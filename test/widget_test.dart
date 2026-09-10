@@ -74,10 +74,8 @@ void main() {
 
     await tester.tap(find.text('Избранное'));
     await tester.pump();
-    expect(
-      find.text('Добавленное в избранное жилье будет отображаться здесь'),
-      findsOneWidget,
-    );
+    expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
+    expect(find.text('Квартира в старом городе'), findsOneWidget);
 
     await tester.tap(find.text('Чат'));
     await tester.pump();
