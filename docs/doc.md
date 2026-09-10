@@ -45,3 +45,28 @@ flutter build linux
 ```
 
 В терминале `flutter run`: `r` — hot reload, `R` — hot restart, `q` — выход.
+
+## Остановить эмулятор (перед выключением компьютера)
+
+Сначала выйти из `flutter run` (`q` в том терминале). Потом погасить AVD:
+
+```bash
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+
+adb devices                 # должен быть emulator-5554
+adb emu kill                # штатно выключить эмулятор
+adb devices                 # список пустой — можно выключать ПК
+```
+
+Если `adb emu kill` не помог (qemu всё ещё в `ps`):
+
+```bash
+pkill -f 'qemu-system-x86_64 -avd pixel'
+```
+
+Проверка, что ничего не крутится:
+
+```bash
+pgrep -a qemu || echo "эмулятор выключен"
+```
