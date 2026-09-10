@@ -67,10 +67,8 @@ void main() {
 
     await tester.tap(find.text('Бронирования'));
     await tester.pump();
-    expect(
-      find.text('Забронированное жилье будет отображаться здесь'),
-      findsOneWidget,
-    );
+    expect(find.text('Текущие'), findsOneWidget);
+    expect(find.text('ожидание предоплаты'), findsOneWidget);
 
     await tester.tap(find.text('Избранное'));
     await tester.pump();
