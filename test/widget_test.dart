@@ -81,10 +81,8 @@ void main() {
 
     await tester.tap(find.text('Чат'));
     await tester.pump();
-    expect(
-      find.text('Чат с владельцем жилья появится после бронирования'),
-      findsOneWidget,
-    );
+    expect(find.text('Анна Иваненко'), findsOneWidget);
+    expect(find.text('Игнат Прокопенко'), findsOneWidget);
 
     await tester.tap(find.text('Профиль'));
     await tester.pump();
