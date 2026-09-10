@@ -50,12 +50,43 @@ flutter run -d linux
 
 ### Android (эмулятор Pixel)
 
-```bash
-export ANDROID_HOME="$HOME/Android/Sdk"
+AVD `pixel` (Android 16 / Play Store). После загрузки обычно виден как `emulator-5554`.
 
+```bash
+export PATH="$HOME/development/flutter/bin:$PATH"
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+
+# 1. Зависимости проекта
 flutter pub get
+
+# 2. Запустить AVD и дождаться Android
 flutter emulators --launch pixel
+adb wait-for-device
+until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; do
+  sleep 2
+done
+
+# 3. Собрать debug и поставить на эмулятор
+flutter devices                 # должен быть emulator-5554
 flutter run -d emulator-5554
+```
+
+В терминале `flutter run`: `r` — hot reload, `R` — hot restart, `q` — выход.
+
+Перед выключением компьютера сначала `q` в `flutter run`, затем погасить AVD:
+
+```bash
+adb devices                 # должен быть emulator-5554
+adb emu kill                # штатно выключить эмулятор
+adb devices                 # список пустой — можно выключать ПК
+```
+
+Если `adb emu kill` не помог (qemu всё ещё в `ps`):
+
+```bash
+pkill -f 'qemu-system-x86_64 -avd pixel'
+pgrep -a qemu || echo "эмулятор выключен"
 ```
 
 Полный список команд — в [`docs/doc.md`](docs/doc.md). Продуктовая спецификация — в [`docs/technical spec.md`](docs/technical%20spec.md).
