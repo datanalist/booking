@@ -5,15 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booking/main.dart';
 import 'package:booking/screens/onboarding_screen.dart';
 import 'package:booking/screens/splash_screen.dart';
+import 'package:booking/shell/main_shell.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('splash shows logo then opens onboarding', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: SplashScreen(delay: Duration.zero),
-      ),
+      const MaterialApp(home: SplashScreen(delay: Duration.zero)),
     );
 
     expect(find.byType(SvgPicture), findsOneWidget);
@@ -27,9 +26,7 @@ void main() {
   });
 
   testWidgets('onboarding advances pages and finishes', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: OnboardingScreen()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
     expect(find.text('Находите идеальное жилье'), findsOneWidget);
 
@@ -44,7 +41,57 @@ void main() {
 
     await tester.tap(find.text('Начать'));
     await tester.pumpAndSettle();
-    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.byType(MainShell), findsOneWidget);
+    expect(find.text('Авторизация'), findsNothing);
+    expect(
+      find.text(
+        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Найти отель'), findsOneWidget);
+    expect(find.text('Хочу снять жилье в...'), findsOneWidget);
+  });
+
+  testWidgets('bottom tabs switch visible screens', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: MainShell()));
+
+    expect(
+      find.text(
+        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Найти отель'), findsOneWidget);
+
+    await tester.tap(find.text('Найти отель'));
+    await tester.pump();
+    expect(
+      find.text(
+        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Уютная студия в центре Москвы'), findsNothing);
+
+    await tester.tap(find.text('Брони'));
+    await tester.pump();
+    expect(find.text('Текущие'), findsOneWidget);
+    expect(find.text('ожидание предоплаты'), findsOneWidget);
+
+    await tester.tap(find.text('Избранное'));
+    await tester.pump();
+    expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
+    expect(find.text('Квартира в старом городе'), findsOneWidget);
+
+    await tester.tap(find.text('Чаты'));
+    await tester.pump();
+    expect(find.text('Анна Иваненко'), findsOneWidget);
+    expect(find.text('Игнат Прокопенко'), findsOneWidget);
+
+    await tester.tap(find.text('Профиль'));
+    await tester.pump();
+    expect(find.text('Профиль'), findsWidgets);
   });
 
   testWidgets('app boots on splash', (tester) async {

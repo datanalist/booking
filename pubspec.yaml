@@ -58,7 +58,10 @@ flutter:
 
   assets:
     - images/logo.svg
+    - images/search/
     - images/onbordins.v1/
+    - images/chat/
+    - images/profile/avatar.png
 
   fonts:
     - family: Noto Sans
