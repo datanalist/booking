@@ -31,8 +31,26 @@
 
 ## Запуск
 
+SDK: `~/development/flutter`. Перед командами:
+
 ```bash
 export PATH="$HOME/development/flutter/bin:$PATH"
+```
+
+### Linux desktop
+
+Для `flutter run` на Linux нужны CMake, Clang, Ninja и GTK 3:
+
+```bash
+sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev mesa-utils
+flutter doctor    # Linux toolchain должен быть ✓
+flutter pub get
+flutter run -d linux
+```
+
+### Android (эмулятор Pixel)
+
+```bash
 export ANDROID_HOME="$HOME/Android/Sdk"
 
 flutter pub get
