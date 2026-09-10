@@ -12,9 +12,7 @@ void main() {
 
   testWidgets('splash shows logo then opens onboarding', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: SplashScreen(delay: Duration.zero),
-      ),
+      const MaterialApp(home: SplashScreen(delay: Duration.zero)),
     );
 
     expect(find.byType(SvgPicture), findsOneWidget);
@@ -28,9 +26,7 @@ void main() {
   });
 
   testWidgets('onboarding advances pages and finishes', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: OnboardingScreen()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
     expect(find.text('Находите идеальное жилье'), findsOneWidget);
 
@@ -53,6 +49,8 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text('Найти отель'), findsOneWidget);
+    expect(find.text('Хочу снять жилье в...'), findsOneWidget);
   });
 
   testWidgets('bottom tabs switch visible screens', (tester) async {
@@ -64,8 +62,19 @@ void main() {
       ),
       findsOneWidget,
     );
+    expect(find.text('Найти отель'), findsOneWidget);
 
-    await tester.tap(find.text('Бронирования'));
+    await tester.tap(find.text('Найти отель'));
+    await tester.pump();
+    expect(
+      find.text(
+        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Уютная студия в центре Москвы'), findsNothing);
+
+    await tester.tap(find.text('Брони'));
     await tester.pump();
     expect(find.text('Текущие'), findsOneWidget);
     expect(find.text('ожидание предоплаты'), findsOneWidget);
@@ -75,7 +84,7 @@ void main() {
     expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
     expect(find.text('Квартира в старом городе'), findsOneWidget);
 
-    await tester.tap(find.text('Чат'));
+    await tester.tap(find.text('Чаты'));
     await tester.pump();
     expect(find.text('Анна Иваненко'), findsOneWidget);
     expect(find.text('Игнат Прокопенко'), findsOneWidget);

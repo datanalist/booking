@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../theme/app_theme.dart';
 
@@ -12,15 +13,14 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  static const _fieldFill = Color(0xFFF5F5F5);
   static const _chipFill = Color(0xFFF3F3F3);
   static const _meta = Color(0xFF9A9A9A);
   static const _priceMuted = Color(0xFF6B6B6B);
   static const _mapFill = Color(0xFFE8EEE4);
 
   final _query = TextEditingController();
+  final _searchFocus = FocusNode();
   final _favorites = <String>{'old-town'};
-  var _showResults = false;
   var _showMap = false;
   String? _housingType;
 
@@ -67,35 +67,85 @@ class _SearchScreenState extends State<SearchScreen> {
       photo: 'images/onbordins.v1/03-travel-without-borders.png',
       imageIndex: 2,
     ),
-  ];
-
-  static const _chips = <String>[
-    'Москва',
-    '14-19 ноября',
-    '2 взрослых',
-    '1 ребенок',
+    _Listing(
+      id: 'kazan-loft',
+      title: 'Лофт у Казанского кремля',
+      city: 'Казань',
+      type: 'Квартира',
+      dates: '2-6 декабря',
+      nights: '4 ночи',
+      total: '12 400 ₽',
+      perNight: '3 100 ₽ / ночь',
+      rating: '4.8',
+      reviews: '(21)',
+      photo: 'images/onbordins.v1/02-book-confidently.png',
+      imageIndex: 1,
+    ),
+    _Listing(
+      id: 'spb-room',
+      title: 'Комната у Невского проспекта',
+      city: 'Санкт-Петербург',
+      type: 'Комната',
+      dates: '8-12 января',
+      nights: '4 ночи',
+      total: '9 200 ₽',
+      perNight: '2 300 ₽ / ночь',
+      rating: '4.3',
+      reviews: '(8)',
+      photo: 'images/onbordins.v1/03-travel-without-borders.png',
+      imageIndex: 0,
+    ),
   ];
 
   @override
   void dispose() {
     _query.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
+  bool get _hasCriteria =>
+      _query.text.trim().isNotEmpty || _housingType != null;
+
   List<_Listing> get _visible {
+    final query = _normalize(_query.text);
     final type = _housingType;
-    if (type == null) return _listings;
-    return _listings.where((item) => item.type == type).toList();
+    return _listings.where((item) {
+      if (type != null && item.type != type) return false;
+      if (query.isEmpty) return true;
+      final haystack = [
+        item.city,
+        item.title,
+        item.type,
+        if (_normalize(item.city) == 'санкт-петербург') 'питер спб',
+      ].map(_normalize).join(' ');
+      return haystack.contains(query);
+    }).toList();
+  }
+
+  List<String> get _activeChips {
+    final query = _query.text.trim();
+    return [
+      if (query.isNotEmpty) query,
+      if (_housingType != null) _housingType!,
+    ];
+  }
+
+  static String _normalize(String value) {
+    return value.toLowerCase().replaceAll('ё', 'е').trim();
   }
 
   void _runSearch() {
-    setState(() {
-      _showResults = true;
-      _query.text = 'Москва';
-    });
+    if (!_hasCriteria) {
+      _searchFocus.requestFocus();
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {});
   }
 
   Future<void> _openFilters() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await showModalBottomSheet<String?>(
       context: context,
       backgroundColor: AppColors.white,
@@ -109,68 +159,74 @@ class _SearchScreenState extends State<SearchScreen> {
     if (!mounted || selected == null) return;
     setState(() {
       _housingType = selected.isEmpty ? null : selected;
-      _showResults = true;
-      if (_query.text.isEmpty) _query.text = 'Москва';
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 32, 24, 0),
-            child: _SearchHeader(
-              controller: _query,
-              fieldFill: _fieldFill,
-              mapSelected: _showMap,
-              onSubmitted: (_) => _runSearch(),
-              onFilter: _openFilters,
-              onMap: () => setState(() => _showMap = !_showMap),
-              onTapField: _runSearch,
-            ),
-          ),
-          if (_showResults) ...[
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 26,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                scrollDirection: Axis.horizontal,
-                itemCount: _chips.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  return _Chip(label: _chips[index], fill: _chipFill);
-                },
+    return Column(
+      children: [
+        ColoredBox(
+          color: AppColors.orange,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: _SearchHeader(
+                controller: _query,
+                focusNode: _searchFocus,
+                mapSelected: _showMap,
+                onSubmitted: (_) => _runSearch(),
+                onChanged: (_) => setState(() {}),
+                onFilter: _openFilters,
+                onMap: () => setState(() => _showMap = !_showMap),
               ),
             ),
-          ],
-          const SizedBox(height: 24),
-          Expanded(
-            child: _showResults
-                ? (_showMap
-                    ? _MapResults(
-                        listings: _visible,
-                        favorites: _favorites,
-                        mapFill: _mapFill,
-                        meta: _meta,
-                        priceMuted: _priceMuted,
-                        onFavorite: _toggleFavorite,
-                      )
-                    : _ListingResults(
-                        listings: _visible,
-                        favorites: _favorites,
-                        meta: _meta,
-                        priceMuted: _priceMuted,
-                        onFavorite: _toggleFavorite,
-                      ))
-                : _EmptySearch(
-                    onSearch: _runSearch,
-                  ),
           ),
-        ],
-      ),
+        ),
+        if (_hasCriteria && _activeChips.isNotEmpty)
+          ColoredBox(
+            color: AppColors.white,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: SizedBox(
+                height: 26,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _activeChips.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    return _Chip(label: _activeChips[index], fill: _chipFill);
+                  },
+                ),
+              ),
+            ),
+          ),
+        Expanded(
+          child: ColoredBox(
+            color: AppColors.white,
+            child: _hasCriteria
+                ? (_showMap
+                      ? _MapResults(
+                          listings: _visible,
+                          favorites: _favorites,
+                          mapFill: _mapFill,
+                          meta: _meta,
+                          priceMuted: _priceMuted,
+                          onFavorite: _toggleFavorite,
+                        )
+                      : _ListingResults(
+                          listings: _visible,
+                          favorites: _favorites,
+                          meta: _meta,
+                          priceMuted: _priceMuted,
+                          onFavorite: _toggleFavorite,
+                        ))
+                : _EmptySearch(onSearch: _runSearch),
+          ),
+        ),
+      ],
     );
   }
 
@@ -214,21 +270,21 @@ class _Listing {
 class _SearchHeader extends StatelessWidget {
   const _SearchHeader({
     required this.controller,
-    required this.fieldFill,
+    required this.focusNode,
     required this.mapSelected,
     required this.onSubmitted,
+    required this.onChanged,
     required this.onFilter,
     required this.onMap,
-    required this.onTapField,
   });
 
   final TextEditingController controller;
-  final Color fieldFill;
+  final FocusNode focusNode;
   final bool mapSelected;
   final ValueChanged<String> onSubmitted;
+  final ValueChanged<String> onChanged;
   final VoidCallback onFilter;
   final VoidCallback onMap;
-  final VoidCallback onTapField;
 
   @override
   Widget build(BuildContext context) {
@@ -237,50 +293,59 @@ class _SearchHeader extends StatelessWidget {
         Expanded(
           child: SizedBox(
             height: 44,
-            child: TextField(
-              controller: controller,
-              textInputAction: TextInputAction.search,
-              onSubmitted: onSubmitted,
-              onTap: onTapField,
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 14,
-                height: 20 / 14,
-                color: AppColors.textPrimary,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Город и даты',
-                hintStyle: const TextStyle(
+            child: Material(
+              color: AppColors.searchFieldFill,
+              borderRadius: BorderRadius.circular(22),
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                keyboardType: TextInputType.text,
+                textInputAction: TextInputAction.search,
+                textCapitalization: TextCapitalization.sentences,
+                enableInteractiveSelection: true,
+                showCursor: true,
+                onChanged: onChanged,
+                onSubmitted: onSubmitted,
+                style: const TextStyle(
                   fontFamily: AppTheme.fontFamily,
                   fontWeight: FontWeight.w400,
                   fontSize: 14,
                   height: 20 / 14,
-                  color: Color(0xFF9A9A9A),
+                  color: AppColors.textPrimary,
                 ),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  size: 16,
-                  color: Color(0xFF9A9A9A),
-                ),
-                prefixIconConstraints: const BoxConstraints(
-                  minWidth: 42,
-                  minHeight: 44,
-                ),
-                filled: true,
-                fillColor: fieldFill,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.orange),
+                decoration: InputDecoration(
+                  hintText: 'Хочу снять жилье в...',
+                  hintStyle: const TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontWeight: FontWeight.w400,
+                    fontSize: 14,
+                    height: 20 / 14,
+                    color: Color(0xFF9A9A9A),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: Color(0xFF9A9A9A),
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 42,
+                    minHeight: 44,
+                  ),
+                  filled: true,
+                  fillColor: AppColors.searchFieldFill,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
             ),
@@ -288,14 +353,14 @@ class _SearchHeader extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         _HeaderIconButton(
-          icon: Icons.tune,
+          asset: 'images/search/icon-filter.svg',
           selected: false,
           onTap: onFilter,
           tooltip: 'Фильтры',
         ),
         const SizedBox(width: 8),
         _HeaderIconButton(
-          icon: Icons.map_outlined,
+          asset: 'images/search/icon-map.svg',
           selected: mapSelected,
           onTap: onMap,
           tooltip: 'Карта',
@@ -307,13 +372,13 @@ class _SearchHeader extends StatelessWidget {
 
 class _HeaderIconButton extends StatelessWidget {
   const _HeaderIconButton({
-    required this.icon,
+    required this.asset,
     required this.selected,
     required this.onTap,
     required this.tooltip,
   });
 
-  final IconData icon;
+  final String asset;
   final bool selected;
   final VoidCallback onTap;
   final String tooltip;
@@ -324,22 +389,15 @@ class _HeaderIconButton extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: selected ? const Color(0xFFFFF3E8) : AppColors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(
-            color: selected ? AppColors.orange : AppColors.tabBarBorder,
-          ),
-        ),
+        shape: const CircleBorder(),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          customBorder: const CircleBorder(),
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(
-              icon,
-              size: 24,
-              color: selected ? AppColors.orange : AppColors.textPrimary,
+            child: Center(
+              child: SvgPicture.asset(asset, width: 22, height: 22),
             ),
           ),
         ),
@@ -360,20 +418,10 @@ class _EmptySearch extends StatelessWidget {
       child: Column(
         children: [
           const Spacer(flex: 175),
-          const SizedBox(
-            width: 183,
+          SvgPicture.asset(
+            'images/search/empty-search.svg',
+            width: 200,
             height: 160,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xFFFFF6EE),
-                borderRadius: BorderRadius.all(Radius.circular(24)),
-              ),
-              child: Icon(
-                Icons.travel_explore,
-                size: 88,
-                color: AppColors.orange,
-              ),
-            ),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -384,7 +432,7 @@ class _EmptySearch extends StatelessWidget {
               fontWeight: FontWeight.w400,
               fontSize: 16,
               height: 1.25,
-              color: AppColors.emptyHint,
+              color: AppColors.textPrimary,
             ),
           ),
           const Spacer(flex: 123),
@@ -396,7 +444,7 @@ class _EmptySearch extends StatelessWidget {
               style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
               ),
-              child: const Text('Искать жилье'),
+              child: const Text('Найти отель'),
             ),
           ),
         ],
@@ -457,7 +505,7 @@ class _ListingResults extends StatelessWidget {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 24),
           child: Text(
-            'Нет подходящих вариантов Попробуйте изменить параметры поиска',
+            'Нет подходящих вариантов.\nПопробуйте изменить параметры поиска',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: AppTheme.fontFamily,
@@ -636,10 +684,7 @@ class _ApartmentCard extends StatelessWidget {
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(compact ? 16 : 12),
-                  child: Image.asset(
-                    listing.photo,
-                    fit: BoxFit.cover,
-                  ),
+                  child: Image.asset(listing.photo, fit: BoxFit.cover),
                 ),
               ),
               Positioned(
@@ -659,7 +704,9 @@ class _ApartmentCard extends StatelessWidget {
                       child: Icon(
                         favorite ? Icons.favorite : Icons.favorite_border,
                         size: compact ? 18 : 20,
-                        color: favorite ? AppColors.orange : AppColors.textPrimary,
+                        color: favorite
+                            ? AppColors.orange
+                            : AppColors.textPrimary,
                       ),
                     ),
                   ),
@@ -782,11 +829,7 @@ class _ApartmentCard extends StatelessWidget {
 }
 
 class _Meta extends StatelessWidget {
-  const _Meta({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
+  const _Meta({required this.icon, required this.label, required this.color});
 
   final IconData icon;
   final String label;
@@ -946,8 +989,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: () =>
-                        Navigator.pop(context, _selected ?? ''),
+                    onPressed: () => Navigator.pop(context, _selected ?? ''),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                     ),

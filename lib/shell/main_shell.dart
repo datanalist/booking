@@ -24,18 +24,18 @@ class _MainShellState extends State<MainShell> {
 
   static const _tabs = <_TabDestination>[
     _TabDestination(
-      label: 'Поиск жилья',
+      label: 'Поиск',
       // TODO(figma): Iconly/Light-Outline/Search и Bold/Search
       // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-16160
       icon: Icons.search_outlined,
       selectedIcon: Icons.search,
     ),
     _TabDestination(
-      label: 'Бронирования',
-      // TODO(figma): Iconly Calendar
+      label: 'Брони',
+      // TODO(figma): Iconly Home на кадре поиска 1:16160
       // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-11948
-      icon: Icons.calendar_today_outlined,
-      selectedIcon: Icons.calendar_today,
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home,
     ),
     _TabDestination(
       label: 'Избранное',
@@ -45,7 +45,7 @@ class _MainShellState extends State<MainShell> {
       selectedIcon: Icons.favorite,
     ),
     _TabDestination(
-      label: 'Чат',
+      label: 'Чаты',
       // TODO(figma): Iconly/Light-Outline/Chat
       // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-13967
       icon: Icons.chat_bubble_outline,
@@ -63,11 +63,13 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: AppColors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
+      value:
+          (_index == 0 ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+              .copyWith(
+                statusBarColor: Colors.transparent,
+                systemNavigationBarColor: AppColors.tabBarFill,
+                systemNavigationBarIconBrightness: Brightness.dark,
+              ),
       child: Scaffold(
         backgroundColor: AppColors.white,
         body: IndexedStack(
@@ -119,12 +121,10 @@ class _AppTabBar extends StatelessWidget {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Material(
-      color: AppColors.white,
+      color: AppColors.tabBarFill,
       child: DecoratedBox(
         decoration: const BoxDecoration(
-          border: Border(
-            top: BorderSide(color: AppColors.tabBarBorder),
-          ),
+          border: Border(top: BorderSide(color: AppColors.tabBarBorder)),
         ),
         child: Padding(
           padding: EdgeInsets.only(bottom: bottomInset),

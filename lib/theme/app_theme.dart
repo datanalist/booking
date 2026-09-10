@@ -9,6 +9,8 @@ abstract final class AppColors {
   static const textPrimary = Color(0xFF1A1A1A);
   static const tabInactive = Color(0xFF9A9A9A);
   static const tabBarBorder = Color(0xFFE8E8E8);
+  static const tabBarFill = Color(0xFFFFFBF2);
+  static const searchFieldFill = Color(0xFFFFF6EE);
   static const emptyHint = Color(0xFF6B6B6B);
 }
 
