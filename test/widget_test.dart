@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booking/main.dart';
 import 'package:booking/screens/onboarding_screen.dart';
 import 'package:booking/screens/splash_screen.dart';
+import 'package:booking/shell/main_shell.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,7 +45,50 @@ void main() {
 
     await tester.tap(find.text('Начать'));
     await tester.pumpAndSettle();
-    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.byType(MainShell), findsOneWidget);
+    expect(find.text('Авторизация'), findsNothing);
+    expect(
+      find.text(
+        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('bottom tabs switch visible screens', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: MainShell()));
+
+    expect(
+      find.text(
+        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Бронирования'));
+    await tester.pump();
+    expect(
+      find.text('Забронированное жилье будет отображаться здесь'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Избранное'));
+    await tester.pump();
+    expect(
+      find.text('Добавленное в избранное жилье будет отображаться здесь'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Чат'));
+    await tester.pump();
+    expect(
+      find.text('Чат с владельцем жилья появится после бронирования'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Профиль'));
+    await tester.pump();
+    expect(find.text('Профиль'), findsWidgets);
   });
 
   testWidgets('app boots on splash', (tester) async {

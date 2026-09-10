@@ -22,7 +22,7 @@
 - Шрифт Noto Sans, акценты `#F88A2A` (кнопка) и `#FBC028` (активная точка)
 - Свайп или кнопка переключают страницы
 
-После **Начать** открывается заглушка «Авторизация» (экран входа ещё не свёрстан).
+После **Начать** открывается гостевой каркас с нижней навигацией (5 вкладок). Экран входа не показывается: авторизация будет на отдельных действиях, не как заглушка перед приложением.
 
 **Прочее**
 - Тема `AppTheme`, edge-to-edge, скрыт debug-banner
@@ -99,9 +99,16 @@ Booking/
 │   ├── main.dart                      # BookingApp, точка входа
 │   ├── theme/
 │   │   └── app_theme.dart             # цвета, Noto Sans, кнопка
+│   ├── shell/
+│   │   └── main_shell.dart            # нижняя панель, IndexedStack вкладок
 │   └── screens/
 │       ├── splash_screen.dart         # сплэш
-│       └── onboarding_screen.dart     # карусель + заглушка авторизации
+│       ├── onboarding_screen.dart     # карусель → MainShell
+│       ├── search/search_screen.dart
+│       ├── bookings/bookings_screen.dart
+│       ├── favorites/favorites_screen.dart
+│       ├── chat/chat_screen.dart
+│       └── profile/profile_screen.dart
 ├── images/
 │   ├── logo.svg                       # логотип сплэша
 │   ├── splash.png                     # референс сплэша из макета

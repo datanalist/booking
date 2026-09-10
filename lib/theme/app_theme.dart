@@ -6,6 +6,10 @@ abstract final class AppColors {
   static const orange = Color(0xFFF88A2A);
   static const yellow = Color(0xFFFBC028);
   static const overlayBottom = Color(0xFF2A2926);
+  static const textPrimary = Color(0xFF1A1A1A);
+  static const tabInactive = Color(0xFF9A9A9A);
+  static const tabBarBorder = Color(0xFFE8E8E8);
+  static const emptyHint = Color(0xFF6B6B6B);
 }
 
 abstract final class AppTheme {
