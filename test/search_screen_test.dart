@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/config/mapbox_config.dart';
 import 'package:booking/config/mapbox_geocoding.dart';
+import 'package:booking/config/mapbox_style.dart';
 import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/screens/search/search_query_sheet.dart';
 import 'package:booking/screens/search/search_screen.dart';
@@ -335,6 +338,33 @@ void main() {
 
     expect(bounds.first, DateTime(2026, 9, 16));
     expect(bounds.initial, DateTime(2026, 9, 16));
+  });
+
+  test('mapbox style json switches english labels to russian', () {
+    const source = '''
+{
+  "layers": [
+    {
+      "id": "country-label",
+      "layout": {
+        "text-field": ["coalesce", ["get", "name_en"], ["get", "name"]],
+        "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"]
+      }
+    }
+  ]
+}
+''';
+    final localized = localizeMapboxStyleJson(source);
+    expect(localized, contains('"name_ru"'));
+    expect(localized, isNot(contains('"name_en"')));
+    expect(localized, contains('"name"'));
+
+    final decoded = jsonDecode(localized) as Map<String, dynamic>;
+    preferAppFonts(decoded);
+    final fonts =
+        (((decoded['layers'] as List).first as Map)['layout']
+            as Map)['text-font'];
+    expect(fonts, ['Noto Sans Regular']);
   });
 
   test('mapbox geocoding parses address features', () {

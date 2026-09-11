@@ -4,8 +4,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 import '../../config/mapbox_config.dart';
+import '../../config/mapbox_style.dart';
 import '../../theme/app_theme.dart';
 import 'search_listing.dart';
 
@@ -140,6 +142,7 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
     with SingleTickerProviderStateMixin {
   final _controller = MapController();
   AnimationController? _revealAnimation;
+  Style? _style;
   double? _pinchStartZoom;
   var _pointers = 0;
   DateTime? _downTime;
@@ -167,6 +170,17 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
   void initState() {
     super.initState();
     GestureBinding.instance.pointerRouter.addGlobalRoute(_onGlobalPointer);
+    _loadRussianStyle();
+  }
+
+  Future<void> _loadRussianStyle() async {
+    try {
+      final style = await loadRussianMapboxStyle(token: widget.token);
+      if (!mounted) return;
+      setState(() => _style = style);
+    } catch (_) {
+      // Остаётся растровая подложка с language=ru.
+    }
   }
 
   @override
@@ -299,17 +313,24 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
           ),
         ),
         children: [
-          TileLayer(
-            urlTemplate:
-                'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=${widget.token}',
-            fallbackUrl:
-                'https://api.mapbox.com/v4/mapbox.streets/{z}/{x}/{y}@2x.png?access_token=${widget.token}',
-            tileDimension: 512,
-            zoomOffset: -1,
-            maxNativeZoom: 22,
-            userAgentPackageName: 'com.booking.booking',
-            tileDisplay: const TileDisplay.instantaneous(),
-          ),
+          if (_style != null)
+            VectorTileLayer(
+              theme: _style!.theme,
+              sprites: _style!.sprites,
+              tileProviders: _style!.providers,
+              tileOffset: TileOffset.mapbox,
+              maximumZoom: 22,
+            )
+          else
+            TileLayer(
+              urlTemplate: mapboxStreetsRasterUrl(widget.token),
+              fallbackUrl: mapboxStreetsRasterFallbackUrl(widget.token),
+              tileDimension: 512,
+              zoomOffset: -1,
+              maxNativeZoom: 22,
+              userAgentPackageName: 'com.booking.booking',
+              tileDisplay: const TileDisplay.instantaneous(),
+            ),
           MarkerLayer(markers: _priceMarkers()),
         ],
       ),
