@@ -16,6 +16,7 @@ void main() {
     );
 
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
+    expect(find.text('Найти отель'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Казань');
     await tester.testTextInput.receiveAction(TextInputAction.search);
@@ -31,6 +32,17 @@ void main() {
     expect(
       find.text(
         'Нет подходящих вариантов.\nПопробуйте изменить параметры поиска',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pump();
+
+    expect(find.text('Найти отель'), findsOneWidget);
+    expect(
+      find.text(
+        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
       ),
       findsOneWidget,
     );

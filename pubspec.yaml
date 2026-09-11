@@ -58,10 +58,13 @@ flutter:
 
   assets:
     - images/logo.svg
+    - "images/ mapFrame.svg"
     - images/search/
     - images/onbordins.v1/
     - images/chat/
     - images/profile/avatar.png
+    - images/SearchBarIcons/Bold/
+    - images/SearchBarIcons/Light-Outline/
 
   fonts:
     - family: Noto Sans

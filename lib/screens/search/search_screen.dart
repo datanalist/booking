@@ -36,7 +36,7 @@ class _SearchScreenState extends State<SearchScreen> {
       perNight: '3 034 ₽ / ночь',
       rating: '4.5',
       reviews: '(13)',
-      photo: 'images/onbordins.v1/01-find-housing.png',
+      photo: 'images/search/studio-moscow.png',
       imageIndex: 0,
     ),
     _Listing(
@@ -50,7 +50,7 @@ class _SearchScreenState extends State<SearchScreen> {
       perNight: '3 034 ₽ / ночь',
       rating: '4.7',
       reviews: '(29)',
-      photo: 'images/onbordins.v1/02-book-confidently.png',
+      photo: 'images/search/old-town.png',
       imageIndex: 1,
     ),
     _Listing(
@@ -64,7 +64,7 @@ class _SearchScreenState extends State<SearchScreen> {
       perNight: '3 294 ₽ / ночь',
       rating: '4.5',
       reviews: '(13)',
-      photo: 'images/onbordins.v1/03-travel-without-borders.png',
+      photo: 'images/search/country-house.png',
       imageIndex: 2,
     ),
     _Listing(
@@ -78,7 +78,7 @@ class _SearchScreenState extends State<SearchScreen> {
       perNight: '3 100 ₽ / ночь',
       rating: '4.8',
       reviews: '(21)',
-      photo: 'images/onbordins.v1/02-book-confidently.png',
+      photo: 'images/search/kazan-loft.png',
       imageIndex: 1,
     ),
     _Listing(
@@ -92,7 +92,7 @@ class _SearchScreenState extends State<SearchScreen> {
       perNight: '2 300 ₽ / ночь',
       rating: '4.3',
       reviews: '(8)',
-      photo: 'images/onbordins.v1/03-travel-without-borders.png',
+      photo: 'images/search/spb-room.png',
       imageIndex: 0,
     ),
   ];
@@ -104,8 +104,9 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
-  bool get _hasCriteria =>
-      _query.text.trim().isNotEmpty || _housingType != null;
+  bool get _hasQuery => _query.text.trim().isNotEmpty;
+
+  bool get _hasCriteria => _hasQuery || _housingType != null;
 
   List<_Listing> get _visible {
     final query = _normalize(_query.text);
@@ -175,7 +176,6 @@ class _SearchScreenState extends State<SearchScreen> {
               child: _SearchHeader(
                 controller: _query,
                 focusNode: _searchFocus,
-                mapSelected: _showMap,
                 onSubmitted: (_) => _runSearch(),
                 onChanged: (_) => setState(() {}),
                 onFilter: _openFilters,
@@ -184,7 +184,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
         ),
-        if (_hasCriteria && _activeChips.isNotEmpty)
+        if (_hasQuery && _activeChips.isNotEmpty)
           ColoredBox(
             color: AppColors.white,
             child: Padding(
@@ -206,8 +206,9 @@ class _SearchScreenState extends State<SearchScreen> {
         Expanded(
           child: ColoredBox(
             color: AppColors.white,
-            child: _hasCriteria
-                ? (_showMap
+            child: !_hasQuery
+                ? _EmptySearch(onSearch: _runSearch)
+                : (_showMap
                       ? _MapResults(
                           listings: _visible,
                           favorites: _favorites,
@@ -222,8 +223,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           meta: _meta,
                           priceMuted: _priceMuted,
                           onFavorite: _toggleFavorite,
-                        ))
-                : _EmptySearch(onSearch: _runSearch),
+                        )),
           ),
         ),
       ],
@@ -271,7 +271,6 @@ class _SearchHeader extends StatelessWidget {
   const _SearchHeader({
     required this.controller,
     required this.focusNode,
-    required this.mapSelected,
     required this.onSubmitted,
     required this.onChanged,
     required this.onFilter,
@@ -280,7 +279,6 @@ class _SearchHeader extends StatelessWidget {
 
   final TextEditingController controller;
   final FocusNode focusNode;
-  final bool mapSelected;
   final ValueChanged<String> onSubmitted;
   final ValueChanged<String> onChanged;
   final VoidCallback onFilter;
@@ -352,56 +350,43 @@ class _SearchHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        _HeaderIconButton(
-          asset: 'images/search/icon-filter.svg',
-          selected: false,
-          onTap: onFilter,
-          tooltip: 'Фильтры',
-        ),
-        const SizedBox(width: 8),
-        _HeaderIconButton(
-          asset: 'images/search/icon-map.svg',
-          selected: mapSelected,
-          onTap: onMap,
-          tooltip: 'Карта',
-        ),
-      ],
-    );
-  }
-}
-
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({
-    required this.asset,
-    required this.selected,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final String asset;
-  final bool selected;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: selected ? const Color(0xFFFFF3E8) : AppColors.white,
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Center(
-              child: SvgPicture.asset(asset, width: 22, height: 22),
+        Tooltip(
+          message: 'Фильтры',
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onFilter,
+              customBorder: const CircleBorder(),
+              child: Image.asset(
+                'images/search/Frame 1851040266.png',
+                width: 44,
+                height: 44,
+                fit: BoxFit.contain,
+                excludeFromSemantics: true,
+              ),
             ),
           ),
         ),
-      ),
+        const SizedBox(width: 8),
+        Tooltip(
+          message: 'Карта',
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            child: InkWell(
+              onTap: onMap,
+              customBorder: const CircleBorder(),
+              child: SvgPicture.asset(
+                'images/ mapFrame.svg',
+                width: 44,
+                height: 44,
+                excludeFromSemantics: true,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

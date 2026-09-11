@@ -43,35 +43,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(MainShell), findsOneWidget);
     expect(find.text('Авторизация'), findsNothing);
+    expect(find.text('Хочу снять жилье в...'), findsOneWidget);
+    expect(find.text('Найти отель'), findsOneWidget);
     expect(
       find.text(
         'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
       ),
       findsOneWidget,
     );
-    expect(find.text('Найти отель'), findsOneWidget);
-    expect(find.text('Хочу снять жилье в...'), findsOneWidget);
   });
 
   testWidgets('bottom tabs switch visible screens', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: MainShell()));
 
-    expect(
-      find.text(
-        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
-      ),
-      findsOneWidget,
-    );
     expect(find.text('Найти отель'), findsOneWidget);
-
-    await tester.tap(find.text('Найти отель'));
-    await tester.pump();
-    expect(
-      find.text(
-        'Укажите город и даты поездки, чтобы увидеть подходящие варианты',
-      ),
-      findsOneWidget,
-    );
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
 
     await tester.tap(find.text('Брони'));

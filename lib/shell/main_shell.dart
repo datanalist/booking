@@ -25,38 +25,28 @@ class _MainShellState extends State<MainShell> {
   static const _tabs = <_TabDestination>[
     _TabDestination(
       label: 'Поиск',
-      // TODO(figma): Iconly/Light-Outline/Search и Bold/Search
-      // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-16160
-      icon: Icons.search_outlined,
-      selectedIcon: Icons.search,
+      icon: 'images/SearchBarIcons/Light-Outline/Search.png',
+      selectedIcon: 'images/SearchBarIcons/Bold/Search.png',
     ),
     _TabDestination(
       label: 'Брони',
-      // TODO(figma): Iconly Home на кадре поиска 1:16160
-      // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-11948
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home,
+      icon: 'images/SearchBarIcons/Light-Outline/Home.png',
+      selectedIcon: 'images/SearchBarIcons/Bold/Home.png',
     ),
     _TabDestination(
       label: 'Избранное',
-      // TODO(figma): Iconly/Light/Heart и Bold/Heart
-      // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-12120
-      icon: Icons.favorite_border,
-      selectedIcon: Icons.favorite,
+      icon: 'images/SearchBarIcons/Light-Outline/Heart.png',
+      selectedIcon: 'images/SearchBarIcons/Bold/Heart.png',
     ),
     _TabDestination(
       label: 'Чаты',
-      // TODO(figma): Iconly/Light-Outline/Chat
-      // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-13967
-      icon: Icons.chat_bubble_outline,
-      selectedIcon: Icons.chat_bubble,
+      icon: 'images/SearchBarIcons/Light-Outline/Chat.png',
+      selectedIcon: 'images/SearchBarIcons/Bold/Chat.png',
     ),
     _TabDestination(
       label: 'Профиль',
-      // TODO(figma): Iconly Profile / User
-      // https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking?node-id=1-14012
-      icon: Icons.person_outline,
-      selectedIcon: Icons.person,
+      icon: 'images/SearchBarIcons/Light-Outline/Group.png',
+      selectedIcon: 'images/SearchBarIcons/Bold/Profile.png',
     ),
   ];
 
@@ -100,8 +90,8 @@ class _TabDestination {
   });
 
   final String label;
-  final IconData icon;
-  final IconData selectedIcon;
+  final String icon;
+  final String selectedIcon;
 }
 
 /// Нижняя панель 393×68 + Home Indicator по макету «Tab bar + Indicator».
@@ -169,10 +159,13 @@ class _TabItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          Image.asset(
             selected ? destination.selectedIcon : destination.icon,
-            size: 24,
+            width: 24,
+            height: 24,
+            fit: BoxFit.contain,
             color: color,
+            excludeFromSemantics: true,
           ),
           const SizedBox(height: 4),
           Text(
