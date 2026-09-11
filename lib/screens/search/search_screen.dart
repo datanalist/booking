@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../theme/app_theme.dart';
+import 'search_filters_sheet.dart';
 import 'search_listing.dart';
 import 'search_map_view.dart';
+import 'search_query_sheet.dart';
 
 /// Вкладка «Поиск жилья» по макету Figma `1:16160` (пустой старт)
 /// и соседним фреймам каталога `1:15179` / чипов `1:15291`.
@@ -19,29 +21,24 @@ class _SearchScreenState extends State<SearchScreen> {
   static const _meta = Color(0xFF9A9A9A);
   static const _priceMuted = Color(0xFF6B6B6B);
 
-  final _query = TextEditingController();
-  final _searchFocus = FocusNode();
   final _favorites = <String>{'old-town'};
   var _showMap = false;
-  String? _housingType;
+  var _query = const SearchQuery();
+  var _filters = const SearchFilters();
   String? _selectedMapListingId;
 
-  @override
-  void dispose() {
-    _query.dispose();
-    _searchFocus.dispose();
-    super.dispose();
-  }
+  static final _cities = {
+    for (final item in kSearchListings) item.city,
+  }.toList()..sort();
 
-  bool get _hasQuery => _query.text.trim().isNotEmpty;
+  bool get _hasQuery => _query.isActive;
 
-  bool get _hasCriteria => _hasQuery || _housingType != null;
+  bool get _hasCriteria => _hasQuery || _filters.isActive;
 
   List<SearchListing> get _visible {
-    final query = _normalize(_query.text);
-    final type = _housingType;
+    final query = _normalize(_query.city);
     return kSearchListings.where((item) {
-      if (type != null && item.type != type) return false;
+      if (!_matchesFilters(item)) return false;
       if (query.isEmpty) return true;
       final haystack = [
         item.city,
@@ -53,43 +50,52 @@ class _SearchScreenState extends State<SearchScreen> {
     }).toList();
   }
 
+  bool _matchesFilters(SearchListing item) {
+    final filters = _filters;
+    if (filters.housingTypes.isNotEmpty &&
+        !filters.housingTypes.contains(item.type)) {
+      return false;
+    }
+    if (filters.price case final price?) {
+      if (item.pricePerNight < price.start || item.pricePerNight > price.end) {
+        return false;
+      }
+    }
+    if (filters.amenities.isNotEmpty &&
+        !filters.amenities.every(item.features.contains)) {
+      return false;
+    }
+    if (filters.extras.isNotEmpty &&
+        !filters.extras.every(item.features.contains)) {
+      return false;
+    }
+    return true;
+  }
+
   List<String> get _activeChips {
-    final query = _query.text.trim();
-    return [
-      if (query.isNotEmpty) query,
-      ?_housingType,
-    ];
+    return [..._query.chipLabels, ..._filters.chipLabels];
   }
 
   static String _normalize(String value) {
     return value.toLowerCase().replaceAll('ё', 'е').trim();
   }
 
-  void _runSearch() {
-    if (!_hasCriteria) {
-      _searchFocus.requestFocus();
-      return;
-    }
+  Future<void> _openSearchQuery() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    setState(() {});
+    final selected = await SearchQuerySheet.show(
+      context,
+      initial: _query,
+      cities: _cities,
+    );
+    if (!mounted || selected == null) return;
+    setState(() => _query = selected);
   }
 
   Future<void> _openFilters() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    final selected = await showModalBottomSheet<String?>(
-      context: context,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return _FilterSheet(selected: _housingType);
-      },
-    );
+    final selected = await SearchFiltersSheet.show(context, initial: _filters);
     if (!mounted || selected == null) return;
-    setState(() {
-      _housingType = selected.isEmpty ? null : selected;
-    });
+    setState(() => _filters = selected);
   }
 
   @override
@@ -103,10 +109,8 @@ class _SearchScreenState extends State<SearchScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: _SearchHeader(
-                controller: _query,
-                focusNode: _searchFocus,
-                onSubmitted: (_) => _runSearch(),
-                onChanged: (_) => setState(() {}),
+                label: _query.city,
+                onSearch: _openSearchQuery,
                 onFilter: _openFilters,
                 onMap: () => setState(() {
                   _showMap = !_showMap;
@@ -116,7 +120,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
         ),
-        if (_hasQuery && _activeChips.isNotEmpty && !_showMap)
+        if (_activeChips.isNotEmpty && !_showMap)
           ColoredBox(
             color: AppColors.white,
             child: Padding(
@@ -162,8 +166,8 @@ class _SearchScreenState extends State<SearchScreen> {
                             },
                           ),
                   )
-                : (!_hasQuery
-                      ? _EmptySearch(onSearch: _runSearch)
+                : (!_hasCriteria
+                      ? _EmptySearch(onSearch: _openSearchQuery)
                       : _ListingResults(
                           listings: _visible,
                           favorites: _favorites,
@@ -195,80 +199,61 @@ class _SearchScreenState extends State<SearchScreen> {
 
 class _SearchHeader extends StatelessWidget {
   const _SearchHeader({
-    required this.controller,
-    required this.focusNode,
-    required this.onSubmitted,
-    required this.onChanged,
+    required this.label,
+    required this.onSearch,
     required this.onFilter,
     required this.onMap,
   });
 
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onSubmitted;
-  final ValueChanged<String> onChanged;
+  final String label;
+  final VoidCallback onSearch;
   final VoidCallback onFilter;
   final VoidCallback onMap;
 
   @override
   Widget build(BuildContext context) {
+    final hasLabel = label.trim().isNotEmpty;
     return Row(
       children: [
         Expanded(
           child: SizedBox(
             height: 44,
-            child: Material(
-              color: AppColors.searchFieldFill,
-              borderRadius: BorderRadius.circular(22),
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                keyboardType: TextInputType.text,
-                textInputAction: TextInputAction.search,
-                textCapitalization: TextCapitalization.sentences,
-                enableInteractiveSelection: true,
-                showCursor: true,
-                onChanged: onChanged,
-                onSubmitted: onSubmitted,
-                style: const TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontWeight: FontWeight.w400,
-                  fontSize: 14,
-                  height: 20 / 14,
-                  color: AppColors.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Хочу снять жилье в...',
-                  hintStyle: const TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    fontWeight: FontWeight.w400,
-                    fontSize: 14,
-                    height: 20 / 14,
-                    color: Color(0xFF9A9A9A),
-                  ),
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    size: 18,
-                    color: Color(0xFF9A9A9A),
-                  ),
-                  prefixIconConstraints: const BoxConstraints(
-                    minWidth: 42,
-                    minHeight: 44,
-                  ),
-                  filled: true,
-                  fillColor: AppColors.searchFieldFill,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide.none,
+            child: Tooltip(
+              message: 'Поиск',
+              child: Material(
+                color: AppColors.searchFieldFill,
+                borderRadius: BorderRadius.circular(22),
+                child: InkWell(
+                  onTap: onSearch,
+                  borderRadius: BorderRadius.circular(22),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.search,
+                          size: 18,
+                          color: Color(0xFF9A9A9A),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            hasLabel ? label : 'Хочу снять жилье в...',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontWeight: FontWeight.w400,
+                              fontSize: 14,
+                              height: 20 / 14,
+                              color: hasLabel
+                                  ? AppColors.textPrimary
+                                  : const Color(0xFF9A9A9A),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -737,126 +722,6 @@ class _PhotoDots extends StatelessWidget {
           ),
         ],
       ],
-    );
-  }
-}
-
-class _FilterSheet extends StatefulWidget {
-  const _FilterSheet({required this.selected});
-
-  final String? selected;
-
-  @override
-  State<_FilterSheet> createState() => _FilterSheetState();
-}
-
-class _FilterSheetState extends State<_FilterSheet> {
-  static const _types = <String>['Квартира', 'Дом', 'Комната', 'Отель'];
-
-  late String? _selected = widget.selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 43,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: AppColors.tabBarBorder,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Фильтры',
-              style: TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 24,
-                height: 29 / 24,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Вид жилья',
-              style: TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 16,
-                height: 23 / 16,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final type in _types)
-                  ChoiceChip(
-                    label: Text(type),
-                    selected: _selected == type,
-                    selectedColor: const Color(0xFFFFF3E8),
-                    labelStyle: TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontWeight: FontWeight.w400,
-                      fontSize: 14,
-                      color: _selected == type
-                          ? AppColors.orange
-                          : AppColors.textPrimary,
-                    ),
-                    side: BorderSide(
-                      color: _selected == type
-                          ? AppColors.orange
-                          : AppColors.tabBarBorder,
-                    ),
-                    onSelected: (value) {
-                      setState(() => _selected = value ? type : null);
-                    },
-                  ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context, ''),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      side: const BorderSide(color: AppColors.tabBarBorder),
-                      foregroundColor: AppColors.textPrimary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text('Сбросить'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: () => Navigator.pop(context, _selected ?? ''),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                    child: const Text('Применить'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

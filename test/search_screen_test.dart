@@ -7,6 +7,16 @@ import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/screens/search/search_screen.dart';
 import 'package:booking/theme/app_theme.dart';
 
+Future<void> _submitSearchCity(WidgetTester tester, String city) async {
+  await tester.tap(find.byTooltip('Поиск'));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byKey(const ValueKey('search-city-field')), city);
+  await tester.pump();
+  await tester.ensureVisible(find.widgetWithText(FilledButton, 'Найти'));
+  await tester.tap(find.widgetWithText(FilledButton, 'Найти'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -21,15 +31,12 @@ void main() {
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
     expect(find.text('Найти отель'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), 'Казань');
-    await tester.testTextInput.receiveAction(TextInputAction.search);
-    await tester.pump();
+    await _submitSearchCity(tester, 'Казань');
 
     expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
 
-    await tester.enterText(find.byType(TextField), 'Владивосток');
-    await tester.pump();
+    await _submitSearchCity(tester, 'Владивосток');
 
     expect(find.text('Лофт у Казанского кремля'), findsNothing);
     expect(
@@ -39,8 +46,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.enterText(find.byType(TextField), '');
-    await tester.pump();
+    await _submitSearchCity(tester, '');
 
     expect(find.text('Найти отель'), findsOneWidget);
     expect(
@@ -49,6 +55,37 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('search field opens the stay query bottom sheet', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const Scaffold(body: SearchScreen()),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Снять жилье'), findsOneWidget);
+    expect(find.text('Город'), findsOneWidget);
+    expect(find.text('Дата заезда'), findsOneWidget);
+    expect(find.text('Дата выезда'), findsOneWidget);
+    expect(find.text('Количество взрослых'), findsOneWidget);
+    expect(find.text('Количество детей'), findsOneWidget);
+    expect(find.text('Количество животных'), findsOneWidget);
+    expect(find.text('Вернуться'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Найти'), findsOneWidget);
+
+    final findStay = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Найти'),
+    );
+    expect(findStay.onPressed, isNull);
+
+    await tester.tap(find.text('Вернуться'));
+    await tester.pumpAndSettle();
+    expect(find.text('Снять жилье'), findsNothing);
   });
 
   testWidgets('map icon opens map search with price pins', (tester) async {
@@ -69,11 +106,16 @@ void main() {
 
     final pin = find.byKey(const ValueKey('map-pin-house-10km'));
     Color pinColor() {
-      final decoration = tester
-          .widget<AnimatedContainer>(
-            find.descendant(of: pin, matching: find.byType(AnimatedContainer)),
-          )
-          .decoration! as ShapeDecoration;
+      final decoration =
+          tester
+                  .widget<AnimatedContainer>(
+                    find.descendant(
+                      of: pin,
+                      matching: find.byType(AnimatedContainer),
+                    ),
+                  )
+                  .decoration!
+              as ShapeDecoration;
       return decoration.color!;
     }
 
@@ -170,6 +212,44 @@ void main() {
         )
         .first;
     expect(tester.getBottomLeft(pin).dy, lessThan(tester.getTopLeft(card).dy));
+  });
+
+  testWidgets('filter icon opens the filters bottom sheet', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const Scaffold(body: SearchScreen()),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Фильтры'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Фильтры'), findsOneWidget);
+    expect(find.text('Вид жилья'), findsOneWidget);
+    expect(find.text('Диапазон цен'), findsOneWidget);
+    expect(find.text('Удобства'), findsOneWidget);
+    expect(find.text('Дополнительные характеристики'), findsOneWidget);
+    expect(find.text('Сбросить фильтры'), findsOneWidget);
+    expect(find.text('Вернуться'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Применить'), findsOneWidget);
+
+    final apply = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Применить'),
+    );
+    expect(apply.onPressed, isNull);
+
+    await tester.tap(find.text('Квартира'));
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('Применить'));
+    await tester.tap(find.text('Применить'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Диапазон цен'), findsNothing);
+    expect(find.text('Квартира'), findsWidgets);
+    expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
+    expect(find.text('Частный дом в 10 км от Москвы'), findsNothing);
   });
 
   testWidgets('mapbox token is available from env.local', (tester) async {

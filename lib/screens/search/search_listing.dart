@@ -14,6 +14,8 @@ class SearchListing {
     required this.imageIndex,
     required this.latitude,
     required this.longitude,
+    required this.pricePerNight,
+    this.features = const {},
   });
 
   final String id;
@@ -30,6 +32,8 @@ class SearchListing {
   final int imageIndex;
   final double latitude;
   final double longitude;
+  final int pricePerNight;
+  final Set<String> features;
 }
 
 const kSearchListings = <SearchListing>[
@@ -48,6 +52,15 @@ const kSearchListings = <SearchListing>[
     imageIndex: 0,
     latitude: 55.7584,
     longitude: 37.6018,
+    pricePerNight: 3034,
+    features: {
+      'Wifi',
+      'Телевизор',
+      'Кондиционер',
+      'Кухня',
+      'Посуда',
+      'Самостоятельное заселение',
+    },
   ),
   SearchListing(
     id: 'old-town',
@@ -64,6 +77,15 @@ const kSearchListings = <SearchListing>[
     imageIndex: 1,
     latitude: 55.7536,
     longitude: 37.6232,
+    pricePerNight: 3034,
+    features: {
+      'Wifi',
+      'Телевизор',
+      'Кухня',
+      'Стиральная машина',
+      'Посуда',
+      'Парковка',
+    },
   ),
   SearchListing(
     id: 'house-10km',
@@ -80,6 +102,15 @@ const kSearchListings = <SearchListing>[
     imageIndex: 2,
     latitude: 55.7468,
     longitude: 37.6114,
+    pricePerNight: 3294,
+    features: {
+      'Wifi',
+      'Кухня',
+      'Камин',
+      'Парковка',
+      'Бассейн',
+      'Сауна',
+    },
   ),
   SearchListing(
     id: 'kazan-loft',
@@ -96,6 +127,15 @@ const kSearchListings = <SearchListing>[
     imageIndex: 1,
     latitude: 55.7963,
     longitude: 49.1089,
+    pricePerNight: 3100,
+    features: {
+      'Wifi',
+      'Телевизор',
+      'Кондиционер',
+      'Кухня',
+      'Завтраки',
+      'Спортзал',
+    },
   ),
   SearchListing(
     id: 'spb-room',
@@ -112,5 +152,7 @@ const kSearchListings = <SearchListing>[
     imageIndex: 0,
     latitude: 59.9343,
     longitude: 30.3351,
+    pricePerNight: 2300,
+    features: {'Wifi', 'Фен', 'Утюг'},
   ),
 ];
