@@ -61,7 +61,7 @@ void main() {
     expect(find.text('Лофт у Казанского кремля'), findsNothing);
     expect(
       find.text(
-        'Нет подходящих вариантов.\nПопробуйте изменить параметры поиска',
+        'Нет подходящих вариантов\nПопробуйте изменить параметры поиска',
       ),
       findsOneWidget,
     );
@@ -264,6 +264,53 @@ void main() {
     );
   });
 
+  testWidgets('empty filters show the no-matches illustration', (tester) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+
+    await tester.tap(find.byTooltip('Фильтры'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Отель'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Применить'));
+    await tester.tap(find.text('Применить'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Уютная студия в центре Москвы'), findsNothing);
+    expect(
+      find.text(
+        'Нет подходящих вариантов\nПопробуйте изменить параметры поиска',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('map with no matches shows a card over the map', (tester) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+
+    await tester.tap(find.byTooltip('Фильтры'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Отель'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Применить'));
+    await tester.tap(find.text('Применить'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('no-matches-map-card')), findsNothing);
+
+    await tester.tap(find.byTooltip('Карта'));
+    await tester.pump();
+
+    expect(find.byType(SearchMapView), findsOneWidget);
+    expect(find.byKey(const ValueKey('no-matches-map-card')), findsOneWidget);
+    expect(
+      find.text(
+        'Нет подходящих вариантов\nПопробуйте изменить параметры поиска',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Отель'), findsNothing);
+  });
+
   testWidgets('applied filter badge counts each selected filter', (
     tester,
   ) async {
@@ -313,7 +360,10 @@ void main() {
       ),
     );
 
-    await tester.enterText(find.byKey(const ValueKey('search-city-field')), 'Твер');
+    await tester.enterText(
+      find.byKey(const ValueKey('search-city-field')),
+      'Твер',
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
@@ -345,10 +395,7 @@ void main() {
 
   test('search filters count each applied option including price', () {
     expect(const SearchFilters().appliedCount, 0);
-    expect(
-      const SearchFilters(housingTypes: {'Квартира'}).appliedCount,
-      1,
-    );
+    expect(const SearchFilters(housingTypes: {'Квартира'}).appliedCount, 1);
     expect(
       const SearchFilters(
         housingTypes: {'Квартира'},

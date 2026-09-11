@@ -35,6 +35,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   bool get _hasCriteria => _hasQuery || _filters.isActive;
 
+  bool get _showNoMatches => _hasCriteria && _visible.isEmpty;
+
   List<SearchListing> get _visible {
     final query = _normalize(_query.city);
     return kSearchListings.where((item) {
@@ -144,28 +146,34 @@ class _SearchScreenState extends State<SearchScreen> {
           child: ColoredBox(
             color: _showMap ? const Color(0xFFE8EEE4) : AppColors.white,
             child: _showMap
-                ? SearchMapView(
-                    listings: _visible,
-                    selectedId: _selectedMapListingId,
-                    onSelectPin: (id) {
-                      setState(() => _selectedMapListingId = id);
-                    },
-                    preview: _selectedMapListing == null
-                        ? null
-                        : _ApartmentCard(
-                            listing: _selectedMapListing!,
-                            favorite: _favorites.contains(
-                              _selectedMapListing!.id,
-                            ),
-                            meta: _meta,
-                            priceMuted: _priceMuted,
-                            compact: true,
-                            onFavorite: () =>
-                                _toggleFavorite(_selectedMapListing!.id),
-                            onClose: () {
-                              setState(() => _selectedMapListingId = null);
-                            },
-                          ),
+                ? Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      SearchMapView(
+                        listings: _visible,
+                        selectedId: _selectedMapListingId,
+                        onSelectPin: (id) {
+                          setState(() => _selectedMapListingId = id);
+                        },
+                        preview: _selectedMapListing == null
+                            ? null
+                            : _ApartmentCard(
+                                listing: _selectedMapListing!,
+                                favorite: _favorites.contains(
+                                  _selectedMapListing!.id,
+                                ),
+                                meta: _meta,
+                                priceMuted: _priceMuted,
+                                compact: true,
+                                onFavorite: () =>
+                                    _toggleFavorite(_selectedMapListing!.id),
+                                onClose: () {
+                                  setState(() => _selectedMapListingId = null);
+                                },
+                              ),
+                      ),
+                      if (_showNoMatches) const _NoMatches(asCard: true),
+                    ],
                   )
                 : (!_hasCriteria
                       ? _EmptySearch(onSearch: _openSearchQuery)
@@ -428,6 +436,74 @@ class _Chip extends StatelessWidget {
   }
 }
 
+class _NoMatches extends StatelessWidget {
+  const _NoMatches({this.asCard = false});
+
+  static const message =
+      'Нет подходящих вариантов\nПопробуйте изменить параметры поиска';
+
+  final bool asCard;
+
+  @override
+  Widget build(BuildContext context) {
+    final illustration = SvgPicture.asset(
+      'images/search/empty-no-matches.svg',
+      width: asCard ? 103 : 164,
+      height: asCard ? 100 : 160,
+    );
+    const text = Text(
+      message,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontFamily: AppTheme.fontFamily,
+        fontWeight: FontWeight.w400,
+        fontSize: 14,
+        height: 1.40,
+        color: Color(0xFF1A1B1C),
+      ),
+    );
+
+    if (!asCard) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: SizedBox(
+            width: 308,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [illustration, const SizedBox(height: 24), text],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 53),
+        child: SizedBox(
+          width: double.infinity,
+          child: DecoratedBox(
+            key: const ValueKey('no-matches-map-card'),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [illustration, const SizedBox(height: 24), text],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ListingResults extends StatelessWidget {
   const _ListingResults({
     required this.listings,
@@ -446,22 +522,7 @@ class _ListingResults extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (listings.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            'Нет подходящих вариантов.\nПопробуйте изменить параметры поиска',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontWeight: FontWeight.w400,
-              fontSize: 16,
-              height: 1.25,
-              color: AppColors.emptyHint,
-            ),
-          ),
-        ),
-      );
+      return const _NoMatches();
     }
 
     return ListView.separated(
