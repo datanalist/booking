@@ -48,3 +48,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Secrets
+.env.local
+.env
+config/mapbox.env

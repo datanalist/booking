@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../theme/app_theme.dart';
+import 'search_listing.dart';
+import 'search_map_view.dart';
 
 /// Вкладка «Поиск жилья» по макету Figma `1:16160` (пустой старт)
 /// и соседним фреймам каталога `1:15179` / чипов `1:15291`.
@@ -16,86 +18,13 @@ class _SearchScreenState extends State<SearchScreen> {
   static const _chipFill = Color(0xFFF3F3F3);
   static const _meta = Color(0xFF9A9A9A);
   static const _priceMuted = Color(0xFF6B6B6B);
-  static const _mapFill = Color(0xFFE8EEE4);
 
   final _query = TextEditingController();
   final _searchFocus = FocusNode();
   final _favorites = <String>{'old-town'};
   var _showMap = false;
   String? _housingType;
-
-  static const _listings = <_Listing>[
-    _Listing(
-      id: 'studio-msk',
-      title: 'Уютная студия в центре Москвы',
-      city: 'Москва',
-      type: 'Квартира',
-      dates: '14-19 ноября',
-      nights: '5 ночей',
-      total: '15 170 ₽',
-      perNight: '3 034 ₽ / ночь',
-      rating: '4.5',
-      reviews: '(13)',
-      photo: 'images/search/studio-moscow.png',
-      imageIndex: 0,
-    ),
-    _Listing(
-      id: 'old-town',
-      title: 'Квартира в старом городе',
-      city: 'Москва',
-      type: 'Квартира',
-      dates: '14-19 ноября',
-      nights: '5 ночей',
-      total: '15 170 ₽',
-      perNight: '3 034 ₽ / ночь',
-      rating: '4.7',
-      reviews: '(29)',
-      photo: 'images/search/old-town.png',
-      imageIndex: 1,
-    ),
-    _Listing(
-      id: 'house-10km',
-      title: 'Частный дом в 10 км от Москвы',
-      city: 'Москва',
-      type: 'Дом',
-      dates: '14-19 ноября',
-      nights: '5 ночей',
-      total: '16 470 ₽',
-      perNight: '3 294 ₽ / ночь',
-      rating: '4.5',
-      reviews: '(13)',
-      photo: 'images/search/country-house.png',
-      imageIndex: 2,
-    ),
-    _Listing(
-      id: 'kazan-loft',
-      title: 'Лофт у Казанского кремля',
-      city: 'Казань',
-      type: 'Квартира',
-      dates: '2-6 декабря',
-      nights: '4 ночи',
-      total: '12 400 ₽',
-      perNight: '3 100 ₽ / ночь',
-      rating: '4.8',
-      reviews: '(21)',
-      photo: 'images/search/kazan-loft.png',
-      imageIndex: 1,
-    ),
-    _Listing(
-      id: 'spb-room',
-      title: 'Комната у Невского проспекта',
-      city: 'Санкт-Петербург',
-      type: 'Комната',
-      dates: '8-12 января',
-      nights: '4 ночи',
-      total: '9 200 ₽',
-      perNight: '2 300 ₽ / ночь',
-      rating: '4.3',
-      reviews: '(8)',
-      photo: 'images/search/spb-room.png',
-      imageIndex: 0,
-    ),
-  ];
+  String? _selectedMapListingId;
 
   @override
   void dispose() {
@@ -108,10 +37,10 @@ class _SearchScreenState extends State<SearchScreen> {
 
   bool get _hasCriteria => _hasQuery || _housingType != null;
 
-  List<_Listing> get _visible {
+  List<SearchListing> get _visible {
     final query = _normalize(_query.text);
     final type = _housingType;
-    return _listings.where((item) {
+    return kSearchListings.where((item) {
       if (type != null && item.type != type) return false;
       if (query.isEmpty) return true;
       final haystack = [
@@ -128,7 +57,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final query = _query.text.trim();
     return [
       if (query.isNotEmpty) query,
-      if (_housingType != null) _housingType!,
+      ?_housingType,
     ];
   }
 
@@ -179,12 +108,15 @@ class _SearchScreenState extends State<SearchScreen> {
                 onSubmitted: (_) => _runSearch(),
                 onChanged: (_) => setState(() {}),
                 onFilter: _openFilters,
-                onMap: () => setState(() => _showMap = !_showMap),
+                onMap: () => setState(() {
+                  _showMap = !_showMap;
+                  if (!_showMap) _selectedMapListingId = null;
+                }),
               ),
             ),
           ),
         ),
-        if (_hasQuery && _activeChips.isNotEmpty)
+        if (_hasQuery && _activeChips.isNotEmpty && !_showMap)
           ColoredBox(
             color: AppColors.white,
             child: Padding(
@@ -205,18 +137,33 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         Expanded(
           child: ColoredBox(
-            color: AppColors.white,
-            child: !_hasQuery
-                ? _EmptySearch(onSearch: _runSearch)
-                : (_showMap
-                      ? _MapResults(
-                          listings: _visible,
-                          favorites: _favorites,
-                          mapFill: _mapFill,
-                          meta: _meta,
-                          priceMuted: _priceMuted,
-                          onFavorite: _toggleFavorite,
-                        )
+            color: _showMap ? const Color(0xFFE8EEE4) : AppColors.white,
+            child: _showMap
+                ? SearchMapView(
+                    listings: _visible,
+                    selectedId: _selectedMapListingId,
+                    onSelectPin: (id) {
+                      setState(() => _selectedMapListingId = id);
+                    },
+                    preview: _selectedMapListing == null
+                        ? null
+                        : _ApartmentCard(
+                            listing: _selectedMapListing!,
+                            favorite: _favorites.contains(
+                              _selectedMapListing!.id,
+                            ),
+                            meta: _meta,
+                            priceMuted: _priceMuted,
+                            compact: true,
+                            onFavorite: () =>
+                                _toggleFavorite(_selectedMapListing!.id),
+                            onClose: () {
+                              setState(() => _selectedMapListingId = null);
+                            },
+                          ),
+                  )
+                : (!_hasQuery
+                      ? _EmptySearch(onSearch: _runSearch)
                       : _ListingResults(
                           listings: _visible,
                           favorites: _favorites,
@@ -230,41 +177,20 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
+  SearchListing? get _selectedMapListing {
+    final id = _selectedMapListingId;
+    if (id == null) return null;
+    for (final item in _visible) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
   void _toggleFavorite(String id) {
     setState(() {
       if (!_favorites.remove(id)) _favorites.add(id);
     });
   }
-}
-
-class _Listing {
-  const _Listing({
-    required this.id,
-    required this.title,
-    required this.city,
-    required this.type,
-    required this.dates,
-    required this.nights,
-    required this.total,
-    required this.perNight,
-    required this.rating,
-    required this.reviews,
-    required this.photo,
-    required this.imageIndex,
-  });
-
-  final String id;
-  final String title;
-  final String city;
-  final String type;
-  final String dates;
-  final String nights;
-  final String total;
-  final String perNight;
-  final String rating;
-  final String reviews;
-  final String photo;
-  final int imageIndex;
 }
 
 class _SearchHeader extends StatelessWidget {
@@ -477,7 +403,7 @@ class _ListingResults extends StatelessWidget {
     required this.onFavorite,
   });
 
-  final List<_Listing> listings;
+  final List<SearchListing> listings;
   final Set<String> favorites;
   final Color meta;
   final Color priceMuted;
@@ -522,122 +448,6 @@ class _ListingResults extends StatelessWidget {
   }
 }
 
-class _MapResults extends StatelessWidget {
-  const _MapResults({
-    required this.listings,
-    required this.favorites,
-    required this.mapFill,
-    required this.meta,
-    required this.priceMuted,
-    required this.onFavorite,
-  });
-
-  final List<_Listing> listings;
-  final Set<String> favorites;
-  final Color mapFill;
-  final Color meta;
-  final Color priceMuted;
-  final ValueChanged<String> onFavorite;
-
-  @override
-  Widget build(BuildContext context) {
-    final preview = listings.isEmpty ? null : listings.first;
-
-    return Stack(
-      children: [
-        ColoredBox(
-          color: mapFill,
-          child: Stack(
-            children: [
-              const Positioned.fill(
-                child: CustomPaint(painter: _MapGridPainter()),
-              ),
-              for (var i = 0; i < listings.length && i < 4; i++)
-                Positioned(
-                  left: 88.0 + (i * 28),
-                  top: 120.0 + (i % 2) * 36,
-                  child: _PricePin(label: listings[i].total, active: i == 0),
-                ),
-            ],
-          ),
-        ),
-        if (preview != null)
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-              child: _ApartmentCard(
-                listing: preview,
-                favorite: favorites.contains(preview.id),
-                meta: meta,
-                priceMuted: priceMuted,
-                compact: true,
-                onFavorite: () => onFavorite(preview.id),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _MapGridPainter extends CustomPainter {
-  const _MapGridPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFD5DDD0)
-      ..strokeWidth = 1;
-    for (var x = 0.0; x < size.width; x += 28) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (var y = 0.0; y < size.height; y += 28) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _PricePin extends StatelessWidget {
-  const _PricePin({required this.label, required this.active});
-
-  final String label;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: active ? AppColors.orange : AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: AppTheme.fontFamily,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-          height: 20 / 12,
-          color: active ? AppColors.white : AppColors.textPrimary,
-        ),
-      ),
-    );
-  }
-}
-
 class _ApartmentCard extends StatelessWidget {
   const _ApartmentCard({
     required this.listing,
@@ -645,21 +455,26 @@ class _ApartmentCard extends StatelessWidget {
     required this.meta,
     required this.priceMuted,
     required this.onFavorite,
+    this.onClose,
     this.compact = false,
   });
 
-  final _Listing listing;
+  final SearchListing listing;
   final bool favorite;
   final Color meta;
   final Color priceMuted;
   final VoidCallback onFavorite;
+  final VoidCallback? onClose;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final photoHeight = compact ? 218.0 : 220.0;
+    const radius = 12.0;
+    final buttonSize = compact ? 34.0 : 36.0;
 
-    return Column(
+    Widget card = Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
@@ -668,33 +483,40 @@ class _ApartmentCard extends StatelessWidget {
             children: [
               Positioned.fill(
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(compact ? 16 : 12),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(radius),
+                    bottom: Radius.circular(compact ? 0 : radius),
+                  ),
                   child: Image.asset(listing.photo, fit: BoxFit.cover),
                 ),
               ),
               Positioned(
                 top: 20,
                 right: 20,
-                child: Material(
-                  color: AppColors.white,
-                  shape: const CircleBorder(),
-                  elevation: 2,
-                  shadowColor: const Color(0x33000000),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: onFavorite,
-                    child: SizedBox(
-                      width: compact ? 34 : 36,
-                      height: compact ? 34 : 36,
-                      child: Icon(
-                        favorite ? Icons.favorite : Icons.favorite_border,
-                        size: compact ? 18 : 20,
-                        color: favorite
-                            ? AppColors.orange
-                            : AppColors.textPrimary,
-                      ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _RoundIconButton(
+                      size: buttonSize,
+                      icon: favorite ? Icons.favorite : Icons.favorite_border,
+                      iconSize: compact ? 18 : 20,
+                      color: favorite
+                          ? AppColors.orange
+                          : AppColors.textPrimary,
+                      onTap: onFavorite,
                     ),
-                  ),
+                    if (onClose != null) ...[
+                      const SizedBox(width: 12),
+                      _RoundIconButton(
+                        size: buttonSize,
+                        icon: Icons.close,
+                        iconSize: compact ? 16 : 18,
+                        color: AppColors.textPrimary,
+                        tooltip: 'Закрыть',
+                        onTap: onClose!,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               Positioned(
@@ -810,6 +632,55 @@ class _ApartmentCard extends StatelessWidget {
         ),
       ],
     );
+
+    if (!compact) return card;
+
+    return Material(
+      color: AppColors.white,
+      elevation: 0,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: card,
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({
+    required this.size,
+    required this.icon,
+    required this.iconSize,
+    required this.color,
+    required this.onTap,
+    this.tooltip,
+  });
+
+  final double size;
+  final IconData icon;
+  final double iconSize;
+  final Color color;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = Material(
+      color: AppColors.white,
+      shape: const CircleBorder(),
+      elevation: 2,
+      shadowColor: const Color(0x33000000),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Icon(icon, size: iconSize, color: color),
+        ),
+      ),
+    );
+    if (tooltip == null) return button;
+    return Tooltip(message: tooltip!, child: button);
   }
 }
 
