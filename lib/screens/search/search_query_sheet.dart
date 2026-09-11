@@ -1,5 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../config/mapbox_config.dart';
+import '../../config/mapbox_geocoding.dart';
 import '../../theme/app_theme.dart';
 
 @immutable
@@ -49,25 +54,66 @@ class SearchQuery {
 }
 
 String formatSearchDate(DateTime date) {
-  final day = date.day.toString().padLeft(2, '0');
-  final month = date.month.toString().padLeft(2, '0');
-  return '$day.$month.${date.year}';
+  return DateFormat('dd.MM.yyyy', 'ru').format(date);
 }
+
+({DateTime first, DateTime last, DateTime initial}) stayDatePickerBounds({
+  required bool checkOut,
+  required DateTime today,
+  DateTime? currentCheckIn,
+  DateTime? currentCheckOut,
+}) {
+  final horizon = today.add(const Duration(days: 365 * 2));
+  final DateTime first;
+  final DateTime last;
+  final DateTime rawInitial;
+
+  if (checkOut) {
+    first = currentCheckIn != null
+        ? currentCheckIn.add(const Duration(days: 1))
+        : today;
+    last = horizon;
+    rawInitial = currentCheckOut ?? first;
+  } else {
+    first = today;
+    var computedLast = horizon;
+    if (currentCheckOut != null) {
+      computedLast = currentCheckOut.subtract(const Duration(days: 1));
+      if (computedLast.isBefore(first)) {
+        computedLast = first;
+      }
+    }
+    last = computedLast;
+    rawInitial = currentCheckIn ?? first;
+  }
+
+  final initial = rawInitial.isBefore(first)
+      ? first
+      : rawInitial.isAfter(last)
+      ? last
+      : rawInitial;
+  return (first: first, last: last, initial: initial);
+}
+
+typedef AddressSuggest = Future<List<AddressSuggestion>> Function(String query);
 
 class SearchQuerySheet extends StatefulWidget {
   const SearchQuerySheet({
     super.key,
     required this.initial,
     required this.cities,
+    this.suggestAddresses,
   });
 
   final SearchQuery initial;
   final List<String> cities;
+  final AddressSuggest? suggestAddresses;
 
   static Future<SearchQuery?> show(
     BuildContext context, {
     required SearchQuery initial,
     required List<String> cities,
+    AddressSuggest? suggestAddresses,
   }) {
     return showModalBottomSheet<SearchQuery>(
       context: context,
@@ -81,7 +127,11 @@ class SearchQuerySheet extends StatefulWidget {
         padding: EdgeInsets.only(
           bottom: MediaQuery.viewInsetsOf(context).bottom,
         ),
-        child: SearchQuerySheet(initial: initial, cities: cities),
+        child: SearchQuerySheet(
+          initial: initial,
+          cities: cities,
+          suggestAddresses: suggestAddresses,
+        ),
       ),
     );
   }
@@ -98,6 +148,10 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
   late int _children;
   late int _pets;
   var _showCities = false;
+  var _suggesting = false;
+  var _remoteSuggestions = const <AddressSuggestion>[];
+  Timer? _suggestTimer;
+  int _suggestRequestId = 0;
 
   @override
   void initState() {
@@ -113,6 +167,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
 
   @override
   void dispose() {
+    _suggestTimer?.cancel();
     _city.dispose();
     super.dispose();
   }
@@ -123,12 +178,63 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
     return widget.initial.isActive;
   }
 
-  List<String> get _citySuggestions {
+  bool get _canFetchRemote {
+    return widget.suggestAddresses != null ||
+        MapboxConfig.accessToken.isNotEmpty;
+  }
+
+  List<String> get _localSuggestions {
     final query = _city.text.trim().toLowerCase();
     if (query.isEmpty) return widget.cities;
     return widget.cities
         .where((city) => city.toLowerCase().contains(query))
         .toList();
+  }
+
+  List<String> get _addressSuggestions {
+    final seen = <String>{};
+    final labels = <String>[];
+    for (final label in [
+      ..._localSuggestions,
+      ..._remoteSuggestions.map((item) => item.label),
+    ]) {
+      final key = label.toLowerCase();
+      if (seen.add(key)) labels.add(label);
+    }
+    return labels;
+  }
+
+  Future<void> _onCityChanged(String value) async {
+    setState(() => _showCities = true);
+    _scheduleAddressSuggest(value);
+  }
+
+  void _scheduleAddressSuggest(String value) {
+    _suggestTimer?.cancel();
+    final query = value.trim();
+    if (query.length < 2 || !_canFetchRemote) {
+      setState(() {
+        _remoteSuggestions = const [];
+        _suggesting = false;
+      });
+      return;
+    }
+
+    setState(() => _suggesting = true);
+    _suggestTimer = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_fetchAddressSuggestions(query));
+    });
+  }
+
+  Future<void> _fetchAddressSuggestions(String query) async {
+    final requestId = ++_suggestRequestId;
+    final suggest = widget.suggestAddresses ?? MapboxGeocoding.suggest;
+    final results = await suggest(query);
+    if (!mounted || requestId != _suggestRequestId) return;
+    setState(() {
+      _remoteSuggestions = results;
+      _suggesting = false;
+    });
   }
 
   SearchQuery _draft() {
@@ -145,15 +251,18 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
   Future<void> _pickDate({required bool checkOut}) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final first = checkOut && _checkIn != null
-        ? _checkIn!.add(const Duration(days: 1))
-        : today;
-    final initial = checkOut ? (_checkOut ?? first) : (_checkIn ?? today);
+    final bounds = stayDatePickerBounds(
+      checkOut: checkOut,
+      today: today,
+      currentCheckIn: _checkIn,
+      currentCheckOut: _checkOut,
+    );
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial.isBefore(first) ? first : initial,
-      firstDate: first,
-      lastDate: today.add(const Duration(days: 365 * 2)),
+      locale: const Locale('ru', 'RU'),
+      initialDate: bounds.initial,
+      firstDate: bounds.first,
+      lastDate: bounds.last,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -227,7 +336,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                               child: TextField(
                                 key: const ValueKey('search-city-field'),
                                 controller: _city,
-                                onChanged: (_) => setState(() {}),
+                                onChanged: _onCityChanged,
                                 onTap: () => setState(() => _showCities = true),
                                 style: const TextStyle(
                                   fontFamily: AppTheme.fontFamily,
@@ -238,7 +347,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                                 ),
                                 decoration: const InputDecoration(
                                   isDense: true,
-                                  hintText: 'Укажите город',
+                                  hintText: 'Город или адрес',
                                   hintStyle: TextStyle(
                                     fontFamily: AppTheme.fontFamily,
                                     fontWeight: FontWeight.w400,
@@ -264,7 +373,8 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                           ],
                         ),
                       ),
-                      if (_showCities && _citySuggestions.isNotEmpty) ...[
+                      if (_showCities &&
+                          (_addressSuggestions.isNotEmpty || _suggesting)) ...[
                         const SizedBox(height: 8),
                         DecoratedBox(
                           decoration: BoxDecoration(
@@ -274,12 +384,26 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                           ),
                           child: Column(
                             children: [
-                              for (final city in _citySuggestions)
+                              if (_suggesting)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 12),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppColors.orange,
+                                    ),
+                                  ),
+                                ),
+                              for (final city in _addressSuggestions)
                                 InkWell(
                                   onTap: () {
+                                    _suggestTimer?.cancel();
                                     setState(() {
                                       _city.text = city;
                                       _showCities = false;
+                                      _suggesting = false;
                                     });
                                   },
                                   child: Padding(
@@ -287,18 +411,27 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                                       horizontal: 14,
                                       vertical: 12,
                                     ),
-                                    child: SizedBox(
-                                      width: double.infinity,
-                                      child: Text(
-                                        city,
-                                        style: const TextStyle(
-                                          fontFamily: AppTheme.fontFamily,
-                                          fontWeight: FontWeight.w400,
-                                          fontSize: 16,
-                                          height: 1.45,
-                                          color: Color(0xFF1A1B1C),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.location_on_outlined,
+                                          size: 18,
+                                          color: Color(0xFF89919D),
                                         ),
-                                      ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            city,
+                                            style: const TextStyle(
+                                              fontFamily: AppTheme.fontFamily,
+                                              fontWeight: FontWeight.w400,
+                                              fontSize: 16,
+                                              height: 1.45,
+                                              color: Color(0xFF1A1B1C),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),

@@ -46,7 +46,7 @@ class _SearchScreenState extends State<SearchScreen> {
         item.type,
         if (_normalize(item.city) == 'санкт-петербург') 'питер спб',
       ].map(_normalize).join(' ');
-      return haystack.contains(query);
+      return haystack.contains(query) || query.contains(_normalize(item.city));
     }).toList();
   }
 

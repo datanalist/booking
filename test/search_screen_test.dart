@@ -1,9 +1,12 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/config/mapbox_config.dart';
+import 'package:booking/config/mapbox_geocoding.dart';
 import 'package:booking/screens/search/search_map_view.dart';
+import 'package:booking/screens/search/search_query_sheet.dart';
 import 'package:booking/screens/search/search_screen.dart';
 import 'package:booking/theme/app_theme.dart';
 
@@ -17,16 +20,29 @@ Future<void> _submitSearchCity(WidgetTester tester, String city) async {
   await tester.pumpAndSettle();
 }
 
+Widget _app(Widget home) {
+  return MaterialApp(
+    theme: AppTheme.light,
+    locale: const Locale('ru', 'RU'),
+    supportedLocales: const [Locale('ru', 'RU')],
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    home: home,
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() {
+    MapboxConfig.accessToken = '';
+  });
+
   testWidgets('search listings follow the typed city', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: const Scaffold(body: SearchScreen()),
-      ),
-    );
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
 
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
     expect(find.text('Найти отель'), findsOneWidget);
@@ -58,12 +74,7 @@ void main() {
   });
 
   testWidgets('search field opens the stay query bottom sheet', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: const Scaffold(body: SearchScreen()),
-      ),
-    );
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
 
     await tester.tap(find.byTooltip('Поиск'));
     await tester.pumpAndSettle();
@@ -89,12 +100,7 @@ void main() {
   });
 
   testWidgets('map icon opens map search with price pins', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: const Scaffold(body: SearchScreen()),
-      ),
-    );
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
 
     await tester.tap(find.byTooltip('Карта'));
     await tester.pump();
@@ -181,12 +187,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: const Scaffold(body: SearchScreen()),
-      ),
-    );
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
 
     await tester.tap(find.byTooltip('Карта'));
     await tester.pump();
@@ -215,12 +216,7 @@ void main() {
   });
 
   testWidgets('filter icon opens the filters bottom sheet', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        home: const Scaffold(body: SearchScreen()),
-      ),
-    );
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
 
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
@@ -250,6 +246,120 @@ void main() {
     expect(find.text('Квартира'), findsWidgets);
     expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
     expect(find.text('Частный дом в 10 км от Москвы'), findsNothing);
+  });
+
+  testWidgets('city field shows mapbox address suggestions', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: SearchQuerySheet(
+            initial: const SearchQuery(),
+            cities: const ['Москва'],
+            suggestAddresses: (query) async => [
+              const AddressSuggestion(
+                label: 'Тверская улица, Москва, Россия',
+                city: 'Москва',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(const ValueKey('search-city-field')), 'Твер');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Тверская улица, Москва, Россия'), findsOneWidget);
+  });
+
+  testWidgets('full address still finds listings by city', (tester) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+
+    await _submitSearchCity(tester, 'Тверская улица, 1, Москва, Россия');
+
+    expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
+    expect(find.text('Лофт у Казанского кремля'), findsNothing);
+  });
+
+  testWidgets('date picker uses russian locale and format', (tester) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('14.11.2024'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Выберите дату'), findsOneWidget);
+    expect(find.text('Отмена'), findsOneWidget);
+    expect(find.text('ОК'), findsOneWidget);
+    expect(find.textContaining('2026'), findsWidgets);
+  });
+
+  test('check-in picker cannot reach the selected check-out day', () {
+    final today = DateTime(2026, 9, 12);
+    final checkOut = DateTime(2026, 9, 20);
+    final bounds = stayDatePickerBounds(
+      checkOut: false,
+      today: today,
+      currentCheckOut: checkOut,
+    );
+
+    expect(bounds.first, today);
+    expect(bounds.last, DateTime(2026, 9, 19));
+    expect(bounds.initial, today);
+    expect(!bounds.last.isBefore(bounds.first), isTrue);
+    expect(bounds.last.isBefore(checkOut), isTrue);
+  });
+
+  test('check-in last day stays at today if check-out is today', () {
+    final today = DateTime(2026, 9, 12);
+    final bounds = stayDatePickerBounds(
+      checkOut: false,
+      today: today,
+      currentCheckOut: today,
+    );
+
+    expect(bounds.first, today);
+    expect(bounds.last, today);
+  });
+
+  test('check-out picker still starts after the selected check-in', () {
+    final today = DateTime(2026, 9, 12);
+    final checkIn = DateTime(2026, 9, 15);
+    final bounds = stayDatePickerBounds(
+      checkOut: true,
+      today: today,
+      currentCheckIn: checkIn,
+    );
+
+    expect(bounds.first, DateTime(2026, 9, 16));
+    expect(bounds.initial, DateTime(2026, 9, 16));
+  });
+
+  test('mapbox geocoding parses address features', () {
+    const body = '''
+{
+  "features": [
+    {
+      "place_name": "Тверская улица, 1, Москва, Россия",
+      "place_type": ["address"],
+      "text": "1",
+      "center": [37.6, 55.75],
+      "context": [
+        {"id": "place.1", "text": "Москва"},
+        {"id": "country.1", "text": "Россия"}
+      ]
+    }
+  ]
+}
+''';
+    final suggestions = parseMapboxGeocodingBody(body);
+    expect(suggestions, hasLength(1));
+    expect(suggestions.single.label, 'Тверская улица, 1, Москва, Россия');
+    expect(suggestions.single.city, 'Москва');
+    expect(suggestions.single.longitude, 37.6);
+    expect(suggestions.single.latitude, 55.75);
   });
 
   testWidgets('mapbox token is available from env.local', (tester) async {

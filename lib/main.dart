@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'config/mapbox_config.dart';
 import 'screens/splash_screen.dart';
@@ -21,6 +22,13 @@ class BookingApp extends StatelessWidget {
       title: 'GlobalStay',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      locale: const Locale('ru', 'RU'),
+      supportedLocales: const [Locale('ru', 'RU')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       home: const SplashScreen(),
     );
   }
