@@ -110,6 +110,7 @@ class _SearchScreenState extends State<SearchScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: _SearchHeader(
                 label: _query.city,
+                filterCount: _filters.appliedCount,
                 onSearch: _openSearchQuery,
                 onFilter: _openFilters,
                 onMap: () => setState(() {
@@ -200,12 +201,14 @@ class _SearchScreenState extends State<SearchScreen> {
 class _SearchHeader extends StatelessWidget {
   const _SearchHeader({
     required this.label,
+    required this.filterCount,
     required this.onSearch,
     required this.onFilter,
     required this.onMap,
   });
 
   final String label;
+  final int filterCount;
   final VoidCallback onSearch;
   final VoidCallback onFilter;
   final VoidCallback onMap;
@@ -269,12 +272,27 @@ class _SearchHeader extends StatelessWidget {
             child: InkWell(
               onTap: onFilter,
               customBorder: const CircleBorder(),
-              child: Image.asset(
-                'images/search/Frame 1851040266.png',
+              child: SizedBox(
                 width: 44,
                 height: 44,
-                fit: BoxFit.contain,
-                excludeFromSemantics: true,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Image.asset(
+                      'images/search/Frame 1851040266.png',
+                      width: 44,
+                      height: 44,
+                      fit: BoxFit.contain,
+                      excludeFromSemantics: true,
+                    ),
+                    if (filterCount > 0)
+                      Positioned(
+                        right: -6,
+                        top: -5,
+                        child: _FilterCountBadge(count: filterCount),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -298,6 +316,37 @@ class _SearchHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FilterCountBadge extends StatelessWidget {
+  const _FilterCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('filter-count-badge'),
+      width: 20,
+      height: 20,
+      alignment: Alignment.center,
+      decoration: const ShapeDecoration(
+        color: Color(0xFFE34043),
+        shape: StadiumBorder(),
+      ),
+      child: Text(
+        '$count',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontFamily: AppTheme.fontFamily,
+          fontWeight: FontWeight.w400,
+          fontSize: 10,
+          height: 1.4,
+          color: AppColors.white,
+        ),
+      ),
     );
   }
 }

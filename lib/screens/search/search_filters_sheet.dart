@@ -28,6 +28,12 @@ class SearchFilters {
       extras.isNotEmpty ||
       price != null;
 
+  int get appliedCount =>
+      housingTypes.length +
+      amenities.length +
+      extras.length +
+      (price != null ? 1 : 0);
+
   List<String> get chipLabels => [
     ...housingTypes,
     if (price != null)
@@ -138,10 +144,9 @@ class _SearchFiltersSheetState extends State<SearchFiltersSheet> {
         _housingTypesSelected.isEmpty &&
         _amenitiesSelected.isEmpty &&
         _extrasSelected.isEmpty;
-    final priceUnchanged = _price == SearchFilters.defaultPrice;
     return SearchFilters(
       housingTypes: {..._housingTypesSelected},
-      price: (!_priceAdjusted || (noChips && priceUnchanged)) ? null : _price,
+      price: (noChips && !_priceAdjusted) ? null : _price,
       amenities: {..._amenitiesSelected},
       extras: {..._extrasSelected},
     );

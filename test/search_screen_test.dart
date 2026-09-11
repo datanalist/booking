@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booking/config/mapbox_config.dart';
 import 'package:booking/config/mapbox_geocoding.dart';
 import 'package:booking/config/mapbox_style.dart';
+import 'package:booking/screens/search/search_filters_sheet.dart';
 import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/screens/search/search_query_sheet.dart';
 import 'package:booking/screens/search/search_screen.dart';
@@ -249,6 +250,49 @@ void main() {
     expect(find.text('Квартира'), findsWidgets);
     expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
     expect(find.text('Частный дом в 10 км от Москвы'), findsNothing);
+    expect(find.byKey(const ValueKey('filter-count-badge')), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('filter-count-badge')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data,
+      '2',
+    );
+  });
+
+  testWidgets('applied filter badge counts each selected filter', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+
+    expect(find.byKey(const ValueKey('filter-count-badge')), findsNothing);
+
+    await tester.tap(find.byTooltip('Фильтры'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Квартира'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Wifi'));
+    await tester.tap(find.text('Wifi'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Применить'));
+    await tester.tap(find.text('Применить'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byKey(const ValueKey('filter-count-badge')),
+              matching: find.byType(Text),
+            ),
+          )
+          .data,
+      '3',
+    );
   });
 
   testWidgets('city field shows mapbox address suggestions', (tester) async {
@@ -297,6 +341,30 @@ void main() {
     expect(find.text('Отмена'), findsOneWidget);
     expect(find.text('ОК'), findsOneWidget);
     expect(find.textContaining('2026'), findsWidgets);
+  });
+
+  test('search filters count each applied option including price', () {
+    expect(const SearchFilters().appliedCount, 0);
+    expect(
+      const SearchFilters(housingTypes: {'Квартира'}).appliedCount,
+      1,
+    );
+    expect(
+      const SearchFilters(
+        housingTypes: {'Квартира'},
+        price: RangeValues(2500, 7000),
+      ).appliedCount,
+      2,
+    );
+    expect(
+      const SearchFilters(
+        housingTypes: {'Квартира'},
+        amenities: {'Wifi', 'Телевизор'},
+        extras: {'Бассейн'},
+        price: RangeValues(2500, 7000),
+      ).appliedCount,
+      5,
+    );
   });
 
   test('check-in picker cannot reach the selected check-out day', () {
