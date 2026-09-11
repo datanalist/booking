@@ -28,7 +28,7 @@
 
 | Вкладка | Экран |
 | --- | --- |
-| Поиск | Пустое состояние, пока не указан город или фильтр; выдача по заглушкам (Москва / Казань / Санкт-Петербург) |
+| Поиск | Шит запроса (адрес, даты, гости), фильтры и карта; выдача по заглушкам (Москва / Казань / Санкт-Петербург) |
 | Брони | Сегменты «Текущие» / «Прошлые», карточки-заглушки |
 | Избранное | Список избранного и пустое состояние |
 | Чаты | Список диалогов-заглушек |
@@ -36,12 +36,32 @@
 
 - Кремовый фон панели `#FFFBF2`, активный акцент `#F88A2A`
 - Поиск: оранжевая шапка, поле «Хочу снять жилье в...», кнопка **Найти отель**
+- Поле города в шите принимает адрес; подсказки — Mapbox Geocoding (`language=ru`) и города из заглушек
+- Календарь на локали `ru_RU`: даты `дд.мм.гггг`, неделя с понедельника; заезд строго раньше выбранного выезда
+- Карта Mapbox с пинами цен; без токена показывается упрощённая схема
 - Иконки фильтра/карты — `images/search/`
 
 **Прочее**
-- Тема `AppTheme`, edge-to-edge, скрыт debug-banner
+- Тема `AppTheme`, локаль `ru_RU`, edge-to-edge, скрыт debug-banner
 - Нативный Android splash — белый фон, подпись приложения GlobalStay
-- Виджет-тесты: сплэш → онбординг → вкладки, поиск по городу, чат, профиль
+- Виджет-тесты: сплэш → онбординг → вкладки, поиск, подсказки адреса, календарь, чат, профиль
+
+## Токен Mapbox
+
+Нужен для подсказок адреса и тайлов карты. Секреты не коммитятся (`.gitignore`: `.env.local`, `.env`, `config/mapbox.env`).
+
+Приоритет источников:
+
+1. `--dart-define=ACCESS_TOKEN=pk...`
+2. `--dart-define=MAPBOX_TOKEN=pk...`
+3. asset `.env.local` — строка `mapbox_token=pk...`
+4. asset `config/mapbox.env` — та же строка
+
+Пример `.env.local`:
+
+```
+mapbox_token=pk.your_public_token
+```
 
 Рабочая ветка: `dev/taps`.
 
@@ -112,7 +132,10 @@ pgrep -a qemu || echo "эмулятор выключен"
 ```
 Booking/
 ├── lib/
-│   ├── main.dart                      # BookingApp, точка входа
+│   ├── main.dart                      # BookingApp, ru_RU, точка входа
+│   ├── config/
+│   │   ├── mapbox_config.dart         # токен из env / dart-define
+│   │   └── mapbox_geocoding.dart      # подсказки адреса (Geocoding API v5)
 │   ├── theme/
 │   │   └── app_theme.dart             # цвета, Noto Sans, кнопка
 │   ├── shell/
@@ -120,7 +143,12 @@ Booking/
 │   └── screens/
 │       ├── splash_screen.dart         # сплэш
 │       ├── onboarding_screen.dart     # карусель → MainShell
-│       ├── search/search_screen.dart
+│       ├── search/
+│       │   ├── search_screen.dart     # шапка, чипы, выдача
+│       │   ├── search_query_sheet.dart
+│       │   ├── search_filters_sheet.dart
+│       │   ├── search_map_view.dart
+│       │   └── search_listing.dart    # заглушки объявлений
 │       ├── bookings/bookings_screen.dart
 │       ├── favorites/favorites_screen.dart
 │       ├── chat/chat_screen.dart
