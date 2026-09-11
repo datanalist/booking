@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../theme/app_theme.dart';
+import '../listing/listing_detail_screen.dart';
 import 'search_filters_sheet.dart';
 import 'search_listing.dart';
 import 'search_map_view.dart';
@@ -165,6 +166,8 @@ class _SearchScreenState extends State<SearchScreen> {
                                 meta: _meta,
                                 priceMuted: _priceMuted,
                                 compact: true,
+                                onOpen: () =>
+                                    _openListing(_selectedMapListing!),
                                 onFavorite: () =>
                                     _toggleFavorite(_selectedMapListing!.id),
                                 onClose: () {
@@ -182,6 +185,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           favorites: _favorites,
                           meta: _meta,
                           priceMuted: _priceMuted,
+                          onOpen: _openListing,
                           onFavorite: _toggleFavorite,
                         )),
           ),
@@ -203,6 +207,15 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() {
       if (!_favorites.remove(id)) _favorites.add(id);
     });
+  }
+
+  void _openListing(SearchListing listing) {
+    ListingDetailScreen.open(
+      context,
+      listing: listing,
+      favorites: _favorites,
+      onFavorite: _toggleFavorite,
+    );
   }
 }
 
@@ -510,6 +523,7 @@ class _ListingResults extends StatelessWidget {
     required this.favorites,
     required this.meta,
     required this.priceMuted,
+    required this.onOpen,
     required this.onFavorite,
   });
 
@@ -517,6 +531,7 @@ class _ListingResults extends StatelessWidget {
   final Set<String> favorites;
   final Color meta;
   final Color priceMuted;
+  final ValueChanged<SearchListing> onOpen;
   final ValueChanged<String> onFavorite;
 
   @override
@@ -536,6 +551,7 @@ class _ListingResults extends StatelessWidget {
           favorite: favorites.contains(listing.id),
           meta: meta,
           priceMuted: priceMuted,
+          onOpen: () => onOpen(listing),
           onFavorite: () => onFavorite(listing.id),
         );
       },
@@ -549,6 +565,7 @@ class _ApartmentCard extends StatelessWidget {
     required this.favorite,
     required this.meta,
     required this.priceMuted,
+    required this.onOpen,
     required this.onFavorite,
     this.onClose,
     this.compact = false,
@@ -558,6 +575,7 @@ class _ApartmentCard extends StatelessWidget {
   final bool favorite;
   final Color meta;
   final Color priceMuted;
+  final VoidCallback onOpen;
   final VoidCallback onFavorite;
   final VoidCallback? onClose;
   final bool compact;
@@ -728,14 +746,24 @@ class _ApartmentCard extends StatelessWidget {
       ],
     );
 
-    if (!compact) return card;
+    if (!compact) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('listing-card-${listing.id}'),
+          onTap: onOpen,
+          child: card,
+        ),
+      );
+    }
 
     return Material(
+      key: ValueKey('listing-card-${listing.id}'),
       color: AppColors.white,
       elevation: 0,
       borderRadius: BorderRadius.circular(12),
       clipBehavior: Clip.antiAlias,
-      child: card,
+      child: InkWell(onTap: onOpen, child: card),
     );
   }
 }

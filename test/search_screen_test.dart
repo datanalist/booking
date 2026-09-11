@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booking/config/mapbox_config.dart';
 import 'package:booking/config/mapbox_geocoding.dart';
 import 'package:booking/config/mapbox_style.dart';
+import 'package:booking/screens/listing/listing_detail_screen.dart';
 import 'package:booking/screens/search/search_filters_sheet.dart';
 import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/screens/search/search_query_sheet.dart';
@@ -161,6 +162,73 @@ void main() {
     await tester.pump();
 
     expect(find.text('Частный дом в 10 км от Москвы'), findsNothing);
+  });
+
+  testWidgets('tapping a list card opens the listing page', (tester) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _submitSearchCity(tester, 'Казань');
+
+    await tester.tap(find.byKey(const ValueKey('listing-card-kazan-loft')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ListingDetailScreen), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('listing-detail-kazan-loft')),
+      findsOneWidget,
+    );
+    expect(find.text('Казань, ул. Баумана 15'), findsOneWidget);
+    expect(find.text('Забронировать'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Назад'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ListingDetailScreen), findsNothing);
+    expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
+  });
+
+  testWidgets('tapping the map preview card opens the listing page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+
+    await tester.tap(find.byTooltip('Карта'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('map-pin-house-10km')));
+    await tester.pump();
+
+    expect(find.text('Частный дом в 10 км от Москвы'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('listing-card-house-10km')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ListingDetailScreen), findsOneWidget);
+    expect(find.text('Москва, деревня Дубровки 5'), findsOneWidget);
+    expect(find.text('Забронировать'), findsOneWidget);
+  });
+
+  testWidgets('favorite on a list card does not open the listing page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _submitSearchCity(tester, 'Казань');
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('listing-card-kazan-loft')),
+        matching: find.byIcon(Icons.favorite_border),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(ListingDetailScreen), findsNothing);
+    expect(find.text('Забронировать'), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('listing-card-kazan-loft')),
+        matching: find.byIcon(Icons.favorite),
+      ),
+      findsOneWidget,
+    );
   });
 
   test('selected fallback pin moves above the preview card', () {
