@@ -47,6 +47,7 @@ class SearchMapView extends StatefulWidget {
 class _SearchMapViewState extends State<SearchMapView> {
   final _previewKey = GlobalKey();
   var _previewExtent = 0.0;
+  var _revealGeneration = 0;
 
   @override
   void initState() {
@@ -64,17 +65,25 @@ class _SearchMapViewState extends State<SearchMapView> {
   @override
   void didUpdateWidget(covariant SearchMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.preview == null) {
-      if (_previewExtent != 0) _previewExtent = 0;
-      return;
+    if (widget.preview == null) return;
+    if (oldWidget.preview == null ||
+        oldWidget.selectedId != widget.selectedId) {
+      _revealGeneration += 1;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _measurePreview());
   }
 
-  void _measurePreview() {
+  void _measurePreview({int retries = 6}) {
     if (!mounted || widget.preview == null) return;
     final box = _previewKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
+    if (box == null || !box.hasSize) {
+      if (retries > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _measurePreview(retries: retries - 1);
+        });
+      }
+      return;
+    }
     final extent = box.size.height;
     if ((extent - _previewExtent).abs() < 1) return;
     setState(() => _previewExtent = extent);
@@ -91,6 +100,7 @@ class _SearchMapViewState extends State<SearchMapView> {
             onSelectPin: widget.onSelectPin,
             token: MapboxConfig.accessToken,
             previewExtent: _previewExtent,
+            revealGeneration: _revealGeneration,
           )
         : _FallbackSearchMap(
             listings: widget.listings,
@@ -126,6 +136,7 @@ class _MapboxTilesMap extends StatefulWidget {
     required this.onSelectPin,
     required this.token,
     required this.previewExtent,
+    required this.revealGeneration,
   });
 
   final List<SearchListing> listings;
@@ -133,13 +144,14 @@ class _MapboxTilesMap extends StatefulWidget {
   final ValueChanged<String> onSelectPin;
   final String token;
   final double previewExtent;
+  final int revealGeneration;
 
   @override
   State<_MapboxTilesMap> createState() => _MapboxTilesMapState();
 }
 
 class _MapboxTilesMapState extends State<_MapboxTilesMap>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _controller = MapController();
   AnimationController? _revealAnimation;
   Style? _style;
@@ -150,6 +162,9 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
   Offset? _lastPan;
   Duration? _lastHandledStamp;
   int? _lastHandledDevice;
+  String? _revealId;
+  var _revealScheduled = false;
+  final _selectedPinKey = GlobalKey();
 
   @override
   void didUpdateWidget(covariant _MapboxTilesMap oldWidget) {
@@ -161,8 +176,9 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
     }
     if (listingsChanged ||
         oldWidget.selectedId != widget.selectedId ||
-        oldWidget.previewExtent != widget.previewExtent) {
-      _scheduleRevealSelectedPin();
+        oldWidget.previewExtent != widget.previewExtent ||
+        oldWidget.revealGeneration != widget.revealGeneration) {
+      _requestReveal(widget.selectedId);
     }
   }
 
@@ -217,33 +233,76 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
     return local;
   }
 
-  void _scheduleRevealSelectedPin() {
+  void _requestReveal(String? id) {
+    _revealId = id;
+    _scheduleRevealSelectedPin();
+  }
+
+  void _scheduleRevealSelectedPin({int retries = 8}) {
+    if (_revealScheduled) return;
+    _revealScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealScheduled = false;
       if (!mounted) return;
-      _revealSelectedPin();
+      if (_revealSelectedPin()) return;
+      if (retries > 0) _scheduleRevealSelectedPin(retries: retries - 1);
     });
   }
 
-  void _revealSelectedPin() {
-    final listing = _listingById(widget.listings, widget.selectedId);
-    if (listing == null) return;
-    final MapCamera camera;
-    try {
-      camera = _controller.camera;
-    } catch (_) {
-      return;
+  bool _revealSelectedPin() {
+    final listing = _listingById(
+      widget.listings,
+      _revealId ?? widget.selectedId,
+    );
+    if (listing == null) return true;
+    final camera = _safeCamera();
+    if (camera == null || widget.previewExtent <= 0) return false;
+
+    final overlap = _pinPreviewOverlap();
+    if (overlap != null) {
+      if (overlap > 1) _panCameraBy(camera, overlap);
+      return true;
     }
+
     final dest = pinRevealCenter(
       camera: camera,
       pin: LatLng(listing.latitude, listing.longitude),
       previewExtent: widget.previewExtent,
     );
-    if (dest == null) return;
-    _animateTo(dest);
+    if (dest != null) _animateTo(dest);
+    return true;
+  }
+
+  double? _pinPreviewOverlap() {
+    final pinBox =
+        _selectedPinKey.currentContext?.findRenderObject() as RenderBox?;
+    final mapBox = context.findRenderObject() as RenderBox?;
+    if (pinBox == null ||
+        !pinBox.hasSize ||
+        mapBox == null ||
+        !mapBox.hasSize) {
+      return null;
+    }
+    final pinBottom = pinBox.localToGlobal(Offset(0, pinBox.size.height)).dy;
+    final coveredTop =
+        mapBox.localToGlobal(Offset.zero).dy +
+        mapBox.size.height -
+        widget.previewExtent;
+    return pinBottom + _pinRevealGap - coveredTop;
+  }
+
+  void _panCameraBy(MapCamera camera, double overflowDy) {
+    _animateTo(
+      camera.screenOffsetToLatLng(
+        camera.latLngToScreenOffset(camera.center) + Offset(0, overflowDy),
+      ),
+    );
   }
 
   void _animateTo(LatLng dest) {
-    _revealAnimation?.dispose();
+    final previous = _revealAnimation;
+    _revealAnimation = null;
+    previous?.dispose();
     final MapCamera camera;
     try {
       camera = _controller.camera;
@@ -255,10 +314,17 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
         (from.longitude - dest.longitude).abs() < 1e-8) {
       return;
     }
-    final animation = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 280),
-    );
+    final zoom = camera.zoom;
+    late final AnimationController animation;
+    try {
+      animation = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 280),
+      );
+    } catch (_) {
+      _controller.move(dest, zoom);
+      return;
+    }
     _revealAnimation = animation;
     final curved = CurvedAnimation(
       parent: animation,
@@ -266,7 +332,6 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
     );
     final lat = Tween(begin: from.latitude, end: dest.latitude);
     final lng = Tween(begin: from.longitude, end: dest.longitude);
-    final zoom = camera.zoom;
     animation
       ..addListener(() {
         _controller.move(
@@ -304,9 +369,10 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
           minZoom: _minZoom,
           maxZoom: _maxZoom,
           backgroundColor: _mapFill,
-          onMapReady: _revealSelectedPin,
+          onMapReady: () => _requestReveal(widget.selectedId),
           interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.pinchZoom |
+            flags:
+                InteractiveFlag.pinchZoom |
                 InteractiveFlag.doubleTapZoom |
                 InteractiveFlag.doubleTapDragZoom,
             scrollWheelVelocity: _scrollZoomVelocity,
@@ -480,9 +546,15 @@ class _MapboxTilesMapState extends State<_MapboxTilesMap>
           alignment: Alignment.center,
           child: Center(
             child: PricePin(
+              key: listing.id == (_revealId ?? widget.selectedId)
+                  ? _selectedPinKey
+                  : null,
               label: listing.total,
               active: listing.id == widget.selectedId,
-              onTap: () => widget.onSelectPin(listing.id),
+              onTap: () {
+                widget.onSelectPin(listing.id);
+                _requestReveal(listing.id);
+              },
             ),
           ),
         ),
@@ -640,10 +712,7 @@ double scrollAmount(Offset delta) {
 }
 
 @visibleForTesting
-double zoomAfterScale({
-  required double startZoom,
-  required double scale,
-}) {
+double zoomAfterScale({required double startZoom, required double scale}) {
   if (scale <= 0) return startZoom;
   return (startZoom + math.log(scale) / math.ln2)
       .clamp(_minZoom, _maxZoom)
@@ -661,13 +730,19 @@ LatLng? pinRevealCenter({
     return null;
   }
 
+  final mapHeight = camera.nonRotatedSize.height;
+  final coveredTop = mapHeight - previewExtent;
+  if (coveredTop <= _pinHeight) return null;
+
   final pinScreen = camera.latLngToScreenOffset(pin);
-  final coveredTop = camera.nonRotatedSize.height - previewExtent;
-  final overflow = pinScreen.dy + _pinHeight / 2 + _pinRevealGap - coveredTop;
-  if (overflow <= 1) return null;
+  final pinBottom = pinScreen.dy + _pinHeight / 2;
+  final overflow = pinBottom + _pinRevealGap - coveredTop;
+  final shiftToVisibleCenter = pinScreen.dy - coveredTop / 2;
+  final shift = math.max(overflow, shiftToVisibleCenter);
+  if (shift <= 1) return null;
 
   return camera.screenOffsetToLatLng(
-    camera.latLngToScreenOffset(camera.center) + Offset(0, overflow),
+    camera.latLngToScreenOffset(camera.center) + Offset(0, shift),
   );
 }
 

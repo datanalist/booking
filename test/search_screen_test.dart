@@ -14,6 +14,8 @@ import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/screens/search/search_query_sheet.dart';
 import 'package:booking/screens/search/search_screen.dart';
 import 'package:booking/theme/app_theme.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 Future<void> _submitSearchCity(WidgetTester tester, String city) async {
   await tester.tap(find.byTooltip('Поиск'));
@@ -251,6 +253,62 @@ void main() {
     expect(selected + 36, lessThan(mapHeight - previewExtent));
   });
 
+  test('pinRevealCenter lifts a centered pin above the preview', () {
+    final camera = MapCamera(
+      crs: const Epsg3857(),
+      center: const LatLng(55.75, 37.62),
+      zoom: 12.2,
+      rotation: 0,
+      nonRotatedSize: const Size(800, 900),
+    );
+    final dest = pinRevealCenter(
+      camera: camera,
+      pin: camera.center,
+      previewExtent: 320,
+    );
+
+    expect(dest, isNotNull);
+    expect(dest!.latitude, lessThan(camera.center.latitude));
+  });
+
+  test('pinRevealCenter is null until the preview is measured', () {
+    final camera = MapCamera(
+      crs: const Epsg3857(),
+      center: const LatLng(55.75, 37.62),
+      zoom: 12.2,
+      rotation: 0,
+      nonRotatedSize: const Size(800, 900),
+    );
+
+    expect(
+      pinRevealCenter(camera: camera, pin: camera.center, previewExtent: 0),
+      isNull,
+    );
+  });
+
+  test('pinRevealCenter stays put when the pin is already in view', () {
+    final camera = MapCamera(
+      crs: const Epsg3857(),
+      center: const LatLng(55.75, 37.62),
+      zoom: 12.2,
+      rotation: 0,
+      nonRotatedSize: const Size(800, 900),
+    );
+    const previewExtent = 320.0;
+    final visibleCenter = camera.screenOffsetToLatLng(
+      Offset(400, (900 - previewExtent) / 2),
+    );
+
+    expect(
+      pinRevealCenter(
+        camera: camera,
+        pin: visibleCenter,
+        previewExtent: previewExtent,
+      ),
+      isNull,
+    );
+  });
+
   testWidgets('tapping a map pin keeps it above the preview card', (
     tester,
   ) async {
@@ -286,6 +344,57 @@ void main() {
         .first;
     expect(tester.getBottomLeft(pin).dy, lessThan(tester.getTopLeft(card).dy));
   });
+
+  testWidgets(
+    'tapping a pin again after closing still lifts it above the card',
+    (tester) async {
+      tester.view.physicalSize = const Size(800, 520);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+
+      await tester.tap(find.byTooltip('Карта'));
+      await tester.pump();
+
+      final pin = find.byKey(const ValueKey('map-pin-house-10km'));
+      await tester.tap(pin);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Частный дом в 10 км от Москвы'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Закрыть'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Частный дом в 10 км от Москвы'), findsNothing);
+      final yClosed = tester.getTopLeft(pin).dy;
+
+      await tester.tap(pin);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Частный дом в 10 км от Москвы'), findsOneWidget);
+      expect(tester.getTopLeft(pin).dy, lessThan(yClosed));
+
+      final card = find
+          .ancestor(
+            of: find.text('Частный дом в 10 км от Москвы'),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Material &&
+                  widget.borderRadius == BorderRadius.circular(12),
+            ),
+          )
+          .first;
+      expect(
+        tester.getBottomLeft(pin).dy,
+        lessThan(tester.getTopLeft(card).dy),
+      );
+    },
+  );
 
   testWidgets('filter icon opens the filters bottom sheet', (tester) async {
     await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
