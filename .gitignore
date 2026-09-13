@@ -1,6 +1,28 @@
-# Local secrets (PocketBase admin, Mapbox, VPS)
-.env.local
-config/mapbox.env
+# Secrets and credentials — never commit real values
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.env
+!*.env.example
+!**/*.env.example
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+id_ecdsa
+*.keystore
+*.jks
+key.properties
+local.properties
+credentials.json
+**/service-account*.json
+**/google-services.json
+**/GoogleService-Info.plist
+pb_data/
+*.sqlite
+*.sqlite3
 
 # Miscellaneous
 *.class
