@@ -1,3 +1,7 @@
+# Local secrets (PocketBase admin, Mapbox, VPS)
+.env.local
+config/mapbox.env
+
 # Miscellaneous
 *.class
 *.log

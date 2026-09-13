@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-/// Публичный токен Mapbox из `.env.local` / `config/mapbox.env` или `--dart-define`.
+/// Токен Mapbox из `--dart-define` или локального `config/mapbox.env` (не в git).
 abstract final class MapboxConfig {
   static String accessToken = '';
 
@@ -14,7 +14,10 @@ abstract final class MapboxConfig {
     const fromMapbox = String.fromEnvironment('MAPBOX_TOKEN');
     if (fromMapbox.isNotEmpty) return fromMapbox;
 
-    for (final asset in const ['.env.local', 'config/mapbox.env']) {
+    for (final asset in const [
+      'config/mapbox.env',
+      'config/mapbox.env.example',
+    ]) {
       try {
         final token = _parse(await rootBundle.loadString(asset));
         if (token.isNotEmpty) return token;
