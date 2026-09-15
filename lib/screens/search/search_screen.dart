@@ -492,7 +492,6 @@ class _Chip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      alignment: Alignment.center,
       decoration: const ShapeDecoration(
         color: AppColors.searchFieldFill,
         shape: StadiumBorder(side: BorderSide(color: AppColors.orange)),
