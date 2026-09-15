@@ -37,14 +37,17 @@
 **Поиск и карточка**
 - Публичные `listings` со `status = published`, хозяин через `expand=host`
 - Поиск по городу, датам и гостям (Mapbox Geocoding), фильтры: тип жилья, цена, удобства, доп. опции
+- Форма «Снять жилье» — отдельный экран (`MaterialPageRoute`), не modal-sheet: так поле города принимает клавиатуру на Android 16
+- Чипы под шапкой — только параметры этой формы (город, даты, гости)
 - Список и карта с пинами; фото с файлового API PocketBase (`ListingImage`)
-- Деталка: галерея, удобства, хозяин, другие объявления того же хоста
+- Деталка: галерея, удобства, хозяин; «Смотреть все» открывает список объявлений хозяина
+- Сердце избранного — глиф Iconly (`FavoriteHeartButton`); состояние локальное, вкладка «Избранное» с PocketBase не связана
 
 **Ещё не сделано:** вход/регистрация, создание брони, серверные избранное и чаты.
 
 **Прочее**
 - Тема `AppTheme`, locale `ru_RU`, edge-to-edge, скрыт debug-banner
-- Нативный Android splash — белый фон, подпись GlobalStay; в манифесте `INTERNET`
+- Нативный Android splash — белый фон, подпись GlobalStay; в манифесте `INTERNET` и `windowSoftInputMode=adjustPan`
 - Виджет-тесты: сплэш → онбординг → поиск, фильтры, деталка (репозиторий подменяется фикстурой)
 
 ## Бэкенд
@@ -90,6 +93,8 @@ flutter run -d linux
 ### Android (эмулятор Pixel)
 
 AVD `pixel` (Android 16 / Play Store). После загрузки обычно виден как `emulator-5554`.
+
+Чтобы печатать с клавиатуры компьютера, в `~/.android/avd/pixel.avd/config.ini` должно быть `hw.keyboard=yes`. Если меняли значение — холодная загрузка (`emulator -avd pixel -no-snapshot-load`), иначе снимок поднимет старый `hw.keyboard=no`. Кликните окно эмулятора, затем поле «Город или адрес».
 
 ```bash
 export PATH="$HOME/development/flutter/bin:$PATH"
@@ -145,13 +150,13 @@ Booking/
 │   ├── theme/app_theme.dart
 │   ├── config/                    # PocketBase URL, Mapbox
 │   ├── data/                      # клиент PB, ListingsRepository
-│   ├── widgets/listing_image.dart # сеть или ассет
+│   ├── widgets/                   # ListingImage, FavoriteHeartButton
 │   ├── shell/main_shell.dart      # нижняя панель
 │   └── screens/
 │       ├── splash_screen.dart
 │       ├── onboarding_screen.dart
 │       ├── search/                # каталог, карта, фильтры, запрос
-│       ├── listing/               # деталка объявления
+│       ├── listing/               # деталка и список объявлений хозяина
 │       ├── bookings/
 │       ├── favorites/
 │       ├── chat/
