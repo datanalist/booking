@@ -126,16 +126,13 @@ class _SearchScreenState extends State<SearchScreen> {
     return true;
   }
 
-  List<String> get _activeChips {
-    return [..._query.chipLabels, ..._filters.chipLabels];
-  }
+  List<String> get _activeChips => _query.chipLabels;
 
   static String _normalize(String value) {
     return value.toLowerCase().replaceAll('ё', 'е').trim();
   }
 
   Future<void> _openSearchQuery() async {
-    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await SearchQuerySheet.show(
       context,
       initial: _query,
@@ -146,7 +143,6 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _openFilters() async {
-    FocusManager.instance.primaryFocus?.unfocus();
     final selected = await SearchFiltersSheet.show(context, initial: _filters);
     if (!mounted || selected == null) return;
     setState(() => _filters = selected);

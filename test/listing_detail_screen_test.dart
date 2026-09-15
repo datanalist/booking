@@ -120,4 +120,71 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('see-all opens the host listings screen', (tester) async {
+    final favorites = <String>{};
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail.fromListing(
+      listing,
+      hostListings: [
+        for (final item in kDemoListings)
+          if (item.id != listing.id && item.hostId == listing.hostId) item,
+      ],
+    );
+
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: favorites,
+          initialDetail: detail,
+          onFavorite: (id) {
+            if (!favorites.remove(id)) favorites.add(id);
+          },
+        ),
+      ),
+    );
+
+    final seeAll = find.byKey(const ValueKey('listing-host-see-all'));
+    await tester.scrollUntilVisible(
+      seeAll,
+      300,
+      scrollable: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable &&
+            (widget.axisDirection == AxisDirection.down ||
+                widget.axisDirection == AxisDirection.up),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(seeAll);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('host-listings')), findsOneWidget);
+    expect(find.text('Объявления владельца Анна Иваненко'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('host-listings')),
+        matching: find.text('Квартира в старом городе'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('host-listings')),
+        matching: find.text('Частный дом в 10 км от Москвы'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('host-listings')),
+        matching: find.text('Квартира в старом городе'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('listing-detail-old-town')), findsOneWidget);
+  });
 }

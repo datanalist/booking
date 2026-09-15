@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
 import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
+import 'host_listings_screen.dart';
 import 'listing_detail.dart';
 
 const _meta = Color(0xFF525252);
@@ -89,8 +90,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     setState(() {});
   }
 
-  void _openListing(SearchListing listing) {
-    ListingDetailScreen.open(
+  Future<void> _openListing(SearchListing listing) {
+    return ListingDetailScreen.open(
       context,
       listing: listing,
       favorites: widget.favorites,
@@ -164,6 +165,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                               favorites: widget.favorites,
                               onOpen: _openListing,
                               onFavorite: _toggleFavorite,
+                              onSeeAll: () => HostListingsScreen.open(
+                                context,
+                                hostName: detail.host.name,
+                                listings: detail.hostListings,
+                                favorites: widget.favorites,
+                                onFavorite: _toggleFavorite,
+                                onOpen: _openListing,
+                              ),
                             ),
                           ],
                         ],
@@ -547,11 +556,13 @@ class _Reviews extends StatelessWidget {
 }
 
 class _SeeAll extends StatelessWidget {
-  const _SeeAll();
+  const _SeeAll({super.key, this.onTap});
+
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
+    const label = Padding(
       padding: EdgeInsets.symmetric(vertical: 4),
       child: Text(
         'Смотреть все',
@@ -565,6 +576,12 @@ class _SeeAll extends StatelessWidget {
           decorationColor: AppColors.orange,
         ),
       ),
+    );
+    if (onTap == null) return label;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: label,
     );
   }
 }
@@ -778,21 +795,23 @@ class _HostListings extends StatelessWidget {
     required this.favorites,
     required this.onOpen,
     required this.onFavorite,
+    required this.onSeeAll,
   });
 
   final List<SearchListing> listings;
   final Set<String> favorites;
   final ValueChanged<SearchListing> onOpen;
   final ValueChanged<String> onFavorite;
+  final VoidCallback onSeeAll;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
-            Expanded(
+            const Expanded(
               child: Text(
                 'Другие объявления владельца',
                 style: TextStyle(
@@ -804,7 +823,10 @@ class _HostListings extends StatelessWidget {
                 ),
               ),
             ),
-            _SeeAll(),
+            _SeeAll(
+              key: const ValueKey('listing-host-see-all'),
+              onTap: onSeeAll,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -814,171 +836,15 @@ class _HostListings extends StatelessWidget {
             children: [
               for (var i = 0; i < listings.length; i++) ...[
                 if (i != 0) const SizedBox(width: 12),
-                _HostListingCard(
+                HostListingCard(
                   listing: listings[i],
                   favorite: favorites.contains(listings[i].id),
+                  width: 260,
                   onTap: () => onOpen(listings[i]),
                   onFavorite: () => onFavorite(listings[i].id),
                 ),
               ],
             ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HostListingCard extends StatelessWidget {
-  const _HostListingCard({
-    required this.listing,
-    required this.favorite,
-    required this.onTap,
-    required this.onFavorite,
-  });
-
-  final SearchListing listing;
-  final bool favorite;
-  final VoidCallback onTap;
-  final VoidCallback onFavorite;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.white,
-      shape: RoundedRectangleBorder(
-        side: const BorderSide(color: _reviewStroke),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          width: 260,
-          height: 247,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ListingImage(
-                      listing.photo,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: FavoriteHeartButton(
-                        favorite: favorite,
-                        size: 32,
-                        iconSize: 18,
-                        onTap: onFavorite,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      listing.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        height: 1.40,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 4,
-                      children: [
-                        _TinyMeta(
-                          icon: Icons.location_on_outlined,
-                          label: listing.city,
-                        ),
-                        _TinyMeta(
-                          icon: Icons.home_outlined,
-                          label: listing.type,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Text(
-                          listing.rating,
-                          style: const TextStyle(
-                            fontFamily: AppTheme.fontFamily,
-                            fontWeight: FontWeight.w400,
-                            fontSize: 12,
-                            height: 1.50,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                        const Icon(
-                          Icons.star,
-                          size: 16,
-                          color: AppColors.yellow,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          reviewCountLabel(
-                            reviewCountFromLabel(listing.reviews),
-                          ),
-                          style: const TextStyle(
-                            fontFamily: AppTheme.fontFamily,
-                            fontWeight: FontWeight.w400,
-                            fontSize: 12,
-                            height: 1.50,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TinyMeta extends StatelessWidget {
-  const _TinyMeta({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: _meta),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontFamily: AppTheme.fontFamily,
-            fontWeight: FontWeight.w400,
-            fontSize: 12,
-            height: 1.50,
-            color: _meta,
           ),
         ),
       ],

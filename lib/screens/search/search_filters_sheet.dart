@@ -91,13 +91,6 @@ class SearchFilters {
       amenities.length +
       extras.length +
       (price != null ? 1 : 0);
-
-  List<String> get chipLabels => [
-    ...housingTypes,
-    if (price != null) '${price!.start.round()}–${price!.end.round()} ₽',
-    ...amenities,
-    ...extras,
-  ];
 }
 
 class SearchFiltersSheet extends StatefulWidget {

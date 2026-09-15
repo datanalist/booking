@@ -478,6 +478,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Диапазон цен'), findsNothing);
+    expect(find.byKey(const ValueKey('search-chips-scroll')), findsNothing);
     expect(find.text('Квартира'), findsWidgets);
     expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
     expect(find.text('Частный дом в 10 км от Москвы'), findsNothing);
@@ -539,7 +540,8 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Отель'), findsOneWidget);
+    expect(find.byKey(const ValueKey('search-chips-scroll')), findsNothing);
+    expect(find.text('Отель'), findsNothing);
   });
 
   testWidgets('applied filter badge counts each selected filter', (
@@ -570,6 +572,81 @@ void main() {
           )
           .data,
       '2',
+    );
+    expect(find.byKey(const ValueKey('search-chips-scroll')), findsNothing);
+  });
+
+  testWidgets('extended filters do not add chips next to search query chips', (
+    tester,
+  ) async {
+    await _pumpSearch(tester);
+    await _submitSearchCity(tester, 'Казань');
+
+    expect(find.byKey(const ValueKey('search-chips-scroll')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('search-chips-scroll')),
+        matching: find.text('Казань'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('search-chips-scroll')),
+        matching: find.text('1 взрослый'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Фильтры'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Wifi'));
+    await tester.tap(find.text('Wifi'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Применить'));
+    await tester.tap(find.text('Применить'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('search-chips-scroll')),
+        matching: find.text('Wifi'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('search-chips-scroll')),
+        matching: find.text('Казань'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('city field keeps typed text when keyboard insets appear', (
+    tester,
+  ) async {
+    await _pumpSearch(tester);
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 400);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    await tester.enterText(
+      find.byKey(const ValueKey('search-city-field')),
+      'Казань',
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('search-city-field')))
+          .controller
+          ?.text,
+      'Казань',
     );
   });
 
