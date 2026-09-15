@@ -160,7 +160,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
     _city = TextEditingController(text: initial.city);
     _checkIn = initial.checkIn;
     _checkOut = initial.checkOut;
-    _adults = initial.adults;
+    _adults = initial.adults < 1 ? 1 : initial.adults;
     _children = initial.children;
     _pets = initial.pets;
   }
@@ -170,7 +170,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
       _city.clear();
       _checkIn = null;
       _checkOut = null;
-      _adults = 0;
+      _adults = 1;
       _children = 0;
       _pets = 0;
       _showCities = false;
@@ -189,7 +189,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
 
   bool get _canSearch {
     final city = _city.text.trim();
-    if (city.isNotEmpty) return true;
+    if (city.isNotEmpty) return _adults >= 1;
     return widget.initial.isActive;
   }
 
@@ -253,11 +253,15 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
   }
 
   SearchQuery _draft() {
+    final city = _city.text.trim();
+    if (city.isEmpty) {
+      return const SearchQuery();
+    }
     return SearchQuery(
-      city: _city.text.trim(),
+      city: city,
       checkIn: _checkIn,
       checkOut: _checkOut,
-      adults: _adults,
+      adults: _adults < 1 ? 1 : _adults,
       children: _children,
       pets: _pets,
     );
@@ -481,6 +485,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                         title: 'Количество взрослых',
                         subtitle: '12 лет и старше',
                         value: _adults,
+                        min: 1,
                         onChanged: (value) => setState(() => _adults = value),
                       ),
                       const SizedBox(height: 40),
@@ -706,6 +711,7 @@ class _GuestRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.subtitle,
+    this.min = 0,
     this.max = 16,
   });
 
@@ -713,6 +719,7 @@ class _GuestRow extends StatelessWidget {
   final String? subtitle;
   final int value;
   final ValueChanged<int> onChanged;
+  final int min;
   final int max;
 
   @override
@@ -754,7 +761,7 @@ class _GuestRow extends StatelessWidget {
             children: [
               _StepperButton(
                 icon: Icons.remove,
-                enabled: value > 0,
+                enabled: value > min,
                 onTap: () => onChanged(value - 1),
               ),
               Text(

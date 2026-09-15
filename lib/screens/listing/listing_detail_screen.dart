@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/favorite_heart_button.dart';
 import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
 import 'listing_detail.dart';
@@ -160,7 +161,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                             const SizedBox(height: 20),
                             _HostListings(
                               listings: detail.hostListings,
+                              favorites: widget.favorites,
                               onOpen: _openListing,
+                              onFavorite: _toggleFavorite,
                             ),
                           ],
                         ],
@@ -229,14 +232,9 @@ class _HeroGallery extends StatelessWidget {
                       tooltip: 'Назад',
                       onTap: onBack,
                     ),
-                    _CircleButton(
-                      icon: favorite ? Icons.favorite : Icons.favorite_border,
-                      color: favorite
-                          ? AppColors.orange
-                          : AppColors.textPrimary,
-                      tooltip: favorite
-                          ? 'Убрать из избранного'
-                          : 'В избранное',
+                    FavoriteHeartButton(
+                      key: const ValueKey('listing-hero-favorite'),
+                      favorite: favorite,
                       onTap: onFavorite,
                     ),
                   ],
@@ -775,10 +773,17 @@ class _HostBadge extends StatelessWidget {
 }
 
 class _HostListings extends StatelessWidget {
-  const _HostListings({required this.listings, required this.onOpen});
+  const _HostListings({
+    required this.listings,
+    required this.favorites,
+    required this.onOpen,
+    required this.onFavorite,
+  });
 
   final List<SearchListing> listings;
+  final Set<String> favorites;
   final ValueChanged<SearchListing> onOpen;
+  final ValueChanged<String> onFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -811,7 +816,9 @@ class _HostListings extends StatelessWidget {
                 if (i != 0) const SizedBox(width: 12),
                 _HostListingCard(
                   listing: listings[i],
+                  favorite: favorites.contains(listings[i].id),
                   onTap: () => onOpen(listings[i]),
+                  onFavorite: () => onFavorite(listings[i].id),
                 ),
               ],
             ],
@@ -823,10 +830,17 @@ class _HostListings extends StatelessWidget {
 }
 
 class _HostListingCard extends StatelessWidget {
-  const _HostListingCard({required this.listing, required this.onTap});
+  const _HostListingCard({
+    required this.listing,
+    required this.favorite,
+    required this.onTap,
+    required this.onFavorite,
+  });
 
   final SearchListing listing;
+  final bool favorite;
   final VoidCallback onTap;
+  final VoidCallback onFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -846,10 +860,25 @@ class _HostListingCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: ListingImage(
-                  listing.photo,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ListingImage(
+                      listing.photo,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: FavoriteHeartButton(
+                        favorite: favorite,
+                        size: 32,
+                        iconSize: 18,
+                        onTap: onFavorite,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               Padding(

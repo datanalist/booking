@@ -108,10 +108,16 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byTooltip('В избранное'));
+    await tester.tap(find.byKey(const ValueKey('listing-hero-favorite')));
     await tester.pump();
 
     expect(favorites, contains('studio-msk'));
-    expect(find.byTooltip('Убрать из избранного'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('listing-hero-favorite')),
+        matching: find.byTooltip('Убрать из избранного'),
+      ),
+      findsOneWidget,
+    );
   });
 }

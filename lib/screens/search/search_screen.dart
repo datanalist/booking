@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/favorite_heart_button.dart';
 import '../../widgets/listing_image.dart';
 import '../listing/listing_detail_screen.dart';
 import 'search_filters_sheet.dart';
@@ -176,16 +177,13 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   if (_activeChips.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (var i = 0; i < _activeChips.length; i++) ...[
-                            if (i > 0) const SizedBox(width: 8),
-                            _Chip(label: _activeChips[i]),
-                          ],
-                        ],
-                      ),
+                    Wrap(
+                      key: const ValueKey('search-chips-scroll'),
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final label in _activeChips) _Chip(label: label),
+                      ],
                     ),
                   ],
                 ],
@@ -501,6 +499,8 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        softWrap: false,
         style: const TextStyle(
           fontFamily: AppTheme.fontFamily,
           fontWeight: FontWeight.w400,
@@ -673,13 +673,10 @@ class _ApartmentCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _RoundIconButton(
+                    FavoriteHeartButton(
+                      favorite: favorite,
                       size: buttonSize,
-                      icon: favorite ? Icons.favorite : Icons.favorite_border,
                       iconSize: compact ? 18 : 20,
-                      color: favorite
-                          ? AppColors.orange
-                          : AppColors.textPrimary,
                       onTap: onFavorite,
                     ),
                     if (onClose != null) ...[

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../widgets/favorite_heart_button.dart';
 
 /// Вкладка «Избранное» по макетам Figma `1:12120` (пусто) и `1:12159` (список).
 class FavoritesScreen extends StatefulWidget {
@@ -186,24 +187,9 @@ class _ApartmentCardState extends State<_ApartmentCard> {
                 Positioned(
                   top: 20,
                   right: 20,
-                  child: Material(
-                    color: AppColors.white,
-                    shape: const CircleBorder(),
-                    elevation: 2,
-                    shadowColor: const Color(0x33000000),
-                    child: InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: widget.onRemove,
-                      child: const SizedBox(
-                        width: 36,
-                        height: 36,
-                        child: Icon(
-                          Icons.favorite,
-                          size: 20,
-                          color: AppColors.orange,
-                        ),
-                      ),
-                    ),
+                  child: FavoriteHeartButton(
+                    favorite: true,
+                    onTap: widget.onRemove,
                   ),
                 ),
                 Positioned(

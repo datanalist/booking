@@ -67,6 +67,7 @@ void main() {
     await _submitSearchCity(tester, 'Казань');
 
     expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
+    expect(find.text('1 взрослый'), findsOneWidget);
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
 
     await _submitSearchCity(tester, 'Владивосток');
@@ -103,6 +104,8 @@ void main() {
     expect(find.text('Количество взрослых'), findsOneWidget);
     expect(find.text('Количество детей'), findsOneWidget);
     expect(find.text('Количество животных'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('0'), findsNWidgets(2));
     expect(find.text('Сбросить фильтры'), findsOneWidget);
     expect(find.text('Вернуться'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Найти'), findsOneWidget);
@@ -139,6 +142,7 @@ void main() {
           .text,
       isEmpty,
     );
+    expect(find.text('1'), findsOneWidget);
 
     await tester.ensureVisible(find.widgetWithText(FilledButton, 'Найти'));
     await tester.tap(find.widgetWithText(FilledButton, 'Найти'));
@@ -259,7 +263,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(const ValueKey('listing-card-kazan-loft')),
-        matching: find.byIcon(Icons.favorite_border),
+        matching: find.byTooltip('В избранное'),
       ),
     );
     await tester.pump();
@@ -269,7 +273,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('listing-card-kazan-loft')),
-        matching: find.byIcon(Icons.favorite),
+        matching: find.byTooltip('Убрать из избранного'),
       ),
       findsOneWidget,
     );
