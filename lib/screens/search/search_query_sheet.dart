@@ -115,23 +115,20 @@ class SearchQuerySheet extends StatefulWidget {
     required List<String> cities,
     AddressSuggest? suggestAddresses,
   }) {
-    return showModalBottomSheet<SearchQuery>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      barrierColor: const Color(0x661A1B1C),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SearchQuerySheet(
-          initial: initial,
-          cities: cities,
-          suggestAddresses: suggestAddresses,
-        ),
+    return Navigator.of(context).push<SearchQuery>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) {
+          return Scaffold(
+            resizeToAvoidBottomInset: true,
+            backgroundColor: AppColors.white,
+            body: SearchQuerySheet(
+              initial: initial,
+              cities: cities,
+              suggestAddresses: suggestAddresses,
+            ),
+          );
+        },
       ),
     );
   }
@@ -142,6 +139,7 @@ class SearchQuerySheet extends StatefulWidget {
 
 class _SearchQuerySheetState extends State<SearchQuerySheet> {
   late final TextEditingController _city;
+  late final FocusNode _cityFocus;
   late DateTime? _checkIn;
   late DateTime? _checkOut;
   late int _adults;
@@ -158,6 +156,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
     super.initState();
     final initial = widget.initial;
     _city = TextEditingController(text: initial.city);
+    _cityFocus = FocusNode();
     _checkIn = initial.checkIn;
     _checkOut = initial.checkOut;
     _adults = initial.adults < 1 ? 1 : initial.adults;
@@ -183,6 +182,7 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
   @override
   void dispose() {
     _suggestTimer?.cancel();
+    _cityFocus.dispose();
     _city.dispose();
     super.dispose();
   }
@@ -310,273 +310,295 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.92;
+    final preferredHeight = MediaQuery.sizeOf(context).height * 0.92;
 
-    return SizedBox(
-      height: maxHeight,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        ),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(24, 8, 24, 8 + bottomInset),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _SheetHandle(),
-              const SizedBox(height: 32),
-              const SizedBox(
-                width: double.infinity,
-                child: Text(
-                  'Снять жилье',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 24,
-                    height: 1.2,
-                    color: Color(0xFF1A1B1C),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxHeight = constraints.hasBoundedHeight
+            ? constraints.maxHeight
+            : preferredHeight;
+        return SizedBox(
+          height: maxHeight,
+          child: DecoratedBox(
+            decoration: const BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24, 8, 24, 8 + bottomInset),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SheetHandle(),
+                  const SizedBox(height: 32),
+                  const SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      'Снять жилье',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 24,
+                        height: 1.2,
+                        color: Color(0xFF1A1B1C),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 40),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _FieldLabel('Город'),
-                      const SizedBox(height: 8),
-                      _PillField(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                key: const ValueKey('search-city-field'),
-                                controller: _city,
-                                onChanged: _onCityChanged,
-                                onTap: () => setState(() => _showCities = true),
-                                style: const TextStyle(
-                                  fontFamily: AppTheme.fontFamily,
-                                  fontWeight: FontWeight.w400,
-                                  fontSize: 16,
-                                  height: 1.45,
-                                  color: Color(0xFF1A1B1C),
+                  const SizedBox(height: 40),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _FieldLabel('Город'),
+                          const SizedBox(height: 8),
+                          _PillField(
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    key: const ValueKey('search-city-field'),
+                                    controller: _city,
+                                    focusNode: _cityFocus,
+                                    keyboardType: TextInputType.text,
+                                    textInputAction: TextInputAction.search,
+                                    textCapitalization:
+                                        TextCapitalization.words,
+                                    onChanged: _onCityChanged,
+                                    onTap: () =>
+                                        setState(() => _showCities = true),
+                                    style: const TextStyle(
+                                      fontFamily: AppTheme.fontFamily,
+                                      fontWeight: FontWeight.w400,
+                                      fontSize: 16,
+                                      height: 1.45,
+                                      color: Color(0xFF1A1B1C),
+                                    ),
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      hintText: 'Город или адрес',
+                                      hintStyle: TextStyle(
+                                        fontFamily: AppTheme.fontFamily,
+                                        fontWeight: FontWeight.w400,
+                                        fontSize: 16,
+                                        height: 1.45,
+                                        color: Color(0xFF89919D),
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ),
                                 ),
-                                decoration: const InputDecoration(
-                                  isDense: true,
-                                  hintText: 'Город или адрес',
-                                  hintStyle: TextStyle(
-                                    fontFamily: AppTheme.fontFamily,
-                                    fontWeight: FontWeight.w400,
-                                    fontSize: 16,
-                                    height: 1.45,
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => setState(
+                                    () => _showCities = !_showCities,
+                                  ),
+                                  child: const Icon(
+                                    Icons.keyboard_arrow_down,
+                                    size: 20,
                                     color: Color(0xFF89919D),
                                   ),
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_showCities &&
+                              (_addressSuggestions.isNotEmpty ||
+                                  _suggesting)) ...[
+                            const SizedBox(height: 8),
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: AppColors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E5EA),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () =>
-                                  setState(() => _showCities = !_showCities),
-                              child: const Icon(
-                                Icons.keyboard_arrow_down,
-                                size: 20,
-                                color: Color(0xFF89919D),
+                              child: Column(
+                                children: [
+                                  if (_suggesting)
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 12,
+                                      ),
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: AppColors.orange,
+                                        ),
+                                      ),
+                                    ),
+                                  for (final city in _addressSuggestions)
+                                    InkWell(
+                                      onTap: () {
+                                        _suggestTimer?.cancel();
+                                        setState(() {
+                                          _city.text = city;
+                                          _showCities = false;
+                                          _suggesting = false;
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                          vertical: 12,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.location_on_outlined,
+                                              size: 18,
+                                              color: Color(0xFF89919D),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                city,
+                                                style: const TextStyle(
+                                                  fontFamily:
+                                                      AppTheme.fontFamily,
+                                                  fontWeight: FontWeight.w400,
+                                                  fontSize: 16,
+                                                  height: 1.45,
+                                                  color: Color(0xFF1A1B1C),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      if (_showCities &&
-                          (_addressSuggestions.isNotEmpty || _suggesting)) ...[
-                        const SizedBox(height: 8),
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2E5EA)),
-                          ),
-                          child: Column(
+                          const SizedBox(height: 40),
+                          Row(
                             children: [
-                              if (_suggesting)
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 12),
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: AppColors.orange,
-                                    ),
-                                  ),
+                              Expanded(
+                                child: _DateField(
+                                  label: 'Дата заезда',
+                                  value: _checkIn,
+                                  hint: '14.11.2024',
+                                  onTap: () => _pickDate(checkOut: false),
                                 ),
-                              for (final city in _addressSuggestions)
-                                InkWell(
-                                  onTap: () {
-                                    _suggestTimer?.cancel();
-                                    setState(() {
-                                      _city.text = city;
-                                      _showCities = false;
-                                      _suggesting = false;
-                                    });
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 12,
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.location_on_outlined,
-                                          size: 18,
-                                          color: Color(0xFF89919D),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            city,
-                                            style: const TextStyle(
-                                              fontFamily: AppTheme.fontFamily,
-                                              fontWeight: FontWeight.w400,
-                                              fontSize: 16,
-                                              height: 1.45,
-                                              color: Color(0xFF1A1B1C),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: _DateField(
+                                  label: 'Дата выезда',
+                                  value: _checkOut,
+                                  hint: '15.11.2024',
+                                  onTap: () => _pickDate(checkOut: true),
                                 ),
+                              ),
                             ],
                           ),
-                        ),
-                      ],
-                      const SizedBox(height: 40),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _DateField(
-                              label: 'Дата заезда',
-                              value: _checkIn,
-                              hint: '14.11.2024',
-                              onTap: () => _pickDate(checkOut: false),
+                          const SizedBox(height: 40),
+                          _GuestRow(
+                            title: 'Количество взрослых',
+                            subtitle: '12 лет и старше',
+                            value: _adults,
+                            min: 1,
+                            onChanged: (value) =>
+                                setState(() => _adults = value),
+                          ),
+                          const SizedBox(height: 40),
+                          _GuestRow(
+                            title: 'Количество детей',
+                            subtitle: '0-11 лет',
+                            value: _children,
+                            onChanged: (value) =>
+                                setState(() => _children = value),
+                          ),
+                          const SizedBox(height: 40),
+                          _GuestRow(
+                            title: 'Количество животных',
+                            value: _pets,
+                            onChanged: (value) => setState(() => _pets = value),
+                          ),
+                          const SizedBox(height: 32),
+                          Center(
+                            child: GestureDetector(
+                              onTap: _reset,
+                              child: const Text(
+                                'Сбросить фильтры',
+                                style: TextStyle(
+                                  fontFamily: AppTheme.fontFamily,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  height: 1.4,
+                                  color: AppColors.orange,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppColors.orange,
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _DateField(
-                              label: 'Дата выезда',
-                              value: _checkOut,
-                              hint: '15.11.2024',
-                              onTap: () => _pickDate(checkOut: true),
-                            ),
-                          ),
+                          const SizedBox(height: 32),
                         ],
                       ),
-                      const SizedBox(height: 40),
-                      _GuestRow(
-                        title: 'Количество взрослых',
-                        subtitle: '12 лет и старше',
-                        value: _adults,
-                        min: 1,
-                        onChanged: (value) => setState(() => _adults = value),
-                      ),
-                      const SizedBox(height: 40),
-                      _GuestRow(
-                        title: 'Количество детей',
-                        subtitle: '0-11 лет',
-                        value: _children,
-                        onChanged: (value) => setState(() => _children = value),
-                      ),
-                      const SizedBox(height: 40),
-                      _GuestRow(
-                        title: 'Количество животных',
-                        value: _pets,
-                        onChanged: (value) => setState(() => _pets = value),
-                      ),
-                      const SizedBox(height: 32),
-                      Center(
-                        child: GestureDetector(
-                          onTap: _reset,
-                          child: const Text(
-                            'Сбросить фильтры',
-                            style: TextStyle(
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(52),
+                            foregroundColor: AppColors.orange,
+                            side: const BorderSide(color: AppColors.orange),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            textStyle: const TextStyle(
                               fontFamily: AppTheme.fontFamily,
                               fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                              height: 1.4,
-                              color: AppColors.orange,
-                              decoration: TextDecoration.underline,
-                              decorationColor: AppColors.orange,
+                              fontSize: 16,
+                              height: 1.2,
                             ),
                           ),
+                          child: const Text('Вернуться'),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _canSearch
+                              ? () => Navigator.pop(context, _draft())
+                              : null,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(52),
+                            backgroundColor: AppColors.orange,
+                            disabledBackgroundColor: const Color(0x66F88A2A),
+                            disabledForegroundColor: AppColors.white,
+                            foregroundColor: AppColors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            textStyle: const TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              height: 1.2,
+                            ),
+                          ),
+                          child: const Text('Найти'),
+                        ),
+                      ),
                     ],
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        foregroundColor: AppColors.orange,
-                        side: const BorderSide(color: AppColors.orange),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        textStyle: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                          height: 1.2,
-                        ),
-                      ),
-                      child: const Text('Вернуться'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _canSearch
-                          ? () => Navigator.pop(context, _draft())
-                          : null,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                        backgroundColor: AppColors.orange,
-                        disabledBackgroundColor: const Color(0x66F88A2A),
-                        disabledForegroundColor: AppColors.white,
-                        foregroundColor: AppColors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        textStyle: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                          height: 1.2,
-                        ),
-                      ),
-                      child: const Text('Найти'),
-                    ),
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
