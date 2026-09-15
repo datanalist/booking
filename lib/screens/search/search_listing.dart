@@ -1,9 +1,47 @@
+import 'package:intl/intl.dart';
+
+class ListingReview {
+  const ListingReview({
+    required this.author,
+    required this.postedAgo,
+    required this.stars,
+    required this.text,
+  });
+
+  final String author;
+  final String postedAgo;
+  final int stars;
+  final String text;
+}
+
+class ListingHost {
+  const ListingHost({
+    required this.id,
+    required this.name,
+    required this.rating,
+    required this.reviewCount,
+    required this.years,
+    this.verified = false,
+    this.avatarUrl = '',
+  });
+
+  final String id;
+  final String name;
+  final String rating;
+  final int reviewCount;
+  final int years;
+  final bool verified;
+  final String avatarUrl;
+}
+
 class SearchListing {
   const SearchListing({
     required this.id,
     required this.title,
     required this.city,
     required this.type,
+    required this.address,
+    required this.description,
     required this.dates,
     required this.nights,
     required this.total,
@@ -11,17 +49,28 @@ class SearchListing {
     required this.rating,
     required this.reviews,
     required this.photo,
+    required this.photos,
     required this.imageIndex,
     required this.latitude,
     required this.longitude,
     required this.pricePerNight,
+    this.price14 = 0,
+    this.price28 = 0,
+    this.maxGuests = 0,
+    this.petsAllowed = false,
+    this.hostId = '',
+    this.host,
     this.features = const {},
+    this.amenities = const [],
+    this.reviewsList = const [],
   });
 
   final String id;
   final String title;
   final String city;
   final String type;
+  final String address;
+  final String description;
   final String dates;
   final String nights;
   final String total;
@@ -29,130 +78,115 @@ class SearchListing {
   final String rating;
   final String reviews;
   final String photo;
+  final List<String> photos;
   final int imageIndex;
   final double latitude;
   final double longitude;
   final int pricePerNight;
+  final int price14;
+  final int price28;
+  final int maxGuests;
+  final bool petsAllowed;
+  final String hostId;
+  final ListingHost? host;
   final Set<String> features;
+  final List<String> amenities;
+  final List<ListingReview> reviewsList;
+
+  int get reviewCount => reviewCountFromLabel(reviews);
+
+  int unitPriceForNights(int nightCount) {
+    if (nightCount >= 28 && price28 > 0) return price28;
+    if (nightCount >= 14 && price14 > 0) return price14;
+    return pricePerNight;
+  }
+
+  SearchListing withStay({DateTime? checkIn, DateTime? checkOut}) {
+    final nightCount = (checkIn != null && checkOut != null)
+        ? checkOut.difference(checkIn).inDays
+        : 0;
+    final nightsUsed = nightCount > 0 ? nightCount : 5;
+    final unit = unitPriceForNights(nightsUsed);
+    final stayTotal = unit * nightsUsed;
+    return SearchListing(
+      id: id,
+      title: title,
+      city: city,
+      type: type,
+      address: address,
+      description: description,
+      dates: nightCount > 0 ? stayDatesLabel(checkIn!, checkOut!) : '',
+      nights: nightCount > 0 ? nightsLabel(nightCount) : '',
+      total: formatRub(stayTotal),
+      perNight: '${formatRub(unit)} / ночь',
+      rating: rating,
+      reviews: reviews,
+      photo: photo,
+      photos: photos,
+      imageIndex: imageIndex,
+      latitude: latitude,
+      longitude: longitude,
+      pricePerNight: pricePerNight,
+      price14: price14,
+      price28: price28,
+      maxGuests: maxGuests,
+      petsAllowed: petsAllowed,
+      hostId: hostId,
+      host: host,
+      features: features,
+      amenities: amenities,
+      reviewsList: reviewsList,
+    );
+  }
 }
 
-const kSearchListings = <SearchListing>[
-  SearchListing(
-    id: 'studio-msk',
-    title: 'Уютная студия в центре Москвы',
-    city: 'Москва',
-    type: 'Квартира',
-    dates: '14-19 ноября',
-    nights: '5 ночей',
-    total: '15 170 ₽',
-    perNight: '3 034 ₽ / ночь',
-    rating: '4.5',
-    reviews: '(13)',
-    photo: 'images/search/studio-moscow.png',
-    imageIndex: 0,
-    latitude: 55.7584,
-    longitude: 37.6018,
-    pricePerNight: 3034,
-    features: {
-      'Wifi',
-      'Телевизор',
-      'Кондиционер',
-      'Кухня',
-      'Посуда',
-      'Самостоятельное заселение',
-    },
-  ),
-  SearchListing(
-    id: 'old-town',
-    title: 'Квартира в старом городе',
-    city: 'Москва',
-    type: 'Квартира',
-    dates: '14-19 ноября',
-    nights: '5 ночей',
-    total: '15 170 ₽',
-    perNight: '3 034 ₽ / ночь',
-    rating: '4.7',
-    reviews: '(29)',
-    photo: 'images/search/old-town.png',
-    imageIndex: 1,
-    latitude: 55.7536,
-    longitude: 37.6232,
-    pricePerNight: 3034,
-    features: {
-      'Wifi',
-      'Телевизор',
-      'Кухня',
-      'Стиральная машина',
-      'Посуда',
-      'Парковка',
-    },
-  ),
-  SearchListing(
-    id: 'house-10km',
-    title: 'Частный дом в 10 км от Москвы',
-    city: 'Москва',
-    type: 'Дом',
-    dates: '14-19 ноября',
-    nights: '5 ночей',
-    total: '16 470 ₽',
-    perNight: '3 294 ₽ / ночь',
-    rating: '4.5',
-    reviews: '(13)',
-    photo: 'images/search/country-house.png',
-    imageIndex: 2,
-    latitude: 55.7468,
-    longitude: 37.6114,
-    pricePerNight: 3294,
-    features: {
-      'Wifi',
-      'Кухня',
-      'Камин',
-      'Парковка',
-      'Бассейн',
-      'Сауна',
-    },
-  ),
-  SearchListing(
-    id: 'kazan-loft',
-    title: 'Лофт у Казанского кремля',
-    city: 'Казань',
-    type: 'Квартира',
-    dates: '2-6 декабря',
-    nights: '4 ночи',
-    total: '12 400 ₽',
-    perNight: '3 100 ₽ / ночь',
-    rating: '4.8',
-    reviews: '(21)',
-    photo: 'images/search/kazan-loft.png',
-    imageIndex: 1,
-    latitude: 55.7963,
-    longitude: 49.1089,
-    pricePerNight: 3100,
-    features: {
-      'Wifi',
-      'Телевизор',
-      'Кондиционер',
-      'Кухня',
-      'Завтраки',
-      'Спортзал',
-    },
-  ),
-  SearchListing(
-    id: 'spb-room',
-    title: 'Комната у Невского проспекта',
-    city: 'Санкт-Петербург',
-    type: 'Комната',
-    dates: '8-12 января',
-    nights: '4 ночи',
-    total: '9 200 ₽',
-    perNight: '2 300 ₽ / ночь',
-    rating: '4.3',
-    reviews: '(8)',
-    photo: 'images/search/spb-room.png',
-    imageIndex: 0,
-    latitude: 59.9343,
-    longitude: 30.3351,
-    pricePerNight: 2300,
-    features: {'Wifi', 'Фен', 'Утюг'},
-  ),
-];
+String formatRub(num value) {
+  final formatted = NumberFormat.decimalPattern('ru')
+      .format(value.round())
+      .replaceAll('\u00a0', ' ')
+      .replaceAll('\u202f', ' ');
+  return '$formatted ₽';
+}
+
+String stayDatesLabel(DateTime checkIn, DateTime checkOut) {
+  final lastNight = checkOut.subtract(const Duration(days: 1));
+  if (checkIn.month == lastNight.month && checkIn.year == lastNight.year) {
+    final month = DateFormat('MMMM', 'ru').format(checkIn);
+    return '${checkIn.day}–${lastNight.day} $month';
+  }
+  final start = DateFormat('d MMMM', 'ru').format(checkIn);
+  final end = DateFormat('d MMMM', 'ru').format(lastNight);
+  return '$start – $end';
+}
+
+String nightsLabel(int count) {
+  return '$count ${_plural(count, one: 'ночь', few: 'ночи', many: 'ночей')}';
+}
+
+int reviewCountFromLabel(String reviews) {
+  final match = RegExp(r'\d+').firstMatch(reviews);
+  if (match == null) return 0;
+  return int.parse(match.group(0)!);
+}
+
+String reviewCountLabel(int count) {
+  return '($count ${_plural(count, one: 'отзыв', few: 'отзыва', many: 'отзывов')})';
+}
+
+String yearsHostingLabel(int years) {
+  return '$years ${_plural(years, one: 'год', few: 'года', many: 'лет')} сдает жилье';
+}
+
+String _plural(
+  int count, {
+  required String one,
+  required String few,
+  required String many,
+}) {
+  final n = count % 100;
+  final n1 = count % 10;
+  if (n >= 11 && n <= 14) return many;
+  if (n1 == 1) return one;
+  if (n1 >= 2 && n1 <= 4) return few;
+  return many;
+}

@@ -17,45 +17,9 @@ enum _BookingsSegment { current, past }
 class _BookingsScreenState extends State<BookingsScreen> {
   _BookingsSegment _segment = _BookingsSegment.current;
 
-  static const _current = <_BookingStub>[
-    _BookingStub(
-      title: 'Уютная студия в центре Москвы',
-      dates: '14.11.2024 - 19.11.2024',
-      guests: '3 гостя',
-      status: _BookingStatus.awaitingPrepayment,
-      imageAsset: 'images/onbordins.v1/01-find-housing.png',
-    ),
-    _BookingStub(
-      title: 'Частный дом в 10 км от Москвы',
-      dates: '16.12.2024 - 18.12.2024',
-      guests: '4 гостя',
-      status: _BookingStatus.confirmed,
-      imageAsset: 'images/onbordins.v1/02-book-confidently.png',
-    ),
-    _BookingStub(
-      title: 'Отель Венеция',
-      dates: '07.01.2025 - 10.01.2025',
-      guests: '2 гостя',
-      status: _BookingStatus.awaitingOwner,
-      imageAsset: 'images/onbordins.v1/03-travel-without-borders.png',
-    ),
-  ];
+  static const _current = <_BookingStub>[];
 
-  static const _past = <_BookingStub>[
-    _BookingStub(
-      title: 'Уютная студия в центре Москвы',
-      dates: '14.11.2024 - 19.11.2024',
-      guests: '3 гостя',
-      status: _BookingStatus.cancelled,
-      imageAsset: 'images/onbordins.v1/01-find-housing.png',
-    ),
-    _BookingStub(
-      title: 'Частный дом в 10 км от Москвы',
-      dates: '12.09.2024 - 15.09.2024',
-      guests: '4 гостя',
-      imageAsset: 'images/onbordins.v1/02-book-confidently.png',
-    ),
-  ];
+  static const _past = <_BookingStub>[];
 
   List<_BookingStub> get _items =>
       _segment == _BookingsSegment.current ? _current : _past;

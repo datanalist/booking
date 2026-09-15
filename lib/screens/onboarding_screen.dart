@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../shell/main_shell.dart';
 import '../theme/app_theme.dart';
 
 class OnboardingPageData {
@@ -62,7 +63,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
           pageBuilder: (context, animation, secondaryAnimation) {
-            return const _OnboardingDoneScreen();
+            return const MainShell();
           },
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
@@ -238,42 +239,6 @@ class _PageIndicator extends StatelessWidget {
                 ),
               ],
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OnboardingDoneScreen extends StatelessWidget {
-  const _OnboardingDoneScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
-        statusBarColor: Colors.transparent,
-        systemNavigationBarColor: AppColors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
-      child: const Scaffold(
-        backgroundColor: AppColors.white,
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                'Авторизация',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 28,
-                  height: 1.2,
-                  color: Color(0xFF1A1A1A),
-                ),
-              ),
-            ),
           ),
         ),
       ),

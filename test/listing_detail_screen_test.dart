@@ -3,8 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/screens/listing/listing_detail.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
-import 'package:booking/screens/search/search_listing.dart';
 import 'package:booking/theme/app_theme.dart';
+
+import 'fixtures/demo_listings.dart';
 
 Widget _app(Widget home) {
   return MaterialApp(theme: AppTheme.light, home: home);
@@ -13,9 +14,14 @@ Widget _app(Widget home) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('listing detail resolves mock copy for the studio', () {
-    final detail = ListingDetail.resolve(
-      kSearchListings.firstWhere((item) => item.id == 'studio-msk'),
+  test('listing detail maps a PocketBase listing and host extras', () {
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail.fromListing(
+      listing,
+      hostListings: [
+        for (final item in kDemoListings)
+          if (item.id != listing.id && item.hostId == listing.hostId) item,
+      ],
     );
 
     expect(detail.address, 'Москва, ул. Невская 48');
@@ -39,8 +45,13 @@ void main() {
 
   testWidgets('listing page shows stay, host and booking bar', (tester) async {
     final favorites = <String>{};
-    final listing = kSearchListings.firstWhere(
-      (item) => item.id == 'studio-msk',
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail.fromListing(
+      listing,
+      hostListings: [
+        for (final item in kDemoListings)
+          if (item.id != listing.id && item.hostId == listing.hostId) item,
+      ],
     );
 
     await tester.pumpWidget(
@@ -48,6 +59,7 @@ void main() {
         ListingDetailScreen(
           listing: listing,
           favorites: favorites,
+          initialDetail: detail,
           onFavorite: (id) {
             if (!favorites.remove(id)) favorites.add(id);
           },
@@ -74,8 +86,13 @@ void main() {
     tester,
   ) async {
     final favorites = <String>{};
-    final listing = kSearchListings.firstWhere(
-      (item) => item.id == 'studio-msk',
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail.fromListing(
+      listing,
+      hostListings: [
+        for (final item in kDemoListings)
+          if (item.id != listing.id && item.hostId == listing.hostId) item,
+      ],
     );
 
     await tester.pumpWidget(
@@ -83,6 +100,7 @@ void main() {
         ListingDetailScreen(
           listing: listing,
           favorites: favorites,
+          initialDetail: detail,
           onFavorite: (id) {
             if (!favorites.remove(id)) favorites.add(id);
           },

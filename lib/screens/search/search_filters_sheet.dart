@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import 'search_listing.dart';
 
 @immutable
 class SearchFilters {
@@ -9,18 +10,75 @@ class SearchFilters {
     this.price,
     this.amenities = const {},
     this.extras = const {},
+    this.priceMin = fallbackPriceMin,
+    this.priceMax = fallbackPriceMax,
   });
 
-  static const priceMin = 1000.0;
-  static const priceMax = 9000.0;
-  static const defaultPrice = RangeValues(2500, 7000);
+  static const fallbackPriceMin = 1000.0;
+  static const fallbackPriceMax = 9000.0;
 
   final Set<String> housingTypes;
   final RangeValues? price;
   final Set<String> amenities;
   final Set<String> extras;
+  final double? priceMin;
+  final double? priceMax;
 
-  RangeValues get displayPrice => price ?? defaultPrice;
+  double get boundedMin => priceMin ?? fallbackPriceMin;
+
+  double get boundedMax {
+    final min = boundedMin;
+    final max = priceMax ?? fallbackPriceMax;
+    return max > min ? max : min + 1;
+  }
+
+  RangeValues get defaultPrice => RangeValues(boundedMin, boundedMax);
+
+  RangeValues get displayPrice => _clamp(price ?? defaultPrice);
+
+  static RangeValues boundsFromPrices(Iterable<int> prices) {
+    var min = fallbackPriceMin;
+    var max = fallbackPriceMax;
+    var found = false;
+    for (final price in prices) {
+      if (price <= 0) continue;
+      final value = price.toDouble();
+      if (!found) {
+        min = value;
+        max = value;
+        found = true;
+        continue;
+      }
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+    if (!found) return const RangeValues(fallbackPriceMin, fallbackPriceMax);
+    if (max <= min) return RangeValues(min, min + 1);
+    return RangeValues(min, max);
+  }
+
+  SearchFilters withPriceBounds(RangeValues bounds) {
+    final min = bounds.start;
+    final max = bounds.end <= min ? min + 1 : bounds.end;
+    return SearchFilters(
+      housingTypes: housingTypes,
+      price: price == null ? null : _clampRange(price!, min, max),
+      amenities: amenities,
+      extras: extras,
+      priceMin: min,
+      priceMax: max,
+    );
+  }
+
+  RangeValues _clamp(RangeValues values) =>
+      _clampRange(values, boundedMin, boundedMax);
+
+  static RangeValues _clampRange(RangeValues values, double min, double max) {
+    var start = values.start.clamp(min, max);
+    var end = values.end.clamp(min, max);
+    if (start > end) (start, end) = (end, start);
+    return RangeValues(start, end);
+  }
 
   bool get isActive =>
       housingTypes.isNotEmpty ||
@@ -36,8 +94,7 @@ class SearchFilters {
 
   List<String> get chipLabels => [
     ...housingTypes,
-    if (price != null)
-      '${price!.start.round()}–${price!.end.round()} ₽',
+    if (price != null) '${price!.start.round()}–${price!.end.round()} ₽',
     ...amenities,
     ...extras,
   ];
@@ -98,7 +155,6 @@ class _SearchFiltersSheetState extends State<SearchFiltersSheet> {
   late Set<String> _amenitiesSelected;
   late Set<String> _extrasSelected;
   late RangeValues _price;
-  var _priceAdjusted = false;
 
   @override
   void initState() {
@@ -108,19 +164,24 @@ class _SearchFiltersSheetState extends State<SearchFiltersSheet> {
     _amenitiesSelected = {...initial.amenities};
     _extrasSelected = {...initial.extras};
     _price = initial.displayPrice;
-    _priceAdjusted = initial.price != null;
   }
+
+  bool get _priceIsCustom => !_sameRange(_price, widget.initial.defaultPrice);
 
   bool get _canApply {
     final initial = widget.initial;
     return !_sameSet(_housingTypesSelected, initial.housingTypes) ||
         !_sameSet(_amenitiesSelected, initial.amenities) ||
         !_sameSet(_extrasSelected, initial.extras) ||
-        _price != initial.displayPrice;
+        !_sameRange(_price, initial.displayPrice);
   }
 
   static bool _sameSet(Set<String> a, Set<String> b) {
     return a.length == b.length && a.containsAll(b);
+  }
+
+  static bool _sameRange(RangeValues a, RangeValues b) {
+    return a.start.round() == b.start.round() && a.end.round() == b.end.round();
   }
 
   void _toggle(Set<String> target, String value) {
@@ -134,21 +195,18 @@ class _SearchFiltersSheetState extends State<SearchFiltersSheet> {
       _housingTypesSelected.clear();
       _amenitiesSelected.clear();
       _extrasSelected.clear();
-      _price = SearchFilters.defaultPrice;
-      _priceAdjusted = false;
+      _price = widget.initial.defaultPrice;
     });
   }
 
   SearchFilters _draft() {
-    final noChips =
-        _housingTypesSelected.isEmpty &&
-        _amenitiesSelected.isEmpty &&
-        _extrasSelected.isEmpty;
     return SearchFilters(
       housingTypes: {..._housingTypesSelected},
-      price: (noChips && !_priceAdjusted) ? null : _price,
+      price: _priceIsCustom ? _price : null,
       amenities: {..._amenitiesSelected},
       extras: {..._extrasSelected},
+      priceMin: widget.initial.boundedMin,
+      priceMax: widget.initial.boundedMax,
     );
   }
 
@@ -209,11 +267,10 @@ class _SearchFiltersSheetState extends State<SearchFiltersSheet> {
                         title: 'Диапазон цен',
                         child: _PriceRange(
                           values: _price,
+                          min: widget.initial.boundedMin,
+                          max: widget.initial.boundedMax,
                           onChanged: (value) {
-                            setState(() {
-                              _price = value;
-                              _priceAdjusted = true;
-                            });
+                            setState(() => _price = value);
                           },
                         ),
                       ),
@@ -433,9 +490,16 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _PriceRange extends StatelessWidget {
-  const _PriceRange({required this.values, required this.onChanged});
+  const _PriceRange({
+    required this.values,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
 
   final RangeValues values;
+  final double min;
+  final double max;
   final ValueChanged<RangeValues> onChanged;
 
   static const _labelStyle = TextStyle(
@@ -454,69 +518,109 @@ class _PriceRange extends StatelessWidget {
     color: Color(0xFF89919D),
   );
 
+  static const _thumbPad = _ChevronThumbShape._radius;
+  static const _thumbFill = Color(0xFFF99945);
+  static const _gap = 4.0;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            const pad = 24.0;
-            final track = (constraints.maxWidth - pad * 2).clamp(0.0, 4000.0);
-            final span = SearchFilters.priceMax - SearchFilters.priceMin;
-            final startT = (values.start - SearchFilters.priceMin) / span;
-            final endT = (values.end - SearchFilters.priceMin) / span;
+            final track = (constraints.maxWidth - _thumbPad * 2).clamp(
+              0.0,
+              4000.0,
+            );
+            final span = (max - min).clamp(1.0, double.infinity);
+            final startT = (values.start - min) / span;
+            final endT = (values.end - min) / span;
+            final startLabel = '${values.start.round()} ₽';
+            final endLabel = '${values.end.round()} ₽';
+            final startWidth = _labelSize(startLabel).width;
+            final endWidth = _labelSize(endLabel).width;
+            var startLeft = _thumbPad + track * startT - startWidth / 2;
+            var endLeft = _thumbPad + track * endT - endWidth / 2;
+            startLeft = startLeft.clamp(0.0, constraints.maxWidth - startWidth);
+            endLeft = endLeft.clamp(0.0, constraints.maxWidth - endWidth);
+            if (startLeft + startWidth + 8 > endLeft) {
+              final overflow = startLeft + startWidth + 8 - endLeft;
+              startLeft = (startLeft - overflow / 2).clamp(
+                0.0,
+                constraints.maxWidth - startWidth,
+              );
+              endLeft = (endLeft + overflow / 2).clamp(
+                0.0,
+                constraints.maxWidth - endWidth,
+              );
+            }
+            final labelHeight = _labelSize(startLabel).height;
             return SizedBox(
-              height: 22,
+              height: labelHeight,
+              width: constraints.maxWidth,
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
                   Positioned(
-                    left: pad + track * startT - 22,
-                    child: Text('${values.start.round()} ₽', style: _labelStyle),
+                    left: startLeft,
+                    child: Text(startLabel, style: _labelStyle),
                   ),
                   Positioned(
-                    left: pad + track * endT - 22,
-                    child: Text('${values.end.round()} ₽', style: _labelStyle),
+                    left: endLeft,
+                    child: Text(endLabel, style: _labelStyle),
                   ),
                 ],
               ),
             );
           },
         ),
+        const SizedBox(height: _gap),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             trackHeight: 4,
+            padding: EdgeInsets.zero,
             activeTrackColor: AppColors.orange,
             inactiveTrackColor: const Color(0xFFE2E5EA),
             overlayColor: Colors.transparent,
-            rangeThumbShape: const _OrangeThumbShape(),
+            rangeThumbShape: const _ChevronThumbShape(),
             rangeTrackShape: const RoundedRectRangeSliderTrackShape(),
             overlayShape: SliderComponentShape.noOverlay,
           ),
           child: RangeSlider(
+            padding: EdgeInsets.zero,
             values: values,
-            min: SearchFilters.priceMin,
-            max: SearchFilters.priceMax,
-            divisions: 80,
+            min: min,
+            max: max,
+            divisions: (max - min).round().clamp(1, 80),
             onChanged: onChanged,
           ),
         ),
-        const Row(
+        const SizedBox(height: _gap),
+        Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('от 1 000 ₽', style: _hintStyle),
-            Text('до 9 000 ₽', style: _hintStyle),
+            Text('от ${formatRub(min)}', style: _hintStyle),
+            Text('до ${formatRub(max)}', style: _hintStyle),
           ],
         ),
       ],
     );
   }
+
+  static Size _labelSize(String text) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: _labelStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    return painter.size;
+  }
 }
 
-class _OrangeThumbShape extends RangeSliderThumbShape {
-  const _OrangeThumbShape();
+class _ChevronThumbShape extends RangeSliderThumbShape {
+  const _ChevronThumbShape();
 
-  static const _radius = 11.0;
+  static const _radius = 15.0;
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) {
@@ -539,13 +643,40 @@ class _OrangeThumbShape extends RangeSliderThumbShape {
   }) {
     final canvas = context.canvas;
     canvas.drawCircle(
-      center.translate(0, 1),
-      11,
+      center.translate(0, 2),
+      _radius,
       Paint()
         ..color = const Color(0x3F000000)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
-    canvas.drawCircle(center, 13, Paint()..color = AppColors.white);
-    canvas.drawCircle(center, 9, Paint()..color = const Color(0xFFF99945));
+    canvas.drawCircle(center, _radius, Paint()..color = AppColors.white);
+    canvas.drawCircle(
+      center,
+      _radius - 4,
+      Paint()..color = _PriceRange._thumbFill,
+    );
+
+    final chevron = Path();
+    const size = 5.5;
+    if (thumb == Thumb.start) {
+      chevron
+        ..moveTo(center.dx + 2.5, center.dy - size)
+        ..lineTo(center.dx - 3.5, center.dy)
+        ..lineTo(center.dx + 2.5, center.dy + size);
+    } else {
+      chevron
+        ..moveTo(center.dx - 2.5, center.dy - size)
+        ..lineTo(center.dx + 3.5, center.dy)
+        ..lineTo(center.dx - 2.5, center.dy + size);
+    }
+    canvas.drawPath(
+      chevron,
+      Paint()
+        ..color = AppColors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
   }
 }

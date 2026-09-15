@@ -2,9 +2,11 @@
 
 Клиентское Flutter-приложение для бронирования жилья. Макет: [Figma — Booking](https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking).
 
+Бэкенд — PocketBase на `https://pb.booking.vallome.ru`. Каталог опубликованных объявлений клиент читает по API; брони, избранное, чаты и вход ещё не подключены.
+
 ## Что сделано
 
-Реализован стартовый поток по макету (вариант онбординга 1) и проверен на эмуляторе **Pixel**.
+Сплэш и онбординг (вариант 1) проверены на эмуляторе **Pixel**. После **Начать** открывается гостевая оболочка с нижней панелью, не заглушка авторизации.
 
 **Сплэш**
 - Белый экран, по центру логотип GlobalStay (`images/logo.svg`)
@@ -22,12 +24,49 @@
 - Шрифт Noto Sans, акценты `#F88A2A` (кнопка) и `#FBC028` (активная точка)
 - Свайп или кнопка переключают страницы
 
-После **Начать** открывается заглушка «Авторизация» (экран входа ещё не свёрстан).
+**Оболочка (`MainShell`)**
+
+| Вкладка | Состояние |
+| --- | --- |
+| Поиск | Живой каталог из PocketBase, карта Mapbox, фильтры, карточка объявления |
+| Брони | UI сегментов «Текущие» / «Прошлые», список пустой |
+| Избранное | UI карточек, список пустой (серверное избранное не читается) |
+| Чаты | Макет списка на локальных заглушках |
+| Профиль | Макет меню на локальных заглушках |
+
+**Поиск и карточка**
+- Публичные `listings` со `status = published`, хозяин через `expand=host`
+- Поиск по городу, датам и гостям (Mapbox Geocoding), фильтры: тип жилья, цена, удобства, доп. опции
+- Список и карта с пинами; фото с файлового API PocketBase (`ListingImage`)
+- Деталка: галерея, удобства, хозяин, другие объявления того же хоста
+
+**Ещё не сделано:** вход/регистрация, создание брони, серверные избранное и чаты.
 
 **Прочее**
-- Тема `AppTheme`, edge-to-edge, скрыт debug-banner
-- Нативный Android splash — белый фон, подпись приложения GlobalStay
-- Виджет-тесты: сплэш → онбординг → переход по страницам
+- Тема `AppTheme`, locale `ru_RU`, edge-to-edge, скрыт debug-banner
+- Нативный Android splash — белый фон, подпись GlobalStay; в манифесте `INTERNET`
+- Виджет-тесты: сплэш → онбординг → поиск, фильтры, деталка (репозиторий подменяется фикстурой)
+
+## Бэкенд
+
+Клиент ходит на `https://pb.booking.vallome.ru` (`PocketBaseConfig.url`). Другой хост:
+
+```bash
+flutter run -d linux --dart-define=POCKETBASE_URL=https://example.com
+```
+
+Схема коллекций — [`pb_schema.json`](pb_schema.json) и [`docs/pocketbase-schema.md`](docs/pocketbase-schema.md). Сервер (Caddy, TLS) — [`docs/pocketbase-server.md`](docs/pocketbase-server.md).
+
+Каталог для разработки наполняет идемпотентный сид (нужны `POCKETBASE_SU` и `POCKETBASE_SU_PASSWORD` в `.env.local`, шаблон — [`.env.example`](.env.example)):
+
+```bash
+python3 scripts/seed_listings.py
+python3 scripts/seed_listings.py --reset   # удалить сид-объявления и создать заново
+```
+
+Пять опубликованных объявлений (Москва, Казань, Санкт-Петербург) и один черновик. Пароль сид-пользователей: `SeedPass123!`.
+
+Токен Mapbox — `config/mapbox.env` (не в git) или `--dart-define=MAPBOX_TOKEN=...`. Пример: `config/mapbox.env.example`.
 
 ## Запуск
 
@@ -89,6 +128,12 @@ pkill -f 'qemu-system-x86_64 -avd pixel'
 pgrep -a qemu || echo "эмулятор выключен"
 ```
 
+### Тесты
+
+```bash
+flutter test
+```
+
 Полный список команд — в [`docs/doc.md`](docs/doc.md). Продуктовая спецификация — в [`docs/technical spec.md`](docs/technical%20spec.md).
 
 ## Структура проекта
@@ -96,30 +141,35 @@ pgrep -a qemu || echo "эмулятор выключен"
 ```
 Booking/
 ├── lib/
-│   ├── main.dart                      # BookingApp, точка входа
-│   ├── theme/
-│   │   └── app_theme.dart             # цвета, Noto Sans, кнопка
+│   ├── main.dart
+│   ├── theme/app_theme.dart
+│   ├── config/                    # PocketBase URL, Mapbox
+│   ├── data/                      # клиент PB, ListingsRepository
+│   ├── widgets/listing_image.dart # сеть или ассет
+│   ├── shell/main_shell.dart      # нижняя панель
 │   └── screens/
-│       ├── splash_screen.dart         # сплэш
-│       └── onboarding_screen.dart     # карусель + заглушка авторизации
-├── images/
-│   ├── logo.svg                       # логотип сплэша
-│   ├── splash.png                     # референс сплэша из макета
-│   └── onbordins.v1/
-│       ├── 01-find-housing.png
-│       ├── 02-book-confidently.png
-│       └── 03-travel-without-borders.png
-├── fonts/
-│   ├── NotoSans-Regular.ttf
-│   └── NotoSans-Bold.ttf
+│       ├── splash_screen.dart
+│       ├── onboarding_screen.dart
+│       ├── search/                # каталог, карта, фильтры, запрос
+│       ├── listing/               # деталка объявления
+│       ├── bookings/
+│       ├── favorites/
+│       ├── chat/
+│       └── profile/
+├── scripts/seed_listings.py
 ├── test/
-│   └── widget_test.dart
+│   ├── fixtures/demo_listings.dart
+│   ├── widget_test.dart
+│   ├── search_screen_test.dart
+│   └── listing_detail_screen_test.dart
+├── images/
+├── fonts/
 ├── docs/
-│   ├── doc.md                         # команды Flutter / Android
-│   └── technical spec.md              # ТЗ клиента
-├── android/  ios/  linux/  macos/  web/  windows/
+│   ├── doc.md
+│   ├── technical spec.md
+│   ├── pocketbase-schema.md
+│   └── pocketbase-server.md
+├── pb_schema.json
 ├── pubspec.yaml
 └── README.md
 ```
-
-Каркас платформ — стандартный `flutter create`. Бизнес-логика поиска, бронирования и авторизации пока не реализована.

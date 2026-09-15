@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:booking/data/listings_repository.dart';
 import 'package:booking/main.dart';
 import 'package:booking/screens/onboarding_screen.dart';
 import 'package:booking/screens/splash_screen.dart';
 
+import 'fixtures/demo_listings.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    ListingsRepositoryScope.instance = FakeListingsRepository();
+  });
 
   testWidgets('splash shows logo then opens onboarding', (tester) async {
     await tester.pumpWidget(
@@ -44,7 +51,8 @@ void main() {
 
     await tester.tap(find.text('Начать'));
     await tester.pumpAndSettle();
-    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.text('Поиск'), findsOneWidget);
+    expect(find.text('Найти отель'), findsOneWidget);
   });
 
   testWidgets('app boots on splash', (tester) async {

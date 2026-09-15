@@ -40,45 +40,8 @@ class _FavoriteStay {
   final int initialPhoto;
 }
 
-const _stubPhotos = <String>[
-  'images/onbordins.v1/01-find-housing.png',
-  'images/onbordins.v1/02-book-confidently.png',
-  'images/onbordins.v1/03-travel-without-borders.png',
-  'images/onbordins.v1/01-find-housing.png',
-];
-
-const _stubFavorites = <_FavoriteStay>[
-  _FavoriteStay(
-    id: 'studio-moscow',
-    title: 'Уютная студия в центре Москвы',
-    city: 'Москва',
-    housingType: 'Квартира',
-    dates: '14-19 ноября',
-    nights: '5 ночей',
-    total: '15 170 ₽',
-    perNight: '3 034 ₽ / ночь',
-    rating: '4.5',
-    reviews: '(13)',
-    photos: _stubPhotos,
-  ),
-  _FavoriteStay(
-    id: 'old-town',
-    title: 'Квартира в старом городе',
-    city: 'Москва',
-    housingType: 'Квартира',
-    dates: '14-19 ноября',
-    nights: '5 ночей',
-    total: '15 170 ₽',
-    perNight: '3 034 ₽ / ночь',
-    rating: '4.7',
-    reviews: '(29)',
-    photos: _stubPhotos,
-    initialPhoto: 1,
-  ),
-];
-
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  late List<_FavoriteStay> _items = List<_FavoriteStay>.from(_stubFavorites);
+  late List<_FavoriteStay> _items = const [];
 
   void _remove(String id) {
     setState(() {

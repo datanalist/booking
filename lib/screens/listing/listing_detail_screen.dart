@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
 import 'listing_detail.dart';
 
@@ -17,17 +19,23 @@ class ListingDetailScreen extends StatefulWidget {
     required this.listing,
     required this.favorites,
     required this.onFavorite,
+    this.initialDetail,
+    this.repository,
   });
 
   final SearchListing listing;
   final Set<String> favorites;
   final ValueChanged<String> onFavorite;
+  final ListingDetail? initialDetail;
+  final ListingsRepository? repository;
 
   static Future<void> open(
     BuildContext context, {
     required SearchListing listing,
     required Set<String> favorites,
     required ValueChanged<String> onFavorite,
+    ListingDetail? initialDetail,
+    ListingsRepository? repository,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -35,6 +43,8 @@ class ListingDetailScreen extends StatefulWidget {
           listing: listing,
           favorites: favorites,
           onFavorite: onFavorite,
+          initialDetail: initialDetail,
+          repository: repository,
         ),
       ),
     );
@@ -47,8 +57,29 @@ class ListingDetailScreen extends StatefulWidget {
 class _ListingDetailScreenState extends State<ListingDetailScreen> {
   late final PageController _photos = PageController();
   var _photoIndex = 0;
+  late ListingDetail _detail;
 
-  ListingDetail get _detail => ListingDetail.resolve(widget.listing);
+  ListingsRepository get _repository =>
+      widget.repository ?? ListingsRepositoryScope.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _detail = widget.initialDetail ?? ListingDetail.fromListing(widget.listing);
+    if (widget.initialDetail == null) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    try {
+      final detail = await _repository.fetchDetail(widget.listing);
+      if (!mounted) return;
+      setState(() => _detail = detail);
+    } catch (_) {
+      // Карточка уже собрана из записи списка; хозяин/другие объекты подтянутся при повторе.
+    }
+  }
 
   bool _isFavorite(String id) => widget.favorites.contains(id);
 
@@ -63,6 +94,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       listing: listing,
       favorites: widget.favorites,
       onFavorite: widget.onFavorite,
+      repository: _repository,
     );
   }
 
@@ -178,7 +210,7 @@ class _HeroGallery extends StatelessWidget {
             itemCount: photos.length,
             onPageChanged: onPageChanged,
             itemBuilder: (context, page) {
-              return Image.asset(photos[page], fit: BoxFit.cover);
+              return ListingImage(photos[page], fit: BoxFit.cover);
             },
           ),
           Positioned(
@@ -695,10 +727,11 @@ class _Host extends StatelessWidget {
                 icon: Icons.verified_outlined,
                 label: 'Верификация пройдена',
               ),
-            _HostBadge(
-              icon: Icons.calendar_month_outlined,
-              label: yearsHostingLabel(host.years),
-            ),
+            if (host.years > 0)
+              _HostBadge(
+                icon: Icons.calendar_month_outlined,
+                label: yearsHostingLabel(host.years),
+              ),
           ],
         ),
       ],
@@ -813,7 +846,7 @@ class _HostListingCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Image.asset(
+                child: ListingImage(
                   listing.photo,
                   width: double.infinity,
                   fit: BoxFit.cover,

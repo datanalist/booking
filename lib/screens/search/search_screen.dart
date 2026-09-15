@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/listing_image.dart';
 import '../listing/listing_detail_screen.dart';
 import 'search_filters_sheet.dart';
 import 'search_listing.dart';
@@ -11,7 +13,9 @@ import 'search_query_sheet.dart';
 /// Вкладка «Поиск жилья» по макету Figma `1:16160` (пустой старт)
 /// и соседним фреймам каталога `1:15179` / чипов `1:15291`.
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  const SearchScreen({super.key, this.repository});
+
+  final ListingsRepository? repository;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -22,35 +26,82 @@ class _SearchScreenState extends State<SearchScreen> {
   static const _meta = Color(0xFF9A9A9A);
   static const _priceMuted = Color(0xFF6B6B6B);
 
-  final _favorites = <String>{'old-town'};
+  final _favorites = <String>{};
   var _showMap = false;
   var _query = const SearchQuery();
   var _filters = const SearchFilters();
+  var _listings = const <SearchListing>[];
+  var _loading = true;
+  Object? _error;
   String? _selectedMapListingId;
 
-  static final _cities = {
-    for (final item in kSearchListings) item.city,
-  }.toList()..sort();
+  ListingsRepository get _repository =>
+      widget.repository ?? ListingsRepositoryScope.instance;
+
+  List<String> get _cities {
+    return {for (final item in _listings) item.city}.toList()..sort();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final listings = await _repository.fetchPublished();
+      if (!mounted) return;
+      setState(() {
+        _listings = listings;
+        _filters = _filters.withPriceBounds(
+          SearchFilters.boundsFromPrices([
+            for (final item in listings) item.pricePerNight,
+          ]),
+        );
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
+  }
 
   bool get _hasQuery => _query.isActive;
 
   bool get _hasCriteria => _hasQuery || _filters.isActive;
 
-  bool get _showNoMatches => _hasCriteria && _visible.isEmpty;
+  bool get _showNoMatches =>
+      !_loading && _error == null && _hasCriteria && _visible.isEmpty;
 
   List<SearchListing> get _visible {
     final query = _normalize(_query.city);
-    return kSearchListings.where((item) {
-      if (!_matchesFilters(item)) return false;
-      if (query.isEmpty) return true;
-      final haystack = [
-        item.city,
-        item.title,
-        item.type,
-        if (_normalize(item.city) == 'санкт-петербург') 'питер спб',
-      ].map(_normalize).join(' ');
-      return haystack.contains(query) || query.contains(_normalize(item.city));
-    }).toList();
+    final guests = _query.adults + _query.children;
+    return [
+      for (final raw in _listings)
+        if (_matchesFilters(raw) &&
+            (guests == 0 || raw.maxGuests <= 0 || raw.maxGuests >= guests) &&
+            (_query.pets == 0 || raw.petsAllowed) &&
+            (query.isEmpty || _matchesCity(raw, query)))
+          raw.withStay(checkIn: _query.checkIn, checkOut: _query.checkOut),
+    ];
+  }
+
+  bool _matchesCity(SearchListing item, String query) {
+    final haystack = [
+      item.city,
+      item.title,
+      item.type,
+      if (_normalize(item.city) == 'санкт-петербург') 'питер спб',
+    ].map(_normalize).join(' ');
+    return haystack.contains(query) || query.contains(_normalize(item.city));
   }
 
   bool _matchesFilters(SearchListing item) {
@@ -146,48 +197,7 @@ class _SearchScreenState extends State<SearchScreen> {
         Expanded(
           child: ColoredBox(
             color: _showMap ? const Color(0xFFE8EEE4) : AppColors.white,
-            child: _showMap
-                ? Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      SearchMapView(
-                        listings: _visible,
-                        selectedId: _selectedMapListingId,
-                        onSelectPin: (id) {
-                          setState(() => _selectedMapListingId = id);
-                        },
-                        preview: _selectedMapListing == null
-                            ? null
-                            : _ApartmentCard(
-                                listing: _selectedMapListing!,
-                                favorite: _favorites.contains(
-                                  _selectedMapListing!.id,
-                                ),
-                                meta: _meta,
-                                priceMuted: _priceMuted,
-                                compact: true,
-                                onOpen: () =>
-                                    _openListing(_selectedMapListing!),
-                                onFavorite: () =>
-                                    _toggleFavorite(_selectedMapListing!.id),
-                                onClose: () {
-                                  setState(() => _selectedMapListingId = null);
-                                },
-                              ),
-                      ),
-                      if (_showNoMatches) const _NoMatches(asCard: true),
-                    ],
-                  )
-                : (!_hasCriteria
-                      ? _EmptySearch(onSearch: _openSearchQuery)
-                      : _ListingResults(
-                          listings: _visible,
-                          favorites: _favorites,
-                          meta: _meta,
-                          priceMuted: _priceMuted,
-                          onOpen: _openListing,
-                          onFavorite: _toggleFavorite,
-                        )),
+            child: _showMap ? _mapBody() : _listBody(),
           ),
         ),
       ],
@@ -209,12 +219,69 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
+  Widget _mapBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return _LoadError(onRetry: _load);
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        SearchMapView(
+          listings: _visible,
+          selectedId: _selectedMapListingId,
+          onSelectPin: (id) {
+            setState(() => _selectedMapListingId = id);
+          },
+          preview: _selectedMapListing == null
+              ? null
+              : _ApartmentCard(
+                  listing: _selectedMapListing!,
+                  favorite: _favorites.contains(_selectedMapListing!.id),
+                  meta: _meta,
+                  priceMuted: _priceMuted,
+                  compact: true,
+                  onOpen: () => _openListing(_selectedMapListing!),
+                  onFavorite: () => _toggleFavorite(_selectedMapListing!.id),
+                  onClose: () {
+                    setState(() => _selectedMapListingId = null);
+                  },
+                ),
+        ),
+        if (_showNoMatches) const _NoMatches(asCard: true),
+      ],
+    );
+  }
+
+  Widget _listBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return _LoadError(onRetry: _load);
+    }
+    if (!_hasCriteria) {
+      return _EmptySearch(onSearch: _openSearchQuery);
+    }
+    return _ListingResults(
+      listings: _visible,
+      favorites: _favorites,
+      meta: _meta,
+      priceMuted: _priceMuted,
+      onOpen: _openListing,
+      onFavorite: _toggleFavorite,
+    );
+  }
+
   void _openListing(SearchListing listing) {
     ListingDetailScreen.open(
       context,
       listing: listing,
       favorites: _favorites,
       onFavorite: _toggleFavorite,
+      repository: _repository,
     );
   }
 }
@@ -600,7 +667,7 @@ class _ApartmentCard extends StatelessWidget {
                     top: Radius.circular(radius),
                     bottom: Radius.circular(compact ? 0 : radius),
                   ),
-                  child: Image.asset(listing.photo, fit: BoxFit.cover),
+                  child: ListingImage(listing.photo, fit: BoxFit.cover),
                 ),
               ),
               Positioned(
@@ -632,12 +699,16 @@ class _ApartmentCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 10,
-                child: _PhotoDots(active: listing.imageIndex),
-              ),
+              if (listing.photos.length > 1)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 10,
+                  child: _PhotoDots(
+                    active: listing.imageIndex,
+                    count: listing.photos.length,
+                  ),
+                ),
             ],
           ),
         ),
@@ -703,14 +774,18 @@ class _ApartmentCard extends StatelessWidget {
                     label: listing.type,
                     color: meta,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _Meta(
-                      icon: Icons.calendar_today_outlined,
-                      label: '${listing.dates} · ${listing.nights}',
-                      color: meta,
+                  if (listing.dates.isNotEmpty) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _Meta(
+                        icon: Icons.calendar_today_outlined,
+                        label: listing.nights.isEmpty
+                            ? listing.dates
+                            : '${listing.dates} · ${listing.nights}',
+                        color: meta,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
               const SizedBox(height: 8),
@@ -838,17 +913,64 @@ class _Meta extends StatelessWidget {
   }
 }
 
-class _PhotoDots extends StatelessWidget {
-  const _PhotoDots({required this.active});
+class _LoadError extends StatelessWidget {
+  const _LoadError({required this.onRetry});
 
-  final int active;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Не удалось загрузить объявления',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                height: 1.3,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Проверьте соединение и попробуйте ещё раз',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontWeight: FontWeight.w400,
+                fontSize: 14,
+                height: 1.4,
+                color: Color(0xFF6B6B6B),
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: const Text('Повторить')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoDots extends StatelessWidget {
+  const _PhotoDots({required this.active, this.count = 4});
+
+  final int active;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final dots = count.clamp(1, 8);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        for (var i = 0; i < 4; i++) ...[
+        for (var i = 0; i < dots; i++) ...[
           if (i != 0) const SizedBox(width: 4),
           Container(
             width: i == active ? 16 : 8,

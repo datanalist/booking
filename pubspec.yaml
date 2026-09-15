@@ -30,9 +30,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   cupertino_icons: ^1.0.8
   flutter_svg: ^2.2.1
+  flutter_map: ^8.3.2
+  http: ^1.5.0
+  intl: ^0.20.2
+  latlong2: ^0.10.1
+  pocketbase: ^0.23.0
+  vector_map_tiles: 9.0.0-beta.13
+  vector_tile_renderer: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -57,8 +66,15 @@ flutter:
   uses-material-design: true
 
   assets:
+    - config/
     - images/logo.svg
+    - "images/ mapFrame.svg"
+    - images/search/
     - images/onbordins.v1/
+    - images/chat/
+    - images/profile/avatar.png
+    - images/SearchBarIcons/Bold/
+    - images/SearchBarIcons/Light-Outline/
 
   fonts:
     - family: Noto Sans

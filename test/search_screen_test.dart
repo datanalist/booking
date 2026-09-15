@@ -8,14 +8,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booking/config/mapbox_config.dart';
 import 'package:booking/config/mapbox_geocoding.dart';
 import 'package:booking/config/mapbox_style.dart';
+import 'package:booking/data/listings_repository.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
 import 'package:booking/screens/search/search_filters_sheet.dart';
 import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/screens/search/search_query_sheet.dart';
 import 'package:booking/screens/search/search_screen.dart';
 import 'package:booking/theme/app_theme.dart';
+
+import 'fixtures/demo_listings.dart';
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+
+Future<void> _pumpSearch(WidgetTester tester) async {
+  await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+  await tester.pump();
+}
 
 Future<void> _submitSearchCity(WidgetTester tester, String city) async {
   await tester.tap(find.byTooltip('Поиск'));
@@ -46,10 +55,11 @@ void main() {
 
   setUp(() {
     MapboxConfig.accessToken = '';
+    ListingsRepositoryScope.instance = FakeListingsRepository();
   });
 
   testWidgets('search listings follow the typed city', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
     expect(find.text('Найти отель'), findsOneWidget);
@@ -81,7 +91,7 @@ void main() {
   });
 
   testWidgets('search field opens the stay query bottom sheet', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Поиск'));
     await tester.pumpAndSettle();
@@ -107,7 +117,7 @@ void main() {
   });
 
   testWidgets('map icon opens map search with price pins', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Карта'));
     await tester.pump();
@@ -167,7 +177,7 @@ void main() {
   });
 
   testWidgets('tapping a list card opens the listing page', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
     await _submitSearchCity(tester, 'Казань');
 
     await tester.tap(find.byKey(const ValueKey('listing-card-kazan-loft')));
@@ -191,7 +201,7 @@ void main() {
   testWidgets('tapping the map preview card opens the listing page', (
     tester,
   ) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Карта'));
     await tester.pump();
@@ -211,7 +221,7 @@ void main() {
   testWidgets('favorite on a list card does not open the listing page', (
     tester,
   ) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
     await _submitSearchCity(tester, 'Казань');
 
     await tester.tap(
@@ -317,7 +327,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Карта'));
     await tester.pump();
@@ -353,7 +363,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+      await _pumpSearch(tester);
 
       await tester.tap(find.byTooltip('Карта'));
       await tester.pump();
@@ -397,7 +407,7 @@ void main() {
   );
 
   testWidgets('filter icon opens the filters bottom sheet', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
@@ -405,6 +415,14 @@ void main() {
     expect(find.text('Фильтры'), findsOneWidget);
     expect(find.text('Вид жилья'), findsOneWidget);
     expect(find.text('Диапазон цен'), findsOneWidget);
+    expect(find.text('от 2 300 ₽'), findsOneWidget);
+    expect(find.text('до 3 294 ₽'), findsOneWidget);
+
+    final slider = tester.widget<RangeSlider>(find.byType(RangeSlider));
+    expect(slider.min, 2300);
+    expect(slider.max, 3294);
+    expect(slider.values.start, 2300);
+    expect(slider.values.end, 3294);
     expect(find.text('Удобства'), findsOneWidget);
     expect(find.text('Дополнительные характеристики'), findsOneWidget);
     expect(find.text('Сбросить фильтры'), findsOneWidget);
@@ -437,12 +455,12 @@ void main() {
             ),
           )
           .data,
-      '2',
+      '1',
     );
   });
 
   testWidgets('empty filters show the no-matches illustration', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
@@ -462,7 +480,7 @@ void main() {
   });
 
   testWidgets('map with no matches shows a card over the map', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Фильтры'));
     await tester.pumpAndSettle();
@@ -491,7 +509,7 @@ void main() {
   testWidgets('applied filter badge counts each selected filter', (
     tester,
   ) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     expect(find.byKey(const ValueKey('filter-count-badge')), findsNothing);
 
@@ -515,7 +533,7 @@ void main() {
             ),
           )
           .data,
-      '3',
+      '2',
     );
   });
 
@@ -548,7 +566,7 @@ void main() {
   });
 
   testWidgets('full address still finds listings by city', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await _submitSearchCity(tester, 'Тверская улица, 1, Москва, Россия');
 
@@ -557,7 +575,7 @@ void main() {
   });
 
   testWidgets('date picker uses russian locale and format', (tester) async {
-    await tester.pumpWidget(_app(const Scaffold(body: SearchScreen())));
+    await _pumpSearch(tester);
 
     await tester.tap(find.byTooltip('Поиск'));
     await tester.pumpAndSettle();
@@ -589,6 +607,28 @@ void main() {
       ).appliedCount,
       5,
     );
+  });
+
+  test('price filter bounds follow listing prices and start at extremes', () {
+    final bounds = SearchFilters.boundsFromPrices([
+      for (final item in kDemoListings) item.pricePerNight,
+    ]);
+    expect(bounds.start, 2300);
+    expect(bounds.end, 3294);
+
+    final filters = const SearchFilters().withPriceBounds(bounds);
+    expect(filters.boundedMin, 2300);
+    expect(filters.boundedMax, 3294);
+    expect(filters.displayPrice.start, 2300);
+    expect(filters.displayPrice.end, 3294);
+    expect(filters.price, isNull);
+    expect(filters.isActive, isFalse);
+  });
+
+  test('price bounds survive missing min/max after hot reload', () {
+    const filters = SearchFilters(priceMin: null, priceMax: null);
+    expect(filters.displayPrice.start, SearchFilters.fallbackPriceMin);
+    expect(filters.displayPrice.end, SearchFilters.fallbackPriceMax);
   });
 
   test('check-in picker cannot reach the selected check-out day', () {
