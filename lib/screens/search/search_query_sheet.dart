@@ -165,6 +165,21 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
     _pets = initial.pets;
   }
 
+  void _reset() {
+    setState(() {
+      _city.clear();
+      _checkIn = null;
+      _checkOut = null;
+      _adults = 0;
+      _children = 0;
+      _pets = 0;
+      _showCities = false;
+      _remoteSuggestions = const [];
+      _suggesting = false;
+    });
+    _suggestTimer?.cancel();
+  }
+
   @override
   void dispose() {
     _suggestTimer?.cancel();
@@ -481,7 +496,25 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                         value: _pets,
                         onChanged: (value) => setState(() => _pets = value),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 32),
+                      Center(
+                        child: GestureDetector(
+                          onTap: _reset,
+                          child: const Text(
+                            'Сбросить фильтры',
+                            style: TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                              height: 1.4,
+                              color: AppColors.orange,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppColors.orange,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
                     ],
                   ),
                 ),

@@ -103,6 +103,7 @@ void main() {
     expect(find.text('Количество взрослых'), findsOneWidget);
     expect(find.text('Количество детей'), findsOneWidget);
     expect(find.text('Количество животных'), findsOneWidget);
+    expect(find.text('Сбросить фильтры'), findsOneWidget);
     expect(find.text('Вернуться'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Найти'), findsOneWidget);
 
@@ -114,6 +115,37 @@ void main() {
     await tester.tap(find.text('Вернуться'));
     await tester.pumpAndSettle();
     expect(find.text('Снять жилье'), findsNothing);
+  });
+
+  testWidgets('search query sheet can reset and clear the current search', (
+    tester,
+  ) async {
+    await _pumpSearch(tester);
+    await _submitSearchCity(tester, 'Казань');
+    expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+    expect(find.text('Сбросить фильтры'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Сбросить фильтры'));
+    await tester.tap(find.text('Сбросить фильтры'));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('search-city-field')))
+          .controller!
+          .text,
+      isEmpty,
+    );
+
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Найти'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Найти'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Лофт у Казанского кремля'), findsNothing);
+    expect(find.text('Найти отель'), findsOneWidget);
   });
 
   testWidgets('map icon opens map search with price pins', (tester) async {
@@ -503,7 +535,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('Отель'), findsNothing);
+    expect(find.text('Отель'), findsOneWidget);
   });
 
   testWidgets('applied filter badge counts each selected filter', (

@@ -22,7 +22,6 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  static const _chipFill = Color(0xFFF3F3F3);
   static const _meta = Color(0xFF9A9A9A);
   static const _priceMuted = Color(0xFF6B6B6B);
 
@@ -162,38 +161,38 @@ class _SearchScreenState extends State<SearchScreen> {
             bottom: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: _SearchHeader(
-                label: _query.city,
-                filterCount: _filters.appliedCount,
-                onSearch: _openSearchQuery,
-                onFilter: _openFilters,
-                onMap: () => setState(() {
-                  _showMap = !_showMap;
-                  if (!_showMap) _selectedMapListingId = null;
-                }),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SearchHeader(
+                    label: _query.city,
+                    filterCount: _filters.appliedCount,
+                    onSearch: _openSearchQuery,
+                    onFilter: _openFilters,
+                    onMap: () => setState(() {
+                      _showMap = !_showMap;
+                      if (!_showMap) _selectedMapListingId = null;
+                    }),
+                  ),
+                  if (_activeChips.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < _activeChips.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 8),
+                            _Chip(label: _activeChips[i]),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
         ),
-        if (_activeChips.isNotEmpty && !_showMap)
-          ColoredBox(
-            color: AppColors.white,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: SizedBox(
-                height: 26,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _activeChips.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    return _Chip(label: _activeChips[index], fill: _chipFill);
-                  },
-                ),
-              ),
-            ),
-          ),
         Expanded(
           child: ColoredBox(
             color: _showMap ? const Color(0xFFE8EEE4) : AppColors.white,
@@ -487,29 +486,27 @@ class _EmptySearch extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip({required this.label, required this.fill});
+  const _Chip({required this.label});
 
   final String label;
-  final Color fill;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 26,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(8),
+      decoration: const ShapeDecoration(
+        color: AppColors.searchFieldFill,
+        shape: StadiumBorder(side: BorderSide(color: AppColors.orange)),
       ),
       child: Text(
         label,
         style: const TextStyle(
           fontFamily: AppTheme.fontFamily,
           fontWeight: FontWeight.w400,
-          fontSize: 12,
-          height: 18 / 12,
-          color: AppColors.textPrimary,
+          fontSize: 14,
+          height: 1.4,
+          color: AppColors.orange,
         ),
       ),
     );
@@ -608,7 +605,7 @@ class _ListingResults extends StatelessWidget {
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
       itemCount: listings.length,
       separatorBuilder: (_, _) => const SizedBox(height: 24),
       itemBuilder: (context, index) {
