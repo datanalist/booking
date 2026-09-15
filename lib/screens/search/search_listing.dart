@@ -63,6 +63,8 @@ class SearchListing {
     this.features = const {},
     this.amenities = const [],
     this.reviewsList = const [],
+    this.checkIn,
+    this.checkOut,
   });
 
   final String id;
@@ -92,22 +94,37 @@ class SearchListing {
   final Set<String> features;
   final List<String> amenities;
   final List<ListingReview> reviewsList;
+  final DateTime? checkIn;
+  final DateTime? checkOut;
 
   int get reviewCount => reviewCountFromLabel(reviews);
 
+  int get stayNightCount => stayNightsBetween(checkIn, checkOut);
+
+  StayQuote get stayQuote => quoteStay(
+    pricePerNight: pricePerNight,
+    price14: price14,
+    price28: price28,
+    nights: stayNightCount,
+  );
+
   int unitPriceForNights(int nightCount) {
-    if (nightCount >= 28 && price28 > 0) return price28;
-    if (nightCount >= 14 && price14 > 0) return price14;
-    return pricePerNight;
+    return quoteStay(
+      pricePerNight: pricePerNight,
+      price14: price14,
+      price28: price28,
+      nights: nightCount,
+    ).unitPrice;
   }
 
   SearchListing withStay({DateTime? checkIn, DateTime? checkOut}) {
-    final nightCount = (checkIn != null && checkOut != null)
-        ? checkOut.difference(checkIn).inDays
-        : 0;
-    final nightsUsed = nightCount > 0 ? nightCount : 5;
-    final unit = unitPriceForNights(nightsUsed);
-    final stayTotal = unit * nightsUsed;
+    final nightCount = stayNightsBetween(checkIn, checkOut);
+    final quote = quoteStay(
+      pricePerNight: pricePerNight,
+      price14: price14,
+      price28: price28,
+      nights: nightCount,
+    );
     return SearchListing(
       id: id,
       title: title,
@@ -117,8 +134,8 @@ class SearchListing {
       description: description,
       dates: nightCount > 0 ? stayDatesLabel(checkIn!, checkOut!) : '',
       nights: nightCount > 0 ? nightsLabel(nightCount) : '',
-      total: formatRub(stayTotal),
-      perNight: '${formatRub(unit)} / ночь',
+      total: formatRub(quote.total),
+      perNight: '${formatRub(quote.unitPrice)} / ночь',
       rating: rating,
       reviews: reviews,
       photo: photo,
@@ -136,8 +153,61 @@ class SearchListing {
       features: features,
       amenities: amenities,
       reviewsList: reviewsList,
+      checkIn: nightCount > 0 ? checkIn : null,
+      checkOut: nightCount > 0 ? checkOut : null,
     );
   }
+}
+
+class StayQuote {
+  const StayQuote({
+    required this.nights,
+    required this.unitPrice,
+    required this.total,
+  });
+
+  final int nights;
+  final int unitPrice;
+  final int total;
+
+  @override
+  bool operator ==(Object other) {
+    return other is StayQuote &&
+        other.nights == nights &&
+        other.unitPrice == unitPrice &&
+        other.total == total;
+  }
+
+  @override
+  int get hashCode => Object.hash(nights, unitPrice, total);
+}
+
+int stayNightsBetween(DateTime? checkIn, DateTime? checkOut) {
+  if (checkIn == null || checkOut == null) return 0;
+  final nights = checkOut.difference(checkIn).inDays;
+  return nights > 0 ? nights : 0;
+}
+
+StayQuote quoteStay({
+  required int pricePerNight,
+  int price14 = 0,
+  int price28 = 0,
+  int nights = 0,
+}) {
+  final billedNights = nights > 0 ? nights : 1;
+  final int unitPrice;
+  if (billedNights >= 28 && price28 > 0) {
+    unitPrice = price28;
+  } else if (billedNights >= 14 && price14 > 0) {
+    unitPrice = price14;
+  } else {
+    unitPrice = pricePerNight;
+  }
+  return StayQuote(
+    nights: nights,
+    unitPrice: unitPrice,
+    total: unitPrice * billedNights,
+  );
 }
 
 String formatRub(num value) {
@@ -151,12 +221,15 @@ String formatRub(num value) {
 String stayDatesLabel(DateTime checkIn, DateTime checkOut) {
   final lastNight = checkOut.subtract(const Duration(days: 1));
   if (checkIn.month == lastNight.month && checkIn.year == lastNight.year) {
-    final month = DateFormat('MMMM', 'ru').format(checkIn);
-    return '${checkIn.day}–${lastNight.day} $month';
+    return '${checkIn.day}–${lastNight.day} ${_monthGenitive(checkIn)}';
   }
   final start = DateFormat('d MMMM', 'ru').format(checkIn);
   final end = DateFormat('d MMMM', 'ru').format(lastNight);
   return '$start – $end';
+}
+
+String _monthGenitive(DateTime date) {
+  return DateFormat('d MMMM', 'ru').format(date).replaceFirst(RegExp(r'^\d+\s*'), '');
 }
 
 String nightsLabel(int count) {

@@ -159,8 +159,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Найти отель'), findsNothing);
-    expect(find.text('15 170 ₽'), findsWidgets);
-    expect(find.text('16 470 ₽'), findsOneWidget);
+    expect(find.text('3 034 ₽'), findsWidgets);
+    expect(find.text('3 294 ₽'), findsOneWidget);
     expect(find.text('Частный дом в 10 км от Москвы'), findsNothing);
 
     final pin = find.byKey(const ValueKey('map-pin-house-10km'));
@@ -583,6 +583,14 @@ void main() {
     await _submitSearchCity(tester, 'Казань');
 
     expect(find.byKey(const ValueKey('search-chips-scroll')), findsOneWidget);
+    expect(
+      tester
+          .widget<SingleChildScrollView>(
+            find.byKey(const ValueKey('search-chips-scroll')),
+          )
+          .scrollDirection,
+      Axis.horizontal,
+    );
     expect(
       find.descendant(
         of: find.byKey(const ValueKey('search-chips-scroll')),

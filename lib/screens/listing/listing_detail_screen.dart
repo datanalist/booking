@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
 import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
+import '../search/search_query_sheet.dart';
 import 'host_listings_screen.dart';
 import 'listing_detail.dart';
 
@@ -852,13 +853,88 @@ class _HostListings extends StatelessWidget {
   }
 }
 
-class _BookingBar extends StatelessWidget {
+class _BookingBar extends StatefulWidget {
   const _BookingBar({required this.listing});
 
   final SearchListing listing;
 
   @override
+  State<_BookingBar> createState() => _BookingBarState();
+}
+
+class _BookingBarState extends State<_BookingBar> {
+  late SearchListing _stay;
+
+  @override
+  void initState() {
+    super.initState();
+    _stay = widget.listing;
+  }
+
+  @override
+  void didUpdateWidget(_BookingBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.listing.id != widget.listing.id) {
+      _stay = widget.listing;
+      return;
+    }
+    _stay = widget.listing.withStay(
+      checkIn: _stay.checkIn,
+      checkOut: _stay.checkOut,
+    );
+  }
+
+  Future<void> _pickStayDates() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final checkIn = await _pickDate(checkOut: false, today: today);
+    if (!mounted || checkIn == null) return;
+    final checkOut = await _pickDate(
+      checkOut: true,
+      today: today,
+      checkIn: checkIn,
+    );
+    if (!mounted || checkOut == null) return;
+    setState(() {
+      _stay = widget.listing.withStay(checkIn: checkIn, checkOut: checkOut);
+    });
+  }
+
+  Future<DateTime?> _pickDate({
+    required bool checkOut,
+    required DateTime today,
+    DateTime? checkIn,
+  }) {
+    final bounds = stayDatePickerBounds(
+      checkOut: checkOut,
+      today: today,
+      currentCheckIn: checkIn ?? _stay.checkIn,
+      currentCheckOut: _stay.checkOut,
+    );
+    return showDatePicker(
+      context: context,
+      locale: const Locale('ru', 'RU'),
+      initialDate: bounds.initial,
+      firstDate: bounds.first,
+      lastDate: bounds.last,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: AppColors.orange,
+              onPrimary: AppColors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final listing = _stay;
+    final hasStay = listing.stayNightCount > 0;
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Material(
       color: AppColors.white,
@@ -874,6 +950,7 @@ class _BookingBar extends StatelessWidget {
               Row(
                 children: [
                   Text(
+                    key: const ValueKey('listing-booking-total'),
                     listing.total,
                     style: const TextStyle(
                       fontFamily: AppTheme.fontFamily,
@@ -898,39 +975,51 @@ class _BookingBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Text(
-                    listing.dates,
-                    style: const TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontWeight: FontWeight.w400,
-                      fontSize: 12,
-                      height: 1.50,
-                      color: _meta,
-                      decoration: TextDecoration.underline,
-                      decorationColor: _meta,
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: SizedBox(
-                      width: 2,
-                      height: 2,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: _meta,
-                          shape: BoxShape.circle,
+                  GestureDetector(
+                    key: const ValueKey('listing-booking-dates'),
+                    onTap: _pickStayDates,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          hasStay ? listing.dates : 'Выберите даты',
+                          style: const TextStyle(
+                            fontFamily: AppTheme.fontFamily,
+                            fontWeight: FontWeight.w400,
+                            fontSize: 12,
+                            height: 1.50,
+                            color: _meta,
+                            decoration: TextDecoration.underline,
+                            decorationColor: _meta,
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                  Text(
-                    listing.nights,
-                    style: const TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontWeight: FontWeight.w400,
-                      fontSize: 12,
-                      height: 1.50,
-                      color: _meta,
+                        if (hasStay) ...[
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: SizedBox(
+                              width: 2,
+                              height: 2,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: _meta,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Text(
+                            listing.nights,
+                            style: const TextStyle(
+                              fontFamily: AppTheme.fontFamily,
+                              fontWeight: FontWeight.w400,
+                              fontSize: 12,
+                              height: 1.50,
+                              color: _meta,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:booking/screens/listing/listing_detail.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
@@ -13,6 +14,10 @@ Widget _app(Widget home) {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    await initializeDateFormatting('ru');
+  });
 
   test('listing detail maps a PocketBase listing and host extras', () {
     final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
@@ -79,7 +84,36 @@ void main() {
     expect(find.text('Другие объявления владельца'), findsOneWidget);
     expect(find.text('Частный дом в 10 км от Москвы'), findsOneWidget);
     expect(find.text('Забронировать'), findsOneWidget);
-    expect(find.text('15 170 ₽'), findsOneWidget);
+    expect(find.text('3 034 ₽'), findsOneWidget);
+    expect(find.text('Выберите даты'), findsOneWidget);
+  });
+
+  testWidgets('booking bar totals the selected stay nights', (tester) async {
+    final favorites = <String>{};
+    final listing = kDemoListings
+        .firstWhere((item) => item.id == 'studio-msk')
+        .withStay(
+          checkIn: DateTime(2026, 9, 12),
+          checkOut: DateTime(2026, 9, 15),
+        );
+    final detail = ListingDetail.fromListing(listing);
+
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: favorites,
+          initialDetail: detail,
+          onFavorite: (id) {
+            if (!favorites.remove(id)) favorites.add(id);
+          },
+        ),
+      ),
+    );
+
+    expect(find.text('9 102 ₽'), findsOneWidget);
+    expect(find.text('3 034 ₽ / ночь'), findsOneWidget);
+    expect(find.text('3 ночи'), findsOneWidget);
   });
 
   testWidgets('favorite on the listing page updates the shared set', (

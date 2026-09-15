@@ -173,13 +173,17 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                   if (_activeChips.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    Wrap(
+                    SingleChildScrollView(
                       key: const ValueKey('search-chips-scroll'),
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final label in _activeChips) _Chip(label: label),
-                      ],
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < _activeChips.length; i++) ...[
+                            if (i != 0) const SizedBox(width: 8),
+                            _Chip(label: _activeChips[i]),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ],
