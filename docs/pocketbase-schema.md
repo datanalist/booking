@@ -25,7 +25,7 @@
 - `balance`: number, default 0 — сумма к выводу (**ТЗ**)
 - `fcm_token`: text — пуш (**интерпретация**; поля в UI нет)
 
-Вход гостя по email — встроенный OTP коллекции `users` (длина 5, TTL 180 с, SMTP). Отдельной коллекции кодов нет. Для автосоздания записи при OTP поля `roles` / `name` / `first_name` / `last_name` не required. Включить и проверить: `python3 scripts/enable_email_otp.py`.
+Вход гостя по email — встроенный OTP коллекции `users` (длина 5, TTL 600 с, SMTP). Отдельной коллекции кодов нет. `requestOTP` сам запись не создаёт: без `users` с этим email письмо не уходит, клиент всё равно получает фиктивный `otpId`. Автосоздание — `pb_hooks/otp_signup.pb.js` и `PocketBaseAuthRepository.requestEmailOtp`. Поля `roles` / `name` / `first_name` / `last_name` не required. Включить OTP: `python3 scripts/enable_email_otp.py`.
 
 ### `listings`
 

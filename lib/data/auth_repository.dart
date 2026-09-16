@@ -109,6 +109,8 @@ class PocketBaseAuthRepository implements AuthRepository {
       throw const AuthException('Введите корректный email');
     }
     try {
+      // Без записи в users PocketBase не шлёт письмо, но отдаёт фиктивный otpId.
+      await _ensureUserForEmailOtp(identity);
       final result = await _pb.collection('users').requestOTP(identity);
       _pendingPhone = '';
       return OtpChallenge(
@@ -117,6 +119,22 @@ class PocketBaseAuthRepository implements AuthRepository {
         destination: identity,
       );
     } on ClientException catch (error) {
+      throw AuthException(_messageFor(error, email: true));
+    }
+  }
+
+  Future<void> _ensureUserForEmailOtp(String email) async {
+    try {
+      final password = _randomPassword();
+      await _pb.collection('users').create(
+        body: {
+          'email': email,
+          'password': password,
+          'passwordConfirm': password,
+        },
+      );
+    } on ClientException catch (error) {
+      if (_isExistingEmail(error) || error.statusCode == 403) return;
       throw AuthException(_messageFor(error, email: true));
     }
   }
@@ -288,6 +306,15 @@ class PocketBaseAuthRepository implements AuthRepository {
         'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#';
     final random = Random.secure();
     return List.generate(18, (_) => chars[random.nextInt(chars.length)]).join();
+  }
+
+  static bool _isExistingEmail(ClientException error) {
+    if (error.statusCode != 400) return false;
+    final data = error.response['data'];
+    if (data is! Map) return false;
+    final email = data['email'];
+    if (email is! Map) return false;
+    return email['code'] == 'validation_not_unique';
   }
 
   static String _messageFor(

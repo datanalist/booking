@@ -17,7 +17,7 @@ if str(ROOT / "scripts") not in sys.path:
 from seed_listings import PocketBase, env, load_dotenv  # noqa: E402
 
 OTP_LENGTH = 5
-OTP_DURATION = 180
+OTP_DURATION = 600
 OTP_TEMPLATE = {
     "subject": "Код подтверждения GlobalStay",
     "body": (
@@ -145,6 +145,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 3
+    print("deploy pb_hooks/otp_signup.pb.js next to pb_data so new emails get a users row")
     return 0
 
 
