@@ -65,12 +65,13 @@ flutter run -d linux --dart-define=POCKETBASE_URL=https://example.com
 ```bash
 python3 scripts/seed_listings.py
 python3 scripts/seed_listings.py --reset   # удалить сид-объявления и создать заново
-python3 scripts/seed_auth_stub.py          # пользователь вкладки Email
+python3 scripts/enable_email_otp.py        # 5-значный OTP на email + SMTP
+bash scripts/push_emulator_gallery.sh      # фото профиля в галерею эмулятора
 ```
 
-Пять опубликованных объявлений (Москва, Казань, Санкт-Петербург) и один черновик. Пароль сид-пользователей: `SeedPass123!`.
+Пять опубликованных объявлений (Москва, Казань, Санкт-Петербург) и один черновик. Пароль сид-пользователей каталога: `SeedPass123!`.
 
-Сид входа с вкладки Email: `example@mail.com` / `SeedPass123!` (коллекция `users`). Телефон `+79999999999` пишется в ту же запись, только если в схеме есть поле `phone`.
+Вход в приложении: свой email → код из письма. Телефон пока заглушка `+79999999999` / код `77777`.
 
 Токен Mapbox — `config/mapbox.env` (не в git) или `--dart-define=MAPBOX_TOKEN=...`. Пример: `config/mapbox.env.example`.
 

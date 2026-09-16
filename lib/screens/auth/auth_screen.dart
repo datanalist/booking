@@ -6,37 +6,31 @@ import 'package:flutter/services.dart';
 import '../../data/auth_repository.dart';
 import '../../shell/main_shell.dart';
 import '../../theme/app_theme.dart';
-
-/// Заглушка email: подставляется по тапу на пустое поле, дальше можно править.
-/// Соответствует записи `users.email` из `scripts/seed_auth_stub.py`.
-const kAuthEmailStub = 'example@mail.com';
+import 'otp_screen.dart';
+import 'register_screen.dart';
 
 /// Копирайт галочки с экрана Email `1:14841` / чекбокс `1:14848`.
 const kAuthTermsPrefix = 'Я прочитал(а) и согласен(сна) с ';
 const kAuthTermsLinkLabel = 'Условиями использования';
 const kAuthPrivacyLinkLabel = 'Политикой конфиденциальности';
 
-/// Вкладки входа по макету: Email `1:14841`, телефон `1:14851` (агент 3).
+/// Вкладки входа по макету: Email `1:14841`, телефон `1:14851`.
 enum AuthEntryMethod { email, phone }
 
-/// Экран авторизации. Телефон и OTP — заглушки под агента 3.
+/// Экран авторизации. Email — реальный OTP, телефон — заглушка номера и кода.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({
     super.key,
     this.initialMethod = AuthEntryMethod.email,
     this.authRepository,
     this.onSignedIn,
-    this.onPhoneContinue,
   });
 
   final AuthEntryMethod initialMethod;
   final AuthRepository? authRepository;
 
-  /// После успешного входа в PocketBase. Если не задан — открывается оболочка.
+  /// После полного входа. Если не задан — открывается оболочка.
   final ValueChanged<AuthSession>? onSignedIn;
-
-  /// Агент 3: сценарий телефона + OTP. Сюда не ходим с вкладки Email.
-  final ValueChanged<String>? onPhoneContinue;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -46,6 +40,8 @@ class _AuthScreenState extends State<AuthScreen> {
   late AuthEntryMethod _method = widget.initialMethod;
   final _email = TextEditingController();
   final _emailFocus = FocusNode();
+  final _phone = TextEditingController();
+  final _phoneFocus = FocusNode();
   bool _busy = false;
   bool _acceptedTerms = false;
   String? _error;
@@ -61,51 +57,48 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _email.dispose();
     _emailFocus.dispose();
+    _phone.dispose();
+    _phoneFocus.dispose();
     super.dispose();
   }
 
   bool get _canContinueEmail =>
       _acceptedTerms && _email.text.trim().isNotEmpty && !_busy;
 
+  bool get _canContinuePhone =>
+      _acceptedTerms && _phone.text.trim().isNotEmpty && !_busy;
+
   bool get _canContinue => _method == AuthEntryMethod.email
       ? _canContinueEmail
-      : _acceptedTerms && !_busy;
+      : _canContinuePhone;
 
-  void _fillEmailStubIfEmpty() {
-    if (_email.text.isNotEmpty) return;
-    _email.value = const TextEditingValue(
-      text: kAuthEmailStub,
-      selection: TextSelection.collapsed(offset: kAuthEmailStub.length),
+  void _fillPhoneStubIfEmpty() {
+    if (_phone.text.isNotEmpty) return;
+    _phone.value = const TextEditingValue(
+      text: kAuthPhoneStub,
+      selection: TextSelection.collapsed(offset: kAuthPhoneStub.length),
     );
     setState(() {});
   }
 
   Future<void> _onContinue() async {
     if (!_canContinue) return;
-    if (_method == AuthEntryMethod.phone) {
-      widget.onPhoneContinue?.call('');
-      return;
-    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final session = await _auth.signInWithEmail(_email.text.trim());
+      final challenge = _method == AuthEntryMethod.email
+          ? await _auth.requestEmailOtp(_email.text.trim())
+          : await _auth.requestPhoneOtp(_phone.text.trim());
       if (!mounted) return;
-      if (widget.onSignedIn != null) {
-        widget.onSignedIn!(session);
-        return;
-      }
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder<void>(
-          pageBuilder: (context, animation, secondaryAnimation) {
-            return const MainShell();
-          },
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 350),
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (context) => OtpScreen(
+            challenge: challenge,
+            authRepository: _auth,
+            onVerified: _afterVerified,
+          ),
         ),
       );
     } on AuthException catch (error) {
@@ -113,10 +106,50 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() => _error = error.message);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Не удалось войти. Проверьте соединение');
+      setState(() => _error = 'Не удалось продолжить. Проверьте соединение');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _afterVerified(AuthSession session) {
+    if (session.profileComplete) {
+      _finish(session);
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (context) => RegisterScreen(
+          initialEmail: session.email.isNotEmpty
+              ? session.email
+              : _email.text.trim(),
+          initialPhone: session.phone.isNotEmpty
+              ? session.phone
+              : _phone.text.trim(),
+          authRepository: _auth,
+          onCompleted: _finish,
+        ),
+      ),
+    );
+  }
+
+  void _finish(AuthSession session) {
+    if (widget.onSignedIn != null) {
+      widget.onSignedIn!(session);
+      return;
+    }
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder<void>(
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return const MainShell();
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+      (route) => false,
+    );
   }
 
   @override
@@ -153,17 +186,30 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 42),
                 if (_method == AuthEntryMethod.email)
-                  _EmailField(
+                  _AuthTextField(
+                    fieldKey: 'auth-email-field',
                     controller: _email,
                     focusNode: _emailFocus,
+                    hint: 'Email',
+                    keyboardType: TextInputType.emailAddress,
                     fill: _fieldFill,
                     border: _fieldBorder,
                     hintColor: _hint,
-                    onTap: _fillEmailStubIfEmpty,
                     onChanged: (_) => setState(() {}),
                   )
                 else
-                  const _PhoneAuthPlaceholder(),
+                  _AuthTextField(
+                    fieldKey: 'auth-phone-field',
+                    controller: _phone,
+                    focusNode: _phoneFocus,
+                    hint: 'Телефон',
+                    keyboardType: TextInputType.phone,
+                    fill: _fieldFill,
+                    border: _fieldBorder,
+                    hintColor: _hint,
+                    onTap: _fillPhoneStubIfEmpty,
+                    onChanged: (_) => setState(() {}),
+                  ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -261,23 +307,29 @@ class _AuthMethodTabs extends StatelessWidget {
   }
 }
 
-class _EmailField extends StatelessWidget {
-  const _EmailField({
+class _AuthTextField extends StatelessWidget {
+  const _AuthTextField({
+    required this.fieldKey,
     required this.controller,
     required this.focusNode,
+    required this.hint,
+    required this.keyboardType,
     required this.fill,
     required this.border,
     required this.hintColor,
-    required this.onTap,
     required this.onChanged,
+    this.onTap,
   });
 
+  final String fieldKey;
   final TextEditingController controller;
   final FocusNode focusNode;
+  final String hint;
+  final TextInputType keyboardType;
   final Color fill;
   final Color border;
   final Color hintColor;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final ValueChanged<String> onChanged;
 
   @override
@@ -285,10 +337,10 @@ class _EmailField extends StatelessWidget {
     return SizedBox(
       height: 56,
       child: TextField(
-        key: const ValueKey<String>('auth-email-field'),
+        key: ValueKey<String>(fieldKey),
         controller: controller,
         focusNode: focusNode,
-        keyboardType: TextInputType.emailAddress,
+        keyboardType: keyboardType,
         textInputAction: TextInputAction.done,
         autocorrect: false,
         enableSuggestions: false,
@@ -302,7 +354,7 @@ class _EmailField extends StatelessWidget {
           color: Color(0xFF1A1B1C),
         ),
         decoration: InputDecoration(
-          hintText: 'Email',
+          hintText: hint,
           hintStyle: TextStyle(
             fontFamily: AppTheme.fontFamily,
             fontWeight: FontWeight.w400,
@@ -330,20 +382,6 @@ class _EmailField extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Каркас вкладки телефона без OTP / заглушки номера — это задача агента 3.
-class _PhoneAuthPlaceholder extends StatelessWidget {
-  const _PhoneAuthPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      key: ValueKey<String>('auth-phone-placeholder'),
-      height: 56,
-      child: ColoredBox(color: Colors.transparent),
     );
   }
 }

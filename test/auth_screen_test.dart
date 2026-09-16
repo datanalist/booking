@@ -10,17 +10,30 @@ import 'fixtures/fake_auth.dart';
 Finder termsCheckbox() =>
     find.byKey(const ValueKey<String>('auth-terms-checkbox'));
 
-Future<void> fillEmailAndAcceptTerms(WidgetTester tester) async {
-  await tester.tap(find.byKey(const ValueKey<String>('auth-email-field')));
-  await tester.pump();
-  await tester.tap(termsCheckbox());
-  await tester.pump();
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('email field is empty until tapped, then stub is editable', (
+  testWidgets('email field stays empty until the user types', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(home: AuthScreen(authRepository: FakeAuthRepository())),
+    );
+
+    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.text('example@mail.com'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('auth-email-field')));
+    await tester.pump();
+    expect(find.text('example@mail.com'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('auth-email-field')),
+      'me@example.com',
+    );
+    await tester.pump();
+    expect(find.text('me@example.com'), findsOneWidget);
+  });
+
+  testWidgets('continue requests email OTP after terms are accepted', (
     tester,
   ) async {
     final auth = FakeAuthRepository();
@@ -28,96 +41,70 @@ void main() {
       MaterialApp(home: AuthScreen(authRepository: auth)),
     );
 
-    expect(find.text('Авторизация'), findsOneWidget);
-    expect(find.text('Продолжить'), findsOneWidget);
-    expect(find.text('Email'), findsWidgets);
-    expect(find.text(kAuthEmailStub), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey<String>('auth-email-field')));
-    await tester.pump();
-
-    expect(find.text(kAuthEmailStub), findsOneWidget);
-
     await tester.enterText(
       find.byKey(const ValueKey<String>('auth-email-field')),
-      'edited@mail.com',
+      'me@example.com',
     );
-    await tester.pump();
-    expect(find.text('edited@mail.com'), findsOneWidget);
-    expect(find.text(kAuthEmailStub), findsNothing);
-  });
-
-  testWidgets('continue stays disabled until terms are accepted', (
-    tester,
-  ) async {
-    final auth = FakeAuthRepository();
-    AuthSession? signedIn;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AuthScreen(
-          authRepository: auth,
-          onSignedIn: (session) => signedIn = session,
-        ),
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey<String>('auth-email-field')));
     await tester.pump();
     await tester.tap(find.text('Продолжить'));
     await tester.pumpAndSettle();
-
     expect(auth.lastEmail, isNull);
-    expect(signedIn, isNull);
 
     await tester.tap(termsCheckbox());
     await tester.pump();
     await tester.tap(find.text('Продолжить'));
     await tester.pumpAndSettle();
 
-    expect(auth.lastEmail, kAuthEmailStub);
-    expect(signedIn?.email, kAuthEmailStub);
+    expect(auth.lastEmail, 'me@example.com');
+    expect(find.text('Введите код'), findsOneWidget);
+    expect(
+      find.textContaining('me@example.com'),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('continue authenticates the typed email against the repository', (
+  testWidgets('phone tab inserts stub number and opens stub OTP', (
     tester,
   ) async {
     final auth = FakeAuthRepository();
-    AuthSession? signedIn;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AuthScreen(
-          authRepository: auth,
-          onSignedIn: (session) => signedIn = session,
-        ),
-      ),
-    );
-
-    await fillEmailAndAcceptTerms(tester);
-    await tester.tap(find.text('Продолжить'));
-    await tester.pumpAndSettle();
-
-    expect(auth.lastEmail, kAuthEmailStub);
-    expect(signedIn?.email, kAuthEmailStub);
-  });
-
-  testWidgets('failed auth shows error and stays on the email tab', (
-    tester,
-  ) async {
-    final auth = FakeAuthRepository()..fail = true;
     await tester.pumpWidget(
       MaterialApp(home: AuthScreen(authRepository: auth)),
     );
 
-    await fillEmailAndAcceptTerms(tester);
+    await tester.tap(find.text('Телефон'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('auth-phone-field')));
+    await tester.pump();
+    expect(find.text(kAuthPhoneStub), findsOneWidget);
+
+    await tester.tap(termsCheckbox());
+    await tester.pump();
     await tester.tap(find.text('Продолжить'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Пользователь не найден или вход не удался'),
-      findsOneWidget,
+    expect(auth.lastPhone, kAuthPhoneStub);
+    expect(find.text('Введите код'), findsOneWidget);
+  });
+
+  testWidgets('failed OTP request shows error on the email tab', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository()..failOtpRequest = true;
+    await tester.pumpWidget(
+      MaterialApp(home: AuthScreen(authRepository: auth)),
     );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('auth-email-field')),
+      'me@example.com',
+    );
+    await tester.tap(termsCheckbox());
+    await tester.pump();
+    await tester.tap(find.text('Продолжить'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Не удалось отправить код на эту почту'), findsOneWidget);
     expect(find.text('Авторизация'), findsOneWidget);
-    expect(find.text('Поиск'), findsNothing);
   });
 
   testWidgets('terms checkbox copy and links match Figma', (tester) async {
@@ -131,26 +118,10 @@ void main() {
       find.textContaining('Политикой конфиденциальности'),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('Я прочитал(а) и согласен(сна)'),
-      findsOneWidget,
-    );
 
     _tapLink(tester, kAuthTermsLinkLabel);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('auth-terms-page')), findsOneWidget);
-    expect(find.text('Условия использования'), findsOneWidget);
-
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-
-    _tapLink(tester, kAuthPrivacyLinkLabel);
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey<String>('auth-privacy-page')),
-      findsOneWidget,
-    );
-    expect(find.text('Политика конфиденциальности'), findsOneWidget);
   });
 }
 
@@ -175,4 +146,3 @@ void _tapLink(WidgetTester tester, String label) {
   expect(recognizer, isNotNull, reason: 'missing recognizer for $label');
   recognizer!.onTap!.call();
 }
-

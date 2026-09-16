@@ -1,16 +1,55 @@
+import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 
 import 'pocketbase_client.dart';
 
-/// Пароль сид-пользователя авторизации (`scripts/seed_auth_stub.py`).
-/// В макете нет поля пароля — вкладка Email входит этим паролем.
-const kAuthStubPassword = 'SeedPass123!';
+/// Заглушка только для вкладки телефона (код на номер не отправляем).
+const kAuthPhoneStub = '+79999999999';
+const kAuthPhoneStubCode = '77777';
+const kAuthPhoneStubOtpId = 'stub-phone-otp';
+
+enum OtpChannel { email, phone }
+
+class OtpChallenge {
+  const OtpChallenge({
+    required this.otpId,
+    required this.channel,
+    required this.destination,
+  });
+
+  final String otpId;
+  final OtpChannel channel;
+  final String destination;
+}
 
 class AuthSession {
-  const AuthSession({required this.userId, required this.email});
+  const AuthSession({
+    required this.userId,
+    required this.email,
+    this.phone = '',
+    this.firstName = '',
+    this.lastName = '',
+    this.displayName = '',
+    this.avatarUrl,
+    this.birthdate,
+    this.profileComplete = false,
+    this.limitedBrowse = false,
+  });
 
   final String userId;
   final String email;
+  final String phone;
+  final String firstName;
+  final String lastName;
+  final String displayName;
+  final String? avatarUrl;
+  final DateTime? birthdate;
+  final bool profileComplete;
+  final bool limitedBrowse;
 }
 
 class AuthException implements Exception {
@@ -23,40 +62,249 @@ class AuthException implements Exception {
 }
 
 abstract class AuthRepository {
-  Future<AuthSession> signInWithEmail(String email);
+  Future<OtpChallenge> requestEmailOtp(String email);
+  Future<AuthSession> verifyEmailOtp({
+    required String otpId,
+    required String code,
+  });
+
+  Future<OtpChallenge> requestPhoneOtp(String phone);
+  Future<AuthSession> verifyPhoneOtp({
+    required String otpId,
+    required String code,
+  });
+
+  Future<AuthSession> completeProfile({
+    required String firstName,
+    required String lastName,
+    required DateTime birthdate,
+    String email = '',
+    String phone = '',
+    File? avatar,
+    bool limitedBrowse = false,
+  });
+
+  AuthSession? currentSession();
 }
 
 class AuthRepositoryScope {
   static AuthRepository instance = PocketBaseAuthRepository();
+  static final ValueNotifier<AuthSession?> session = ValueNotifier<AuthSession?>(null);
 }
 
 class PocketBaseAuthRepository implements AuthRepository {
   PocketBaseAuthRepository({PocketBase? client}) : _pb = client ?? pocketBase;
 
   final PocketBase _pb;
+  AuthSession? _session;
+  String _pendingPhone = '';
 
   @override
-  Future<AuthSession> signInWithEmail(String email) async {
+  AuthSession? currentSession() => _session ?? _fromRecord(_pb.authStore.record);
+
+  @override
+  Future<OtpChallenge> requestEmailOtp(String email) async {
     final identity = email.trim();
+    if (!_looksLikeEmail(identity)) {
+      throw const AuthException('Введите корректный email');
+    }
     try {
-      final auth = await _pb
-          .collection('users')
-          .authWithPassword(identity, kAuthStubPassword);
-      final record = auth.record;
-      return AuthSession(
-        userId: record.id,
-        email: record.get<String>('email', identity),
+      final result = await _pb.collection('users').requestOTP(identity);
+      _pendingPhone = '';
+      return OtpChallenge(
+        otpId: result.otpId,
+        channel: OtpChannel.email,
+        destination: identity,
       );
+    } on ClientException catch (error) {
+      throw AuthException(_messageFor(error, email: true));
+    }
+  }
+
+  @override
+  Future<AuthSession> verifyEmailOtp({
+    required String otpId,
+    required String code,
+  }) async {
+    try {
+      final auth = await _pb.collection('users').authWithOTP(otpId, code.trim());
+      _session = _fromRecord(
+        auth.record,
+        fallbackEmail: auth.record.get<String>('email', ''),
+      );
+      AuthRepositoryScope.session.value = _session;
+      return _session!;
+    } on ClientException catch (error) {
+      throw AuthException(_messageFor(error, otp: true));
+    }
+  }
+
+  @override
+  Future<OtpChallenge> requestPhoneOtp(String phone) async {
+    final normalized = phone.replaceAll(RegExp(r'\s'), '');
+    if (normalized.isEmpty) {
+      throw const AuthException('Введите номер телефона');
+    }
+    _pendingPhone = normalized;
+    return const OtpChallenge(
+      otpId: kAuthPhoneStubOtpId,
+      channel: OtpChannel.phone,
+      destination: kAuthPhoneStub,
+    );
+  }
+
+  @override
+  Future<AuthSession> verifyPhoneOtp({
+    required String otpId,
+    required String code,
+  }) async {
+    if (otpId != kAuthPhoneStubOtpId || code.trim() != kAuthPhoneStubCode) {
+      throw const AuthException('Неверный код');
+    }
+    _session = AuthSession(
+      userId: '',
+      email: '',
+      phone: _pendingPhone.isEmpty ? kAuthPhoneStub : _pendingPhone,
+      profileComplete: false,
+    );
+    AuthRepositoryScope.session.value = _session;
+    return _session!;
+  }
+
+  @override
+  Future<AuthSession> completeProfile({
+    required String firstName,
+    required String lastName,
+    required DateTime birthdate,
+    String email = '',
+    String phone = '',
+    File? avatar,
+    bool limitedBrowse = false,
+  }) async {
+    final first = firstName.trim();
+    final last = lastName.trim();
+    final display = '$first $last'.trim();
+    final body = <String, dynamic>{
+      'first_name': first,
+      'last_name': last,
+      'name': display,
+      'birthdate':
+          '${birthdate.year.toString().padLeft(4, '0')}-${birthdate.month.toString().padLeft(2, '0')}-${birthdate.day.toString().padLeft(2, '0')} 00:00:00.000Z',
+      'emailVisibility': true,
+      'limited_browse': limitedBrowse,
+    };
+    if (phone.trim().isNotEmpty) {
+      body['phone'] = phone.trim();
+    }
+
+    final files = <http.MultipartFile>[];
+    if (avatar != null) {
+      files.add(
+        http.MultipartFile.fromBytes(
+          'avatar',
+          await avatar.readAsBytes(),
+          filename: 'avatar.jpg',
+        ),
+      );
+    }
+
+    try {
+      RecordModel record;
+      if (_pb.authStore.isValid && _pb.authStore.record != null) {
+        if (email.trim().isNotEmpty) {
+          body['email'] = email.trim();
+        }
+        record = await _pb
+            .collection('users')
+            .update(_pb.authStore.record!.id, body: body, files: files);
+      } else {
+        final identity = email.trim();
+        if (!_looksLikeEmail(identity)) {
+          throw const AuthException('Укажите email, чтобы сохранить профиль');
+        }
+        final password = _randomPassword();
+        record = await _pb
+            .collection('users')
+            .create(
+              body: {
+                ...body,
+                'email': identity,
+                'password': password,
+                'passwordConfirm': password,
+              },
+              files: files,
+            );
+        await _pb.collection('users').authWithPassword(identity, password);
+        record = _pb.authStore.record ?? record;
+      }
+      _session = _fromRecord(record, fallbackEmail: email);
+      AuthRepositoryScope.session.value = _session;
+      return _session!;
+    } on AuthException {
+      rethrow;
     } on ClientException catch (error) {
       throw AuthException(_messageFor(error));
     }
   }
 
-  static String _messageFor(ClientException error) {
+  AuthSession? _fromRecord(RecordModel? record, {String fallbackEmail = ''}) {
+    if (record == null) return null;
+    final email = record.get<String>('email', fallbackEmail);
+    final first = record.get<String>('first_name', '');
+    final last = record.get<String>('last_name', '');
+    final name = record.get<String>('name', '$first $last'.trim());
+    final birthRaw = record.get<String>('birthdate', '');
+    return AuthSession(
+      userId: record.id,
+      email: email,
+      phone: record.get<String>('phone', ''),
+      firstName: first,
+      lastName: last,
+      displayName: name.trim(),
+      avatarUrl: _avatarUrl(record),
+      birthdate: _parsePbDate(birthRaw),
+      profileComplete: name.trim().isNotEmpty,
+      limitedBrowse: record.get<bool>('limited_browse', false),
+    );
+  }
+
+  String? _avatarUrl(RecordModel record) {
+    final file = record.get<String>('avatar', '');
+    if (file.isEmpty) return null;
+    return _pb.files.getUrl(record, file).toString();
+  }
+
+  static DateTime? _parsePbDate(String raw) {
+    if (raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  static bool _looksLikeEmail(String value) {
+    return value.contains('@') && value.contains('.');
+  }
+
+  static String _randomPassword() {
+    const chars =
+        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#';
+    final random = Random.secure();
+    return List.generate(18, (_) => chars[random.nextInt(chars.length)]).join();
+  }
+
+  static String _messageFor(
+    ClientException error, {
+    bool email = false,
+    bool otp = false,
+  }) {
     final status = error.statusCode;
-    if (status == 400 || status == 401 || status == 403) {
-      return 'Пользователь не найден или вход не удался';
+    if (otp && (status == 400 || status == 401 || status == 403)) {
+      return 'Неверный код';
     }
-    return 'Не удалось войти. Проверьте соединение';
+    if (email && (status == 400 || status == 403)) {
+      return 'Не удалось отправить код на эту почту';
+    }
+    if (status == 400 || status == 401 || status == 403) {
+      return 'Не удалось продолжить. Проверьте данные';
+    }
+    return 'Не удалось продолжить. Проверьте соединение';
   }
 }
