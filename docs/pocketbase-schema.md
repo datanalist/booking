@@ -13,9 +13,10 @@
 - `phone`: text, unique — вход гостя / контакт хозяина
 - `first_name`, `last_name`: text — анкета бронирования (**ТЗ**); на `ProfileScreen` одна строка имени
 - `avatar`: file(1) — профиль и карточка хозяина
-- `birthdate`: date — возраст 18+ (**ТЗ**; формы в taps нет)
+- `birthdate`: date — возраст 18+ (**ТЗ**; анкета после email OTP)
+- `limited_browse`: bool, default false — гость без полной анкеты (**экран**)
 - `bio`: text — «информация о владельце»
-- `roles`: select multiple `[guest, host, staff]`, required — три кабинета ТЗ, не три коллекции (**интерпретация**)
+- `roles`: select multiple `[guest, host, staff]` — три кабинета ТЗ, не три коллекции (**интерпретация**); для OTP-signup не required
 - `account_status`: select `[active, pending, blocked, rejected]`, required, default `active` — имена под сценарии ТЗ: заявка сотрудника, принять/отклонить, блок, бан хозяина (**интерпретация**)
 - `staff_tasks`: text — «задачи сотрудника» есть в ТЗ, словаря значений нет
 - `verified_host`: bool, default false — бейдж «Верификация пройдена» / `ListingHost.verified` (**экран**)
@@ -23,6 +24,8 @@
 - `rating`, `reviews_count`: number — денорм хозяина для карточек
 - `balance`: number, default 0 — сумма к выводу (**ТЗ**)
 - `fcm_token`: text — пуш (**интерпретация**; поля в UI нет)
+
+Вход гостя по email — встроенный OTP коллекции `users` (длина 5, TTL 180 с, SMTP). Отдельной коллекции кодов нет. Для автосоздания записи при OTP поля `roles` / `name` / `first_name` / `last_name` не required. Включить и проверить: `python3 scripts/enable_email_otp.py`.
 
 ### `listings`
 
@@ -179,6 +182,6 @@ chats    ──*──1── tickets
 
 ## Сознательно не вынесено
 
-Отдельные коллекции `hosts` / `staff`, справочники городов и удобств, OTP, ledger, история статусов, коллекция фото, настройки комиссии.
+Отдельные коллекции `hosts` / `staff`, справочники городов и удобств, отдельная коллекция OTP, ledger, история статусов, коллекция фото, настройки комиссии.
 
 Убрано после ревью первой схемы: enum `placement_type` (целиком / комната / койко-место), потолок `photos` ~20, словарь `staff_tasks`, доменное описание `emailVisibility`, `bookings.status = rejected`, `cancel_reason = admin`, `bookings.refund_amount`, `tickets.status`, `notifications.type`, `payouts.status = rejected`.

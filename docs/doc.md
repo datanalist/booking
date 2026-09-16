@@ -46,6 +46,16 @@ flutter build linux
 
 В терминале `flutter run`: `r` — hot reload, `R` — hot restart, `q` — выход.
 
+## Auth, OTP, галерея эмулятора
+
+```bash
+python3 scripts/enable_email_otp.py          # 5-значный email OTP + SMTP
+bash scripts/push_emulator_gallery.sh        # images/profile/avatar.png → Pictures
+bash scripts/push_emulator_gallery.sh emulator-5554
+```
+
+Фото профиля берётся системным picker (`image_picker`), не `photo_manager`. Первая debug-сборка Android может идти несколько минут из‑за Gradle; повторные — быстрее. Если `flutter run` завис на `assembleDebug` без прогресса больше ~5 минут — остановить (`q`) и проверить, не крутится ли лишний Gradle.
+
 ## Остановить эмулятор (перед выключением компьютера)
 
 Сначала выйти из `flutter run` (`q` в том терминале). Потом погасить AVD:

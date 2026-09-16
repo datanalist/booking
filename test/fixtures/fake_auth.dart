@@ -148,6 +148,9 @@ class FakePhotoLibrary implements PhotoLibrary {
     await file.writeAsBytes(_png);
     return file;
   }
+
+  @override
+  Future<File?> pickFromGallery() => load(const PhotoAssetItem(id: 'gallery'));
 }
 
 const _png = <int>[

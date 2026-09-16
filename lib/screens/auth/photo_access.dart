@@ -7,15 +7,13 @@ import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:photo_manager/photo_manager.dart';
 
 import '../../theme/app_theme.dart';
 
 class PhotoAssetItem {
-  const PhotoAssetItem({required this.id, this.entity});
+  const PhotoAssetItem({required this.id});
 
   final String id;
-  final AssetEntity? entity;
 }
 
 abstract class PhotoLibrary {
@@ -25,6 +23,7 @@ abstract class PhotoLibrary {
   Future<Uint8List?> thumbnail(PhotoAssetItem item);
   Future<File?> load(PhotoAssetItem item);
   Future<File?> capture();
+  Future<File?> pickFromGallery();
 }
 
 class DevicePhotoLibrary implements PhotoLibrary {
@@ -34,8 +33,11 @@ class DevicePhotoLibrary implements PhotoLibrary {
 
   @override
   Future<bool> requestGallery({required bool limited}) async {
-    final state = await PhotoManager.requestPermissionExtend();
-    return state.hasAccess || state.isAuth;
+    final status = await Permission.photos.request();
+    return status.isGranted ||
+        status.isLimited ||
+        status.isDenied ||
+        status.isRestricted;
   }
 
   @override
@@ -45,38 +47,22 @@ class DevicePhotoLibrary implements PhotoLibrary {
   }
 
   @override
-  Future<List<PhotoAssetItem>> list({int limit = 90}) async {
-    final paths = await PhotoManager.getAssetPathList(
-      type: RequestType.image,
-      onlyAll: true,
-    );
-    if (paths.isEmpty) return const [];
-    final assets = await paths.first.getAssetListPaged(page: 0, size: limit);
-    return [
-      for (final asset in assets) PhotoAssetItem(id: asset.id, entity: asset),
-    ];
-  }
+  Future<List<PhotoAssetItem>> list({int limit = 90}) async => const [];
 
   @override
-  Future<Uint8List?> thumbnail(PhotoAssetItem item) async {
-    final entity = item.entity;
-    if (entity == null) return null;
-    return entity.thumbnailDataWithSize(const ThumbnailSize.square(200));
-  }
+  Future<Uint8List?> thumbnail(PhotoAssetItem item) async => null;
 
   @override
-  Future<File?> load(PhotoAssetItem item) async {
-    final entity = item.entity;
-    if (entity == null) return null;
-    return entity.file;
-  }
+  Future<File?> load(PhotoAssetItem item) => pickFromGallery();
 
   @override
-  Future<File?> capture() async {
-    final shot = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 92,
-    );
+  Future<File?> capture() => _pick(ImageSource.camera);
+
+  @override
+  Future<File?> pickFromGallery() => _pick(ImageSource.gallery);
+
+  Future<File?> _pick(ImageSource source) async {
+    final shot = await _picker.pickImage(source: source, imageQuality: 92);
     if (shot == null) return null;
     return File(shot.path);
   }
@@ -234,6 +220,11 @@ class _PhotoPickerScreenState extends State<PhotoPickerScreen> {
     if (file != null && mounted) Navigator.of(context).pop(file);
   }
 
+  Future<void> _onGallery() async {
+    final file = await widget.library.pickFromGallery();
+    if (file != null && mounted) Navigator.of(context).pop(file);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -300,7 +291,7 @@ class _PhotoPickerScreenState extends State<PhotoPickerScreen> {
                       mainAxisSpacing: 2,
                       crossAxisSpacing: 2,
                     ),
-                    itemCount: _items.length + 1,
+                    itemCount: _items.length + 2,
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return GestureDetector(
@@ -312,7 +303,17 @@ class _PhotoPickerScreenState extends State<PhotoPickerScreen> {
                           ),
                         );
                       }
-                      final item = _items[index - 1];
+                      if (index == 1) {
+                        return GestureDetector(
+                          key: const ValueKey<String>('auth-photo-gallery-tile'),
+                          onTap: _onGallery,
+                          child: const ColoredBox(
+                            color: Color(0xFFE8E8ED),
+                            child: Icon(Icons.photo_library_outlined, size: 32),
+                          ),
+                        );
+                      }
+                      final item = _items[index - 2];
                       return _ThumbTile(
                         item: item,
                         library: widget.library,
