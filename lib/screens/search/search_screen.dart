@@ -139,7 +139,12 @@ class _SearchScreenState extends State<SearchScreen> {
       cities: _cities,
     );
     if (!mounted || selected == null) return;
-    setState(() => _query = selected);
+    final now = DateTime.now();
+    setState(() {
+      _query = selected.completed(
+        today: DateTime(now.year, now.month, now.day),
+      );
+    });
   }
 
   Future<void> _openFilters() async {

@@ -184,7 +184,9 @@ class StayQuote {
 
 int stayNightsBetween(DateTime? checkIn, DateTime? checkOut) {
   if (checkIn == null || checkOut == null) return 0;
-  final nights = checkOut.difference(checkIn).inDays;
+  final start = DateTime(checkIn.year, checkIn.month, checkIn.day);
+  final end = DateTime(checkOut.year, checkOut.month, checkOut.day);
+  final nights = end.difference(start).inDays;
   return nights > 0 ? nights : 0;
 }
 

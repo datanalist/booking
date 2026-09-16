@@ -27,6 +27,23 @@ class SearchQuery {
 
   bool get isActive => city.trim().isNotEmpty;
 
+  SearchQuery completed({required DateTime today}) {
+    final dates = completeSearchStayDates(
+      checkIn: checkIn,
+      checkOut: checkOut,
+      today: today,
+    );
+    if (dates.checkIn == checkIn && dates.checkOut == checkOut) return this;
+    return SearchQuery(
+      city: city,
+      checkIn: dates.checkIn,
+      checkOut: dates.checkOut,
+      adults: adults,
+      children: children,
+      pets: pets,
+    );
+  }
+
   List<String> get chipLabels {
     final cityLabel = city.trim();
     return [
@@ -93,6 +110,28 @@ String formatSearchDate(DateTime date) {
       ? last
       : rawInitial;
   return (first: first, last: last, initial: initial);
+}
+
+({DateTime? checkIn, DateTime? checkOut}) completeSearchStayDates({
+  DateTime? checkIn,
+  DateTime? checkOut,
+  required DateTime today,
+}) {
+  final day = DateTime(today.year, today.month, today.day);
+  DateTime? start = checkIn == null
+      ? null
+      : DateTime(checkIn.year, checkIn.month, checkIn.day);
+  DateTime? end = checkOut == null
+      ? null
+      : DateTime(checkOut.year, checkOut.month, checkOut.day);
+
+  if (end != null && start == null && day.isBefore(end)) {
+    start = day;
+  }
+  if (start != null && (end == null || !end.isAfter(start))) {
+    end = start.add(const Duration(days: 1));
+  }
+  return (checkIn: start, checkOut: end);
 }
 
 typedef AddressSuggest = Future<List<AddressSuggestion>> Function(String query);
@@ -257,10 +296,16 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
     if (city.isEmpty) {
       return const SearchQuery();
     }
-    return SearchQuery(
-      city: city,
+    final now = DateTime.now();
+    final completed = completeSearchStayDates(
       checkIn: _checkIn,
       checkOut: _checkOut,
+      today: DateTime(now.year, now.month, now.day),
+    );
+    return SearchQuery(
+      city: city,
+      checkIn: completed.checkIn,
+      checkOut: completed.checkOut,
       adults: _adults < 1 ? 1 : _adults,
       children: _children,
       pets: _pets,
@@ -300,10 +345,14 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
         _checkOut = picked;
       } else {
         _checkIn = picked;
-        if (_checkOut != null && !_checkOut!.isAfter(picked)) {
-          _checkOut = picked.add(const Duration(days: 1));
-        }
       }
+      final completed = completeSearchStayDates(
+        checkIn: _checkIn,
+        checkOut: _checkOut,
+        today: today,
+      );
+      _checkIn = completed.checkIn;
+      _checkOut = completed.checkOut;
     });
   }
 
@@ -481,18 +530,20 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
                             children: [
                               Expanded(
                                 child: _DateField(
+                                  key: const ValueKey('search-check-in-field'),
                                   label: 'Дата заезда',
                                   value: _checkIn,
-                                  hint: '14.11.2024',
+                                  hint: 'дд.мм.гггг',
                                   onTap: () => _pickDate(checkOut: false),
                                 ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: _DateField(
+                                  key: const ValueKey('search-check-out-field'),
                                   label: 'Дата выезда',
                                   value: _checkOut,
-                                  hint: '15.11.2024',
+                                  hint: 'дд.мм.гггг',
                                   onTap: () => _pickDate(checkOut: true),
                                 ),
                               ),
@@ -673,6 +724,7 @@ class _PillField extends StatelessWidget {
 
 class _DateField extends StatelessWidget {
   const _DateField({
+    super.key,
     required this.label,
     required this.value,
     required this.hint,

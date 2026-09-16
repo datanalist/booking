@@ -91,6 +91,29 @@ void main() {
     );
   });
 
+  testWidgets('cards price the stay from the selected dates', (tester) async {
+    await _pumpSearch(tester);
+
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+
+    Navigator.of(tester.element(find.byType(SearchQuerySheet))).pop(
+      SearchQuery(
+        city: 'Москва',
+        checkIn: DateTime(2026, 10, 1),
+        checkOut: DateTime(2026, 10, 31),
+        adults: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('01.10.2026 – 31.10.2026'), findsOneWidget);
+    // 30 ночей: 3 034 ₽ × 30 = 91 020 ₽ у московских квартир.
+    expect(find.text('91 020 ₽'), findsWidgets);
+    expect(find.text('3 034 ₽'), findsNothing);
+    expect(find.text('1–30 октября · 30 ночей'), findsWidgets);
+  });
+
   testWidgets('search field opens the stay query bottom sheet', (tester) async {
     await _pumpSearch(tester);
 
@@ -700,7 +723,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Поиск'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('14.11.2024'));
+    await tester.tap(find.byKey(const ValueKey('search-check-in-field')));
     await tester.pumpAndSettle();
 
     expect(find.text('Выберите дату'), findsOneWidget);
@@ -791,6 +814,27 @@ void main() {
 
     expect(bounds.first, DateTime(2026, 9, 16));
     expect(bounds.initial, DateTime(2026, 9, 16));
+  });
+
+  test('missing check-in is filled from today when check-out is later', () {
+    final today = DateTime(2026, 9, 16);
+    final dates = completeSearchStayDates(
+      checkOut: DateTime(2026, 9, 20),
+      today: today,
+    );
+
+    expect(dates.checkIn, today);
+    expect(dates.checkOut, DateTime(2026, 9, 20));
+  });
+
+  test('missing check-out becomes the next day after check-in', () {
+    final dates = completeSearchStayDates(
+      checkIn: DateTime(2026, 9, 16),
+      today: DateTime(2026, 9, 16),
+    );
+
+    expect(dates.checkIn, DateTime(2026, 9, 16));
+    expect(dates.checkOut, DateTime(2026, 9, 17));
   });
 
   test('mapbox style json switches english labels to russian', () {

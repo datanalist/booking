@@ -61,4 +61,14 @@ void main() {
     expect(threeNights.nights, '3 ночи');
     expect(threeNights.dates, '12–14 сентября');
   });
+
+  test('stayNightsBetween counts calendar days', () {
+    expect(
+      stayNightsBetween(
+        DateTime(2026, 9, 16, 23),
+        DateTime(2026, 9, 20, 1),
+      ),
+      4,
+    );
+  });
 }
