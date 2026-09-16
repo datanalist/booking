@@ -52,6 +52,31 @@ void main() {
     expect(find.text('Поиск'), findsNothing);
   });
 
+  testWidgets('swiping through onboarding opens authorization', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
+
+    expect(find.text('Находите идеальное жилье'), findsOneWidget);
+
+    Future<void> swipeNext() async {
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+    }
+
+    await swipeNext();
+    expect(find.text('Бронируйте жилье уверенно'), findsOneWidget);
+
+    await swipeNext();
+    expect(find.text('Путешествуйте без границ'), findsOneWidget);
+    expect(find.text('Начать'), findsOneWidget);
+    expect(find.text('Авторизация'), findsNothing);
+
+    await swipeNext();
+    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.text('Email'), findsWidgets);
+    expect(find.text('Продолжить'), findsOneWidget);
+    expect(find.text('Поиск'), findsNothing);
+  });
+
   testWidgets('app boots on splash', (tester) async {
     await tester.pumpWidget(const BookingApp());
     expect(find.byType(SplashScreen), findsOneWidget);

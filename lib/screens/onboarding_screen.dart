@@ -48,6 +48,7 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   int _index = 0;
+  bool _openingAuth = false;
 
   bool get _isLast => _index == onboardingPages.length - 1;
 
@@ -57,19 +58,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
+  void _openAuth() {
+    if (_openingAuth || !mounted) return;
+    _openingAuth = true;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder<void>(
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return const AuthScreen();
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+    );
+  }
+
   Future<void> _onNext() async {
     if (_isLast) {
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder<void>(
-          pageBuilder: (context, animation, secondaryAnimation) {
-            return const AuthScreen();
-          },
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
-          transitionDuration: const Duration(milliseconds: 350),
-        ),
-      );
+      _openAuth();
       return;
     }
     await _controller.nextPage(
@@ -93,9 +100,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           children: [
             PageView.builder(
               controller: _controller,
-              itemCount: onboardingPages.length,
-              onPageChanged: (value) => setState(() => _index = value),
+              itemCount: onboardingPages.length + 1,
+              onPageChanged: (value) {
+                if (value >= onboardingPages.length) {
+                  _openAuth();
+                  return;
+                }
+                setState(() => _index = value);
+              },
               itemBuilder: (context, index) {
+                if (index >= onboardingPages.length) {
+                  return const ColoredBox(color: AppColors.white);
+                }
                 return Image.asset(
                   onboardingPages[index].imageAsset,
                   fit: BoxFit.cover,
@@ -110,19 +126,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: Column(
                   children: [
                     const Spacer(),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: _CopyBlock(
-                        key: ValueKey<int>(_index),
-                        page: onboardingPages[_index],
+                    IgnorePointer(
+                      child: Column(
+                        children: [
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            child: _CopyBlock(
+                              key: ValueKey<int>(_index),
+                              page: onboardingPages[_index],
+                            ),
+                          ),
+                          const SizedBox(height: 26),
+                          _PageIndicator(
+                            count: onboardingPages.length,
+                            index: _index,
+                          ),
+                          const SizedBox(height: 14),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 26),
-                    _PageIndicator(
-                      count: onboardingPages.length,
-                      index: _index,
-                    ),
-                    const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
