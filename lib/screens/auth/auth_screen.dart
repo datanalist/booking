@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,19 +13,21 @@ const kAuthTermsPrefix = 'Я прочитал(а) и согласен(сна) с
 const kAuthTermsLinkLabel = 'Условиями использования';
 const kAuthPrivacyLinkLabel = 'Политикой конфиденциальности';
 
-/// Вкладки входа по макету: Email `1:14841`, телефон `1:14851`.
-enum AuthEntryMethod { email, phone }
+const _authBg = Color(0xFFF7F7F6);
+const _fieldHint = Color(0xFFC7C7CC);
+const _termsGray = Color(0xFF8E8E93);
+const _disabledFill = Color(0x1A1D1B20);
+const _disabledLabel = Color(0x991D1B20);
 
-/// Экран авторизации. Email — реальный OTP, телефон — заглушка номера и кода.
+/// Экран авторизации по макетам `1:14841`, `1:14880`, `1:14900`.
+/// Одно поле: email или телефон. Email — реальный OTP, телефон — заглушка.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({
     super.key,
-    this.initialMethod = AuthEntryMethod.email,
     this.authRepository,
     this.onSignedIn,
   });
 
-  final AuthEntryMethod initialMethod;
   final AuthRepository? authRepository;
 
   /// После полного входа. Если не задан — открывается оболочка.
@@ -37,11 +38,8 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  late AuthEntryMethod _method = widget.initialMethod;
-  final _email = TextEditingController();
-  final _emailFocus = FocusNode();
-  final _phone = TextEditingController();
-  final _phoneFocus = FocusNode();
+  final _identity = TextEditingController();
+  final _identityFocus = FocusNode();
   bool _busy = false;
   bool _acceptedTerms = false;
   String? _error;
@@ -49,36 +47,30 @@ class _AuthScreenState extends State<AuthScreen> {
   AuthRepository get _auth =>
       widget.authRepository ?? AuthRepositoryScope.instance;
 
-  static const _fieldFill = Color(0xFFF4F4F4);
-  static const _fieldBorder = Color(0xFFE2E5EA);
-  static const _hint = Color(0xFF89919D);
-
   @override
   void dispose() {
-    _email.dispose();
-    _emailFocus.dispose();
-    _phone.dispose();
-    _phoneFocus.dispose();
+    _identity.dispose();
+    _identityFocus.dispose();
     super.dispose();
   }
 
-  bool get _canContinueEmail =>
-      _acceptedTerms && _email.text.trim().isNotEmpty && !_busy;
+  String get _identityText => _identity.text.trim();
 
-  bool get _canContinuePhone =>
-      _acceptedTerms && _phone.text.trim().isNotEmpty && !_busy;
+  bool get _canContinue =>
+      _acceptedTerms && _identityText.isNotEmpty && !_busy;
 
-  bool get _canContinue => _method == AuthEntryMethod.email
-      ? _canContinueEmail
-      : _canContinuePhone;
+  bool get _isEmail => _looksLikeEmail(_identityText);
 
-  void _fillPhoneStubIfEmpty() {
-    if (_phone.text.isNotEmpty) return;
-    _phone.value = const TextEditingValue(
-      text: kAuthPhoneStub,
-      selection: TextSelection.collapsed(offset: kAuthPhoneStub.length),
-    );
-    setState(() {});
+  bool get _isPhone => _looksLikePhone(_identityText);
+
+  static bool _looksLikeEmail(String value) {
+    return value.contains('@') && value.contains('.');
+  }
+
+  static bool _looksLikePhone(String value) {
+    if (value.contains('@')) return false;
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    return digits.length >= 10;
   }
 
   Future<void> _onContinue() async {
@@ -88,9 +80,16 @@ class _AuthScreenState extends State<AuthScreen> {
       _error = null;
     });
     try {
-      final challenge = _method == AuthEntryMethod.email
-          ? await _auth.requestEmailOtp(_email.text.trim())
-          : await _auth.requestPhoneOtp(_phone.text.trim());
+      final OtpChallenge challenge;
+      if (_isEmail) {
+        challenge = await _auth.requestEmailOtp(_identityText);
+      } else if (_isPhone) {
+        challenge = await _auth.requestPhoneOtp(_identityText);
+      } else {
+        throw const AuthException(
+          'Введите корректный email или номер телефона',
+        );
+      }
       if (!mounted) return;
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
@@ -122,10 +121,10 @@ class _AuthScreenState extends State<AuthScreen> {
         builder: (context) => RegisterScreen(
           initialEmail: session.email.isNotEmpty
               ? session.email
-              : _email.text.trim(),
+              : (_isEmail ? _identityText : ''),
           initialPhone: session.phone.isNotEmpty
               ? session.phone
-              : _phone.text.trim(),
+              : (_isPhone ? _identityText : ''),
           authRepository: _auth,
           onCompleted: _finish,
         ),
@@ -157,11 +156,11 @@ class _AuthScreenState extends State<AuthScreen> {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
-        systemNavigationBarColor: AppColors.white,
+        systemNavigationBarColor: _authBg,
         systemNavigationBarIconBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.white,
+        backgroundColor: _authBg,
         resizeToAvoidBottomInset: true,
         body: SafeArea(
           child: Padding(
@@ -171,45 +170,21 @@ class _AuthScreenState extends State<AuthScreen> {
               children: [
                 const Text(
                   'Авторизация',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: AppTheme.fontFamily,
                     fontWeight: FontWeight.w700,
-                    fontSize: 32,
-                    height: 45 / 32,
-                    color: AppColors.textPrimary,
+                    fontSize: 28,
+                    height: 45 / 28,
+                    color: Color(0xFF000000),
                   ),
                 ),
-                const SizedBox(height: 24),
-                _AuthMethodTabs(
-                  value: _method,
-                  onChanged: (value) => setState(() => _method = value),
+                const SizedBox(height: 102),
+                _AuthIdentityField(
+                  controller: _identity,
+                  focusNode: _identityFocus,
+                  onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 42),
-                if (_method == AuthEntryMethod.email)
-                  _AuthTextField(
-                    fieldKey: 'auth-email-field',
-                    controller: _email,
-                    focusNode: _emailFocus,
-                    hint: 'Email',
-                    keyboardType: TextInputType.emailAddress,
-                    fill: _fieldFill,
-                    border: _fieldBorder,
-                    hintColor: _hint,
-                    onChanged: (_) => setState(() {}),
-                  )
-                else
-                  _AuthTextField(
-                    fieldKey: 'auth-phone-field',
-                    controller: _phone,
-                    focusNode: _phoneFocus,
-                    hint: 'Телефон',
-                    keyboardType: TextInputType.phone,
-                    fill: _fieldFill,
-                    border: _fieldBorder,
-                    hintColor: _hint,
-                    onTap: _fillPhoneStubIfEmpty,
-                    onChanged: (_) => setState(() {}),
-                  ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -233,8 +208,20 @@ class _AuthScreenState extends State<AuthScreen> {
                 FilledButton(
                   onPressed: _canContinue ? _onContinue : null,
                   style: FilledButton.styleFrom(
-                    disabledBackgroundColor: const Color(0x66F88A2A),
-                    disabledForegroundColor: AppColors.white,
+                    minimumSize: const Size.fromHeight(56),
+                    backgroundColor: AppColors.orange,
+                    foregroundColor: AppColors.white,
+                    disabledBackgroundColor: _disabledFill,
+                    disabledForegroundColor: _disabledLabel,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    textStyle: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontWeight: FontWeight.w400,
+                      fontSize: 16,
+                      height: 1.25,
+                    ),
                   ),
                   child: _busy
                       ? const SizedBox(
@@ -245,7 +232,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             color: AppColors.white,
                           ),
                         )
-                      : const Text('Продолжить'),
+                      : const Text('Далее'),
                 ),
               ],
             ),
@@ -256,80 +243,15 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-class _AuthMethodTabs extends StatelessWidget {
-  const _AuthMethodTabs({required this.value, required this.onChanged});
-
-  final AuthEntryMethod value;
-  final ValueChanged<AuthEntryMethod> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 36,
-      child: CupertinoSlidingSegmentedControl<AuthEntryMethod>(
-        groupValue: value,
-        backgroundColor: const Color(0x1F767680),
-        thumbColor: AppColors.white,
-        padding: const EdgeInsets.all(2),
-        children: {
-          AuthEntryMethod.email: _label(
-            'Email',
-            selected: value == AuthEntryMethod.email,
-          ),
-          AuthEntryMethod.phone: _label(
-            'Телефон',
-            selected: value == AuthEntryMethod.phone,
-          ),
-        },
-        onValueChanged: (next) {
-          if (next != null) onChanged(next);
-        },
-      ),
-    );
-  }
-
-  static Widget _label(String text, {required bool selected}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontFamily: AppTheme.fontFamily,
-          fontWeight: FontWeight.w400,
-          fontSize: 13,
-          height: 20 / 13,
-          color: selected ? AppColors.textPrimary : const Color(0xFF3C3C43),
-        ),
-      ),
-    );
-  }
-}
-
-class _AuthTextField extends StatelessWidget {
-  const _AuthTextField({
-    required this.fieldKey,
+class _AuthIdentityField extends StatelessWidget {
+  const _AuthIdentityField({
     required this.controller,
     required this.focusNode,
-    required this.hint,
-    required this.keyboardType,
-    required this.fill,
-    required this.border,
-    required this.hintColor,
     required this.onChanged,
-    this.onTap,
   });
 
-  final String fieldKey;
   final TextEditingController controller;
   final FocusNode focusNode;
-  final String hint;
-  final TextInputType keyboardType;
-  final Color fill;
-  final Color border;
-  final Color hintColor;
-  final VoidCallback? onTap;
   final ValueChanged<String> onChanged;
 
   @override
@@ -337,48 +259,47 @@ class _AuthTextField extends StatelessWidget {
     return SizedBox(
       height: 56,
       child: TextField(
-        key: ValueKey<String>(fieldKey),
+        key: const ValueKey<String>('auth-identity-field'),
         controller: controller,
         focusNode: focusNode,
-        keyboardType: keyboardType,
+        keyboardType: TextInputType.emailAddress,
         textInputAction: TextInputAction.done,
         autocorrect: false,
         enableSuggestions: false,
-        onTap: onTap,
         onChanged: onChanged,
         style: const TextStyle(
           fontFamily: AppTheme.fontFamily,
           fontWeight: FontWeight.w400,
           fontSize: 16,
           height: 1.45,
-          color: Color(0xFF1A1B1C),
+          color: Color(0xFF000000),
         ),
         decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(
+          hintText: 'Введите Email или номер телефона',
+          hintStyle: const TextStyle(
             fontFamily: AppTheme.fontFamily,
             fontWeight: FontWeight.w400,
             fontSize: 16,
             height: 1.45,
-            color: hintColor,
+            color: _fieldHint,
           ),
           filled: true,
-          fillColor: fill,
+          fillColor: AppColors.white,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,
             vertical: 16,
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: border),
+            borderSide: BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: border),
+            borderSide: BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: AppColors.orange),
+            borderSide: BorderSide.none,
           ),
         ),
       ),
@@ -409,7 +330,8 @@ class _AuthTermsCheckboxState extends State<_AuthTermsCheckbox> {
     fontWeight: FontWeight.w400,
     fontSize: 12,
     height: 16 / 12,
-    color: Color(0xFF1A1B1C),
+    letterSpacing: -0.4,
+    color: _termsGray,
   );
 
   static const _linkStyle = TextStyle(
@@ -417,6 +339,7 @@ class _AuthTermsCheckboxState extends State<_AuthTermsCheckbox> {
     fontWeight: FontWeight.w400,
     fontSize: 12,
     height: 16 / 12,
+    letterSpacing: -0.4,
     color: AppColors.orange,
     decoration: TextDecoration.underline,
     decorationColor: AppColors.orange,
@@ -502,9 +425,9 @@ class _FigmaCheckboxMark extends StatelessWidget {
   final bool accepted;
   final VoidCallback onTap;
 
-  static const _box = 22.0;
-  static const _radius = 6.0;
-  static const _uncheckedStroke = Color(0xFFC7C7CC);
+  static const _box = 18.0;
+  static const _radius = 2.0;
+  static const _uncheckedStroke = Color(0x4D000000);
 
   @override
   Widget build(BuildContext context) {
@@ -527,14 +450,13 @@ class _FigmaCheckboxMark extends StatelessWidget {
               decoration: BoxDecoration(
                 color: accepted ? AppColors.orange : Colors.transparent,
                 borderRadius: BorderRadius.circular(_radius),
-                border: Border.all(
-                  color: accepted ? AppColors.orange : _uncheckedStroke,
-                  width: 1.5,
-                ),
+                border: accepted
+                    ? null
+                    : Border.all(color: _uncheckedStroke, width: 2),
               ),
               alignment: Alignment.center,
               child: accepted
-                  ? const Icon(Icons.check, size: 16, color: AppColors.white)
+                  ? const Icon(Icons.check, size: 12, color: AppColors.white)
                   : null,
             ),
           ),

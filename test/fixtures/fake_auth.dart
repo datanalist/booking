@@ -23,6 +23,12 @@ class FakeAuthRepository implements AuthRepository {
       session.userId.isEmpty ? null : session;
 
   @override
+  Future<void> signOut() async {
+    session = const AuthSession(userId: '', email: '');
+    AuthRepositoryScope.session.value = null;
+  }
+
+  @override
   Future<OtpChallenge> requestEmailOtp(String email) async {
     lastEmail = email;
     if (failOtpRequest) {

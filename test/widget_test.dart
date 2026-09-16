@@ -48,7 +48,8 @@ void main() {
     await tester.tap(find.text('Начать'));
     await tester.pumpAndSettle();
     expect(find.text('Авторизация'), findsOneWidget);
-    expect(find.text('Продолжить'), findsOneWidget);
+    expect(find.text('Введите Email или номер телефона'), findsOneWidget);
+    expect(find.text('Далее'), findsOneWidget);
     expect(find.text('Поиск'), findsNothing);
   });
 
@@ -72,8 +73,8 @@ void main() {
 
     await swipeNext();
     expect(find.text('Авторизация'), findsOneWidget);
-    expect(find.text('Email'), findsWidgets);
-    expect(find.text('Продолжить'), findsOneWidget);
+    expect(find.text('Введите Email или номер телефона'), findsOneWidget);
+    expect(find.text('Далее'), findsOneWidget);
     expect(find.text('Поиск'), findsNothing);
   });
 

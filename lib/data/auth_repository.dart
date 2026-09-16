@@ -85,6 +85,7 @@ abstract class AuthRepository {
   });
 
   AuthSession? currentSession();
+  Future<void> signOut();
 }
 
 class AuthRepositoryScope {
@@ -101,6 +102,14 @@ class PocketBaseAuthRepository implements AuthRepository {
 
   @override
   AuthSession? currentSession() => _session ?? _fromRecord(_pb.authStore.record);
+
+  @override
+  Future<void> signOut() async {
+    _session = null;
+    _pendingPhone = '';
+    _pb.authStore.clear();
+    AuthRepositoryScope.session.value = null;
+  }
 
   @override
   Future<OtpChallenge> requestEmailOtp(String email) async {

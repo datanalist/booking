@@ -10,25 +10,29 @@ import 'fixtures/fake_auth.dart';
 Finder termsCheckbox() =>
     find.byKey(const ValueKey<String>('auth-terms-checkbox'));
 
+Finder identityField() =>
+    find.byKey(const ValueKey<String>('auth-identity-field'));
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('email field stays empty until the user types', (tester) async {
+  testWidgets('identity field stays empty until the user types', (tester) async {
     await tester.pumpWidget(
       MaterialApp(home: AuthScreen(authRepository: FakeAuthRepository())),
     );
 
     expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.text('Введите Email или номер телефона'), findsOneWidget);
+    expect(find.text('Далее'), findsOneWidget);
+    expect(find.text('Email'), findsNothing);
+    expect(find.text('Телефон'), findsNothing);
     expect(find.text('example@mail.com'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey<String>('auth-email-field')));
+    await tester.tap(identityField());
     await tester.pump();
     expect(find.text('example@mail.com'), findsNothing);
 
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-email-field')),
-      'me@example.com',
-    );
+    await tester.enterText(identityField(), 'me@example.com');
     await tester.pump();
     expect(find.text('me@example.com'), findsOneWidget);
   });
@@ -41,18 +45,15 @@ void main() {
       MaterialApp(home: AuthScreen(authRepository: auth)),
     );
 
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-email-field')),
-      'me@example.com',
-    );
+    await tester.enterText(identityField(), 'me@example.com');
     await tester.pump();
-    await tester.tap(find.text('Продолжить'));
+    await tester.tap(find.text('Далее'));
     await tester.pumpAndSettle();
     expect(auth.lastEmail, isNull);
 
     await tester.tap(termsCheckbox());
     await tester.pump();
-    await tester.tap(find.text('Продолжить'));
+    await tester.tap(find.text('Далее'));
     await tester.pumpAndSettle();
 
     expect(auth.lastEmail, 'me@example.com');
@@ -63,48 +64,57 @@ void main() {
     );
   });
 
-  testWidgets('phone tab inserts stub number and opens stub OTP', (
-    tester,
-  ) async {
+  testWidgets('phone number requests stub OTP', (tester) async {
     final auth = FakeAuthRepository();
     await tester.pumpWidget(
       MaterialApp(home: AuthScreen(authRepository: auth)),
     );
 
-    await tester.tap(find.text('Телефон'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey<String>('auth-phone-field')));
+    await tester.enterText(identityField(), kAuthPhoneStub);
     await tester.pump();
-    expect(find.text(kAuthPhoneStub), findsOneWidget);
-
     await tester.tap(termsCheckbox());
     await tester.pump();
-    await tester.tap(find.text('Продолжить'));
+    await tester.tap(find.text('Далее'));
     await tester.pumpAndSettle();
 
     expect(auth.lastPhone, kAuthPhoneStub);
     expect(find.text('Введите код'), findsOneWidget);
   });
 
-  testWidgets('failed OTP request shows error on the email tab', (
-    tester,
-  ) async {
+  testWidgets('failed OTP request shows error on the screen', (tester) async {
     final auth = FakeAuthRepository()..failOtpRequest = true;
     await tester.pumpWidget(
       MaterialApp(home: AuthScreen(authRepository: auth)),
     );
 
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('auth-email-field')),
-      'me@example.com',
-    );
+    await tester.enterText(identityField(), 'me@example.com');
     await tester.tap(termsCheckbox());
     await tester.pump();
-    await tester.tap(find.text('Продолжить'));
+    await tester.tap(find.text('Далее'));
     await tester.pumpAndSettle();
 
     expect(find.text('Не удалось отправить код на эту почту'), findsOneWidget);
     expect(find.text('Авторизация'), findsOneWidget);
+  });
+
+  testWidgets('invalid identity shows validation error', (tester) async {
+    final auth = FakeAuthRepository();
+    await tester.pumpWidget(
+      MaterialApp(home: AuthScreen(authRepository: auth)),
+    );
+
+    await tester.enterText(identityField(), 'not-an-identity');
+    await tester.tap(termsCheckbox());
+    await tester.pump();
+    await tester.tap(find.text('Далее'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Введите корректный email или номер телефона'),
+      findsOneWidget,
+    );
+    expect(auth.lastEmail, isNull);
+    expect(auth.lastPhone, isNull);
   });
 
   testWidgets('terms checkbox copy and links match Figma', (tester) async {

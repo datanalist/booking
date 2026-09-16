@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/auth_repository.dart';
 import '../../theme/app_theme.dart';
+import '../auth/auth_screen.dart';
 
 const _menuFill = Color(0xFFFFFBF2);
 const _menuStroke = Color(0xFFFFF3D0);
@@ -14,14 +15,37 @@ const _stubNotificationCount = 2;
 
 /// Вкладка «Профиль» по макету (фрейм 1:14012): аватар, имя и меню.
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.authRepository});
+
+  final AuthRepository? authRepository;
+
+  AuthRepository get _auth => authRepository ?? AuthRepositoryScope.instance;
+
+  Future<void> _onLogout(BuildContext context) async {
+    final confirmed = await showLogoutConfirmDialog(context);
+    if (confirmed != true || !context.mounted) return;
+    await _auth.signOut();
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      PageRouteBuilder<void>(
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return AuthScreen(authRepository: _auth);
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: ValueListenableBuilder<AuthSession?>(
         valueListenable: AuthRepositoryScope.session,
-        builder: (context, session, _) {
+        builder: (_, session, _) {
           final name = (session?.displayName.isNotEmpty ?? false)
               ? session!.displayName
               : _guestName;
@@ -74,7 +98,7 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 36),
-                const _ProfileMenu(),
+                _ProfileMenu(onLogout: () => _onLogout(context)),
               ],
             ),
           );
@@ -85,34 +109,37 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _ProfileMenu extends StatelessWidget {
-  const _ProfileMenu();
+  const _ProfileMenu({required this.onLogout});
 
-  static const _items = <_MenuItemData>[
-    _MenuItemData(
-      icon: Icons.person_outline,
-      label: 'Личные данные',
-    ),
-    _MenuItemData(
-      icon: Icons.notifications_none_outlined,
-      label: 'Уведомления',
-      badgeCount: _stubNotificationCount,
-    ),
-    _MenuItemData(
-      icon: Icons.help_outline,
-      label: 'Написать в поддержку',
-    ),
-    _MenuItemData(
-      icon: Icons.logout,
-      label: 'Выйти из аккаунта',
-    ),
-    _MenuItemData(
-      icon: Icons.person_off_outlined,
-      label: 'Удалить аккаунт',
-    ),
-  ];
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
+    final items = <_MenuItemData>[
+      const _MenuItemData(
+        icon: Icons.person_outline,
+        label: 'Личные данные',
+      ),
+      const _MenuItemData(
+        icon: Icons.notifications_none_outlined,
+        label: 'Уведомления',
+        badgeCount: _stubNotificationCount,
+      ),
+      const _MenuItemData(
+        icon: Icons.help_outline,
+        label: 'Написать в поддержку',
+      ),
+      _MenuItemData(
+        key: const ValueKey<String>('profile-logout'),
+        icon: Icons.logout,
+        label: 'Выйти из аккаунта',
+        onTap: onLogout,
+      ),
+      const _MenuItemData(
+        icon: Icons.person_off_outlined,
+        label: 'Удалить аккаунт',
+      ),
+    ];
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _menuFill,
@@ -121,14 +148,14 @@ class _ProfileMenu extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (var i = 0; i < _items.length; i++) ...[
+          for (var i = 0; i < items.length; i++) ...[
             if (i != 0)
               const Divider(
                 height: 1,
                 thickness: 1,
                 color: _menuStroke,
               ),
-            _ProfileMenuRow(item: _items[i]),
+            _ProfileMenuRow(item: items[i]),
           ],
         ],
       ),
@@ -141,11 +168,15 @@ class _MenuItemData {
     required this.icon,
     required this.label,
     this.badgeCount,
+    this.onTap,
+    this.key,
   });
 
   final IconData icon;
   final String label;
   final int? badgeCount;
+  final VoidCallback? onTap;
+  final Key? key;
 }
 
 class _ProfileMenuRow extends StatelessWidget {
@@ -158,7 +189,8 @@ class _ProfileMenuRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {},
+        key: item.key,
+        onTap: item.onTap,
         child: SizedBox(
           height: 59,
           child: Padding(
@@ -227,6 +259,124 @@ class _NotificationBadge extends StatelessWidget {
           fontSize: 11,
           height: 1,
           color: AppColors.white,
+        ),
+      ),
+    );
+  }
+}
+
+const _logoutBarrier = Color(0xFF525353);
+
+Future<bool?> showLogoutConfirmDialog(BuildContext context) {
+  return showGeneralDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: 'logout-confirm',
+    barrierColor: _logoutBarrier,
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return const _LogoutConfirmDialog();
+    },
+    transitionDuration: const Duration(milliseconds: 200),
+    transitionBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
+}
+
+/// Модалка выхода по макету (фрейм 1:14582).
+class _LogoutConfirmDialog extends StatelessWidget {
+  const _LogoutConfirmDialog();
+
+  static const _titleColor = Color(0xFF1A1B1D);
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 19),
+        child: Material(
+          color: Colors.transparent,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 355),
+            child: DecoratedBox(
+              key: const ValueKey<String>('profile-logout-dialog'),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Выйти из аккаунта?',
+                      style: TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        height: 1,
+                        letterSpacing: 0.018,
+                        color: _titleColor,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      height: 52,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              key: const ValueKey<String>('profile-logout-no'),
+                              onPressed: () => Navigator.of(context).pop(false),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(52),
+                                foregroundColor: AppColors.orange,
+                                side: const BorderSide(color: AppColors.orange),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontFamily: AppTheme.fontFamily,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                  height: 1.2,
+                                ),
+                              ),
+                              child: const Text('Нет'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: FilledButton(
+                              key: const ValueKey<String>('profile-logout-yes'),
+                              onPressed: () => Navigator.of(context).pop(true),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(52),
+                                backgroundColor: AppColors.orange,
+                                foregroundColor: AppColors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontFamily: AppTheme.fontFamily,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                  height: 1.2,
+                                ),
+                              ),
+                              child: const Text('Да'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
