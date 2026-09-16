@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../shell/main_shell.dart';
+import 'auth/auth_screen.dart';
 import '../theme/app_theme.dart';
 
 class OnboardingPageData {
@@ -28,8 +28,7 @@ const onboardingPages = <OnboardingPageData>[
   OnboardingPageData(
     imageAsset: 'images/onbordins.v1/02-book-confidently.png',
     title: 'Бронируйте жилье уверенно',
-    subtitle:
-        'Прозрачные цены, мгновенное подтверждение и поддержка на каждом шаге поездки',
+    subtitle: 'Прозрачные цены, мгновенное подтверждение и поддержка на каждом шаге поездки',
   ),
   OnboardingPageData(
     imageAsset: 'images/onbordins.v1/03-travel-without-borders.png',
@@ -63,7 +62,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
           pageBuilder: (context, animation, secondaryAnimation) {
-            return const MainShell();
+            return const AuthScreen();
           },
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);

@@ -11,6 +11,7 @@ Usage:
   python3 scripts/seed_listings.py --reset   # delete seed listings, then recreate
 
 Seed users (password SeedPass123!):
+  example@mail.com                 # Email-tab stub (scripts/seed_auth_stub.py)
   anna.ivanenko@seed.booking.local
   rail.safin@seed.booking.local
   marina.orlova@seed.booking.local
@@ -36,7 +37,16 @@ ROOT = Path(__file__).resolve().parents[1]
 SEED_PASSWORD = "SeedPass123!"
 SEED_DOMAIN = "@seed.booking.local"
 
+# Email-tab stub (scripts/seed_auth_stub.py). Phone is for a later agent.
+AUTH_STUB_USER = {
+    "key": "auth_stub",
+    "email": "example@mail.com",
+    "name": "Example Mail",
+    "phone": "+79999999999",
+}
+
 USERS = [
+    AUTH_STUB_USER,
     {
         "key": "anna",
         "email": f"anna.ivanenko{SEED_DOMAIN}",
@@ -452,8 +462,46 @@ def ensure_user_view_rule(pb: PocketBase) -> None:
     print("updated users.viewRule so listing.host expand works for guests")
 
 
+def users_has_phone(pb: PocketBase) -> bool:
+    collection = pb.request("GET", "/api/collections/users")
+    return any(field.get("name") == "phone" for field in collection.get("fields") or [])
+
+
+def seed_auth_stub_user(pb: PocketBase) -> dict:
+    """Create or refresh example@mail.com used by the Email auth tab."""
+    has_phone = users_has_phone(pb)
+    existing = pb.first("users", f'email = "{AUTH_STUB_USER["email"]}"')
+    body = {
+        "email": AUTH_STUB_USER["email"],
+        "emailVisibility": True,
+        "name": AUTH_STUB_USER["name"],
+        "password": SEED_PASSWORD,
+        "passwordConfirm": SEED_PASSWORD,
+        "verified": True,
+    }
+    if has_phone:
+        body["phone"] = AUTH_STUB_USER["phone"]
+    if existing:
+        update = {
+            "name": AUTH_STUB_USER["name"],
+            "verified": True,
+            "emailVisibility": True,
+            "password": SEED_PASSWORD,
+            "passwordConfirm": SEED_PASSWORD,
+        }
+        if has_phone:
+            update["phone"] = AUTH_STUB_USER["phone"]
+        record = pb.update("users", existing["id"], update)
+        print(f"auth stub exists {AUTH_STUB_USER['email']} -> {record['id']}")
+        return record
+    record = pb.create("users", body)
+    print(f"auth stub created {AUTH_STUB_USER['email']} -> {record['id']}")
+    return record
+
+
 def seed_users(pb: PocketBase) -> dict[str, str]:
     ids: dict[str, str] = {}
+    has_phone = users_has_phone(pb)
     for user in USERS:
         existing = pb.first("users", f'email = "{user["email"]}"')
         body = {
@@ -464,8 +512,19 @@ def seed_users(pb: PocketBase) -> dict[str, str]:
             "passwordConfirm": SEED_PASSWORD,
             "verified": True,
         }
+        if has_phone and user.get("phone"):
+            body["phone"] = user["phone"]
+            body["emailVisibility"] = True
         if existing:
-            update = {"name": user["name"], "verified": True, "emailVisibility": False}
+            update = {
+                "name": user["name"],
+                "verified": True,
+                "emailVisibility": body["emailVisibility"],
+                "password": SEED_PASSWORD,
+                "passwordConfirm": SEED_PASSWORD,
+            }
+            if has_phone and user.get("phone"):
+                update["phone"] = user["phone"]
             record = pb.update("users", existing["id"], update)
             print(f"user exists {user['email']} -> {record['id']}")
         else:
@@ -547,6 +606,7 @@ def main() -> int:
     args = parser.parse_args()
 
     load_dotenv(ROOT / ".env.local")
+    load_dotenv(Path("/home/mk/Projects/Booking/.env.local"))
     base = env("POCKETBASE_URL", "https://pb.booking.vallome.ru")
     identity = env("POCKETBASE_SU")
     password = env("POCKETBASE_SU_PASSWORD")

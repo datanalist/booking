@@ -18,9 +18,7 @@ void main() {
 
   testWidgets('splash shows logo then opens onboarding', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: SplashScreen(delay: Duration.zero),
-      ),
+      const MaterialApp(home: SplashScreen(delay: Duration.zero)),
     );
 
     expect(find.byType(SvgPicture), findsOneWidget);
@@ -34,9 +32,7 @@ void main() {
   });
 
   testWidgets('onboarding advances pages and finishes', (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(home: OnboardingScreen()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: OnboardingScreen()));
 
     expect(find.text('Находите идеальное жилье'), findsOneWidget);
 
@@ -51,8 +47,9 @@ void main() {
 
     await tester.tap(find.text('Начать'));
     await tester.pumpAndSettle();
-    expect(find.text('Поиск'), findsOneWidget);
-    expect(find.text('Найти отель'), findsOneWidget);
+    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.text('Продолжить'), findsOneWidget);
+    expect(find.text('Поиск'), findsNothing);
   });
 
   testWidgets('app boots on splash', (tester) async {
