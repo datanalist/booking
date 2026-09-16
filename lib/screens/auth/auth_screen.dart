@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,11 +11,15 @@ import '../../theme/app_theme.dart';
 /// Соответствует записи `users.email` из `scripts/seed_auth_stub.py`.
 const kAuthEmailStub = 'example@mail.com';
 
+/// Копирайт галочки с экрана Email `1:14841` / чекбокс `1:14848`.
+const kAuthTermsPrefix = 'Я прочитал(а) и согласен(сна) с ';
+const kAuthTermsLinkLabel = 'Условиями использования';
+const kAuthPrivacyLinkLabel = 'Политикой конфиденциальности';
+
 /// Вкладки входа по макету: Email `1:14841`, телефон `1:14851` (агент 3).
 enum AuthEntryMethod { email, phone }
 
-/// Экран авторизации. Этот агент собирает вкладку Email; телефон и галочка
-/// условий — заглушки под следующих агентов.
+/// Экран авторизации. Телефон и OTP — заглушки под агента 3.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({
     super.key,
@@ -42,6 +47,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _email = TextEditingController();
   final _emailFocus = FocusNode();
   bool _busy = false;
+  bool _acceptedTerms = false;
   String? _error;
 
   AuthRepository get _auth =>
@@ -58,7 +64,12 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  bool get _canContinueEmail => _email.text.trim().isNotEmpty && !_busy;
+  bool get _canContinueEmail =>
+      _acceptedTerms && _email.text.trim().isNotEmpty && !_busy;
+
+  bool get _canContinue => _method == AuthEntryMethod.email
+      ? _canContinueEmail
+      : _acceptedTerms && !_busy;
 
   void _fillEmailStubIfEmpty() {
     if (_email.text.isNotEmpty) return;
@@ -70,11 +81,11 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _onContinue() async {
+    if (!_canContinue) return;
     if (_method == AuthEntryMethod.phone) {
       widget.onPhoneContinue?.call('');
       return;
     }
-    if (!_canContinueEmail) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -168,16 +179,17 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                 ],
                 const Spacer(),
-                // Агент 2: галочка условий использования и политики.
-                const SizedBox(
-                  key: ValueKey<String>('auth-terms-slot'),
-                  height: 48,
+                _AuthTermsCheckbox(
+                  accepted: _acceptedTerms,
+                  onChanged: (value) => setState(() => _acceptedTerms = value),
                 ),
                 const SizedBox(height: 16),
                 FilledButton(
-                  onPressed: _method == AuthEntryMethod.email
-                      ? (_canContinueEmail ? _onContinue : null)
-                      : _onContinue,
+                  onPressed: _canContinue ? _onContinue : null,
+                  style: FilledButton.styleFrom(
+                    disabledBackgroundColor: const Color(0x66F88A2A),
+                    disabledForegroundColor: AppColors.white,
+                  ),
                   child: _busy
                       ? const SizedBox(
                           width: 22,
@@ -332,6 +344,203 @@ class _PhoneAuthPlaceholder extends StatelessWidget {
       key: ValueKey<String>('auth-phone-placeholder'),
       height: 56,
       child: ColoredBox(color: Colors.transparent),
+    );
+  }
+}
+
+/// Figma `1:14848`: ряд 343×48, бокс 48×48, текст 295×32 со смещением y=8.
+class _AuthTermsCheckbox extends StatefulWidget {
+  const _AuthTermsCheckbox({
+    required this.accepted,
+    required this.onChanged,
+  });
+
+  final bool accepted;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  State<_AuthTermsCheckbox> createState() => _AuthTermsCheckboxState();
+}
+
+class _AuthTermsCheckboxState extends State<_AuthTermsCheckbox> {
+  late final TapGestureRecognizer _termsTap;
+  late final TapGestureRecognizer _privacyTap;
+
+  static const _copyStyle = TextStyle(
+    fontFamily: AppTheme.fontFamily,
+    fontWeight: FontWeight.w400,
+    fontSize: 12,
+    height: 16 / 12,
+    color: Color(0xFF1A1B1C),
+  );
+
+  static const _linkStyle = TextStyle(
+    fontFamily: AppTheme.fontFamily,
+    fontWeight: FontWeight.w400,
+    fontSize: 12,
+    height: 16 / 12,
+    color: AppColors.orange,
+    decoration: TextDecoration.underline,
+    decorationColor: AppColors.orange,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTap = TapGestureRecognizer()
+      ..onTap = () => _openLegal(
+            title: 'Условия использования',
+            keyName: 'auth-terms-page',
+          );
+    _privacyTap = TapGestureRecognizer()
+      ..onTap = () => _openLegal(
+            title: 'Политика конфиденциальности',
+            keyName: 'auth-privacy-page',
+          );
+  }
+
+  @override
+  void dispose() {
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    super.dispose();
+  }
+
+  void _toggle() => widget.onChanged(!widget.accepted);
+
+  void _openLegal({required String title, required String keyName}) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => _AuthLegalPage(title: title, keyName: keyName),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey<String>('auth-terms-slot'),
+      height: 48,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FigmaCheckboxMark(accepted: widget.accepted, onTap: _toggle),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                height: 32,
+                child: Text.rich(
+                  TextSpan(
+                    style: _copyStyle,
+                    children: [
+                      const TextSpan(text: kAuthTermsPrefix),
+                      TextSpan(
+                        text: kAuthTermsLinkLabel,
+                        style: _linkStyle,
+                        recognizer: _termsTap,
+                      ),
+                      const TextSpan(text: ' и '),
+                      TextSpan(
+                        text: kAuthPrivacyLinkLabel,
+                        style: _linkStyle,
+                        recognizer: _privacyTap,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FigmaCheckboxMark extends StatelessWidget {
+  const _FigmaCheckboxMark({required this.accepted, required this.onTap});
+
+  final bool accepted;
+  final VoidCallback onTap;
+
+  static const _box = 22.0;
+  static const _radius = 6.0;
+  static const _uncheckedStroke = Color(0xFFC7C7CC);
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      checked: accepted,
+      label: 'Согласие с условиями',
+      child: GestureDetector(
+        key: const ValueKey<String>('auth-terms-checkbox'),
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              width: _box,
+              height: _box,
+              decoration: BoxDecoration(
+                color: accepted ? AppColors.orange : Colors.transparent,
+                borderRadius: BorderRadius.circular(_radius),
+                border: Border.all(
+                  color: accepted ? AppColors.orange : _uncheckedStroke,
+                  width: 1.5,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: accepted
+                  ? const Icon(Icons.check, size: 16, color: AppColors.white)
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthLegalPage extends StatelessWidget {
+  const _AuthLegalPage({required this.title, required this.keyName});
+
+  final String title;
+  final String keyName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.white,
+      appBar: AppBar(
+        title: Text(
+          title,
+          key: ValueKey<String>(keyName),
+          style: const TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ),
+      body: const Padding(
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: Text(
+          'Текст документа появится здесь.',
+          style: TextStyle(
+            fontFamily: AppTheme.fontFamily,
+            fontWeight: FontWeight.w400,
+            fontSize: 16,
+            height: 1.45,
+            color: Color(0xFF1A1B1C),
+          ),
+        ),
+      ),
     );
   }
 }

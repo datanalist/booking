@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -5,6 +6,16 @@ import 'package:booking/data/auth_repository.dart';
 import 'package:booking/screens/auth/auth_screen.dart';
 
 import 'fixtures/fake_auth.dart';
+
+Finder termsCheckbox() =>
+    find.byKey(const ValueKey<String>('auth-terms-checkbox'));
+
+Future<void> fillEmailAndAcceptTerms(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey<String>('auth-email-field')));
+  await tester.pump();
+  await tester.tap(termsCheckbox());
+  await tester.pump();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +47,7 @@ void main() {
     expect(find.text(kAuthEmailStub), findsNothing);
   });
 
-  testWidgets('continue authenticates the typed email against the repository', (
+  testWidgets('continue stays disabled until terms are accepted', (
     tester,
   ) async {
     final auth = FakeAuthRepository();
@@ -55,6 +66,36 @@ void main() {
     await tester.tap(find.text('Продолжить'));
     await tester.pumpAndSettle();
 
+    expect(auth.lastEmail, isNull);
+    expect(signedIn, isNull);
+
+    await tester.tap(termsCheckbox());
+    await tester.pump();
+    await tester.tap(find.text('Продолжить'));
+    await tester.pumpAndSettle();
+
+    expect(auth.lastEmail, kAuthEmailStub);
+    expect(signedIn?.email, kAuthEmailStub);
+  });
+
+  testWidgets('continue authenticates the typed email against the repository', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository();
+    AuthSession? signedIn;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AuthScreen(
+          authRepository: auth,
+          onSignedIn: (session) => signedIn = session,
+        ),
+      ),
+    );
+
+    await fillEmailAndAcceptTerms(tester);
+    await tester.tap(find.text('Продолжить'));
+    await tester.pumpAndSettle();
+
     expect(auth.lastEmail, kAuthEmailStub);
     expect(signedIn?.email, kAuthEmailStub);
   });
@@ -67,8 +108,7 @@ void main() {
       MaterialApp(home: AuthScreen(authRepository: auth)),
     );
 
-    await tester.tap(find.byKey(const ValueKey<String>('auth-email-field')));
-    await tester.pump();
+    await fillEmailAndAcceptTerms(tester);
     await tester.tap(find.text('Продолжить'));
     await tester.pumpAndSettle();
 
@@ -80,10 +120,59 @@ void main() {
     expect(find.text('Поиск'), findsNothing);
   });
 
-  testWidgets('terms checkbox is not on the email tab yet', (tester) async {
+  testWidgets('terms checkbox copy and links match Figma', (tester) async {
     await tester.pumpWidget(
       MaterialApp(home: AuthScreen(authRepository: FakeAuthRepository())),
     );
-    expect(find.textContaining('Условиями использования'), findsNothing);
+
+    expect(find.byKey(const ValueKey<String>('auth-terms-slot')), findsOneWidget);
+    expect(find.textContaining('Условиями использования'), findsOneWidget);
+    expect(
+      find.textContaining('Политикой конфиденциальности'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Я прочитал(а) и согласен(сна)'),
+      findsOneWidget,
+    );
+
+    _tapLink(tester, kAuthTermsLinkLabel);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('auth-terms-page')), findsOneWidget);
+    expect(find.text('Условия использования'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    _tapLink(tester, kAuthPrivacyLinkLabel);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('auth-privacy-page')),
+      findsOneWidget,
+    );
+    expect(find.text('Политика конфиденциальности'), findsOneWidget);
   });
 }
+
+void _tapLink(WidgetTester tester, String label) {
+  final rich = tester.widget<RichText>(
+    find.descendant(
+      of: find.byKey(const ValueKey<String>('auth-terms-slot')),
+      matching: find.byType(RichText),
+    ),
+  );
+  final root = rich.text as TextSpan;
+  TapGestureRecognizer? recognizer;
+  root.visitChildren((span) {
+    if (span is TextSpan &&
+        span.text == label &&
+        span.recognizer is TapGestureRecognizer) {
+      recognizer = span.recognizer as TapGestureRecognizer;
+      return false;
+    }
+    return true;
+  });
+  expect(recognizer, isNotNull, reason: 'missing recognizer for $label');
+  recognizer!.onTap!.call();
+}
+
