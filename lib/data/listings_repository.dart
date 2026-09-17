@@ -3,6 +3,7 @@ import 'package:pocketbase/pocketbase.dart';
 import '../screens/listing/listing_detail.dart';
 import '../screens/search/search_listing.dart';
 import 'pocketbase_client.dart';
+import 'pocketbase_filter.dart';
 
 abstract class ListingsRepository {
   Future<List<SearchListing>> fetchPublished();
@@ -25,7 +26,7 @@ class PocketBaseListingsRepository implements ListingsRepository {
 
   @override
   Future<List<SearchListing>> fetchPublished() async {
-    final records = await _pb.collection('listings').getFullList(
+    final records = await _pb.collection(PbCollection.listings).getFullList(
       filter: _published,
       expand: _expand,
       sort: '-created',
@@ -37,7 +38,7 @@ class PocketBaseListingsRepository implements ListingsRepository {
   Future<ListingDetail> fetchDetail(SearchListing listing) async {
     RecordModel record;
     try {
-      record = await _pb.collection('listings').getOne(
+      record = await _pb.collection(PbCollection.listings).getOne(
         listing.id,
         expand: _expand,
       );
@@ -57,10 +58,11 @@ class PocketBaseListingsRepository implements ListingsRepository {
 
   Future<List<SearchListing>> _hostListings(String hostId, String exceptId) async {
     if (hostId.isEmpty) return const [];
-    final escaped = hostId.replaceAll('"', '');
-    final records = await _pb.collection('listings').getFullList(
-      filter:
-          '$_published && host = "$escaped" && id != "${exceptId.replaceAll('"', '')}"',
+    final records = await _pb.collection(PbCollection.listings).getFullList(
+      filter: pbFilter(
+        '$_published && host = {:hostId} && id != {:exceptId}',
+        {'hostId': hostId, 'exceptId': exceptId},
+      ),
       expand: _expand,
       sort: '-created',
     );

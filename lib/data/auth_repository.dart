@@ -7,6 +7,7 @@ import 'package:pocketbase/pocketbase.dart';
 
 import 'auth_callback.dart';
 import 'pocketbase_client.dart';
+import 'pocketbase_filter.dart';
 
 /// Заглушка только для вкладки телефона (код на номер не отправляем).
 const kAuthPhoneStub = '+79999999999';
@@ -117,7 +118,7 @@ class PocketBaseAuthRepository implements AuthRepository {
       return null;
     }
     try {
-      final auth = await _pb.collection('users').authRefresh();
+      final auth = await _pb.collection(PbCollection.users).authRefresh();
       _session = _fromRecord(auth.record);
     } on ClientException catch (error) {
       if (error.statusCode == 401 || error.statusCode == 403) {
@@ -176,7 +177,7 @@ class PocketBaseAuthRepository implements AuthRepository {
   Future<AuthSession> _signInWithToken(String token) async {
     try {
       _pb.authStore.save(token, _pb.authStore.record);
-      final auth = await _pb.collection('users').authRefresh();
+      final auth = await _pb.collection(PbCollection.users).authRefresh();
       _session = _fromRecord(auth.record);
       if (_session == null || _session!.userId.isEmpty) {
         throw const AuthException(
@@ -211,7 +212,7 @@ class PocketBaseAuthRepository implements AuthRepository {
     try {
       // Без записи в users PocketBase не шлёт письмо, но отдаёт фиктивный otpId.
       await _ensureUserForEmailOtp(identity);
-      final result = await _pb.collection('users').requestOTP(identity);
+      final result = await _pb.collection(PbCollection.users).requestOTP(identity);
       _pendingPhone = '';
       return OtpChallenge(
         otpId: result.otpId,
@@ -226,7 +227,7 @@ class PocketBaseAuthRepository implements AuthRepository {
   Future<void> _ensureUserForEmailOtp(String email) async {
     try {
       final password = _randomPassword();
-      await _pb.collection('users').create(
+      await _pb.collection(PbCollection.users).create(
         body: {
           'email': email,
           'password': password,
@@ -245,7 +246,7 @@ class PocketBaseAuthRepository implements AuthRepository {
     required String code,
   }) async {
     try {
-      final auth = await _pb.collection('users').authWithOTP(otpId, code.trim());
+      final auth = await _pb.collection(PbCollection.users).authWithOTP(otpId, code.trim());
       _session = _fromRecord(
         auth.record,
         fallbackEmail: auth.record.get<String>('email', ''),
@@ -333,7 +334,7 @@ class PocketBaseAuthRepository implements AuthRepository {
           body['email'] = email.trim();
         }
         record = await _pb
-            .collection('users')
+            .collection(PbCollection.users)
             .update(_pb.authStore.record!.id, body: body, files: files);
       } else {
         final identity = email.trim();
@@ -342,7 +343,7 @@ class PocketBaseAuthRepository implements AuthRepository {
         }
         final password = _randomPassword();
         record = await _pb
-            .collection('users')
+            .collection(PbCollection.users)
             .create(
               body: {
                 ...body,
@@ -352,7 +353,7 @@ class PocketBaseAuthRepository implements AuthRepository {
               },
               files: files,
             );
-        await _pb.collection('users').authWithPassword(identity, password);
+        await _pb.collection(PbCollection.users).authWithPassword(identity, password);
         record = _pb.authStore.record ?? record;
       }
       _session = _fromRecord(record, fallbackEmail: email);

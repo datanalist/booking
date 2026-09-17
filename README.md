@@ -69,6 +69,18 @@ flutter run -d linux --dart-define=POCKETBASE_URL=https://example.com
 
 Схема коллекций — [`pb_schema.json`](pb_schema.json) и [`docs/pocketbase-schema.md`](docs/pocketbase-schema.md). Сервер (Caddy, TLS) — [`docs/pocketbase-server.md`](docs/pocketbase-server.md).
 
+**Запросы к PocketBase.** Клиент не склеивает пользовательские строки в `filter`. Значения подставляются через `pbFilter` (`lib/data/pocketbase_filter.dart`) с плейсхолдерами `{:name}` — тот же синтаксис, что у `PocketBase.filter` в Dart SDK. Имена коллекций только из `PbCollection` (`users`, `listings`, `bookings`), не из ввода. Пример:
+
+```dart
+final filter = pbFilter(
+  'status = "published" && host = {:hostId} && id != {:exceptId}',
+  {'hostId': hostId, 'exceptId': exceptId},
+);
+await pb.collection(PbCollection.listings).getFullList(filter: filter);
+```
+
+Хук `bookings_overlap.pb.js` биндит listing/даты/id в `findRecordsByFilter(..., {:placeholder})`. Сид-скрипты используют тот же приём (`pb_filter` в `scripts/seed_listings.py`). Правила API по-прежнему отдают гостю только свои брони (`guest` / `host` = текущий пользователь).
+
 Каталог и схему для разработки наполняют идемпотентные скрипты (нужны `POCKETBASE_SU` и `POCKETBASE_SU_PASSWORD` в `.env.local`, шаблон — [`.env.example`](.env.example)):
 
 ```bash
@@ -159,6 +171,7 @@ pgrep -a qemu || echo "эмулятор выключен"
 
 ```bash
 flutter test
+flutter test test/pocketbase_filter_test.dart   # безопасная сборка PocketBase filter
 ```
 
 Полный список команд — в [`docs/doc.md`](docs/doc.md). Продуктовая спецификация — в [`docs/technical spec.md`](docs/technical%20spec.md).
@@ -171,7 +184,7 @@ Booking/
 │   ├── main.dart
 │   ├── theme/app_theme.dart
 │   ├── config/                    # PocketBase URL, Mapbox
-│   ├── data/                      # клиент PB, auth, listings, bookings
+│   ├── data/                      # клиент PB, auth, listings, bookings, pbFilter
 │   ├── widgets/                   # ListingImage, FavoriteHeartButton
 │   ├── shell/main_shell.dart      # нижняя панель
 │   └── screens/
@@ -195,6 +208,7 @@ Booking/
 │   ├── fixtures/fake_auth.dart
 │   ├── fixtures/fake_bookings.dart
 │   ├── widget_test.dart
+│   ├── pocketbase_filter_test.dart
 │   ├── auth_screen_test.dart
 │   ├── otp_register_test.dart
 │   ├── search_screen_test.dart

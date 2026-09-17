@@ -4,6 +4,7 @@ import '../screens/search/search_listing.dart';
 import 'auth_repository.dart';
 import 'booking.dart';
 import 'pocketbase_client.dart';
+import 'pocketbase_filter.dart';
 
 abstract class BookingsRepository {
   Future<List<Booking>> fetchMine();
@@ -26,7 +27,7 @@ class BookingsRepositoryScope {
 class PocketBaseBookingsRepository implements BookingsRepository {
   PocketBaseBookingsRepository({PocketBase? client}) : _client = client;
 
-  static const collection = 'bookings';
+  static const collection = PbCollection.bookings;
   static const _expand = 'listing';
   static const occupyingStatuses = [
     'pending_host',
@@ -49,9 +50,11 @@ class PocketBaseBookingsRepository implements BookingsRepository {
   Future<List<Booking>> fetchMine() async {
     final userId = _userId;
     if (userId.isEmpty || !_pb.authStore.isValid) return const [];
-    final escaped = _escape(userId);
     final records = await _pb.collection(collection).getFullList(
-      filter: 'guest = "$escaped" || host = "$escaped"',
+      filter: pbFilter(
+        'guest = {:userId} || host = {:userId}',
+        {'userId': userId},
+      ),
       expand: _expand,
       sort: '-created',
     );
@@ -128,18 +131,28 @@ class PocketBaseBookingsRepository implements BookingsRepository {
     DateTime checkIn,
     DateTime checkOut,
   ) async {
-    final listing = _escape(listingId);
     final start = _dateValue(checkIn);
     final end = _dateValue(checkOut);
-    final statuses = occupyingStatuses
-        .map((status) => 'status = "$status"')
-        .join(' || ');
+    final params = <String, Object?>{
+      'listing': listingId,
+      'end': end,
+      'start': start,
+    };
+    final statuses = [
+      for (var i = 0; i < occupyingStatuses.length; i++)
+        'status = {:status$i}',
+    ].join(' || ');
+    for (var i = 0; i < occupyingStatuses.length; i++) {
+      params['status$i'] = occupyingStatuses[i];
+    }
     final result = await _pb.collection(collection).getList(
       page: 1,
       perPage: 1,
-      filter:
-          'listing = "$listing" && ($statuses) && '
-          'check_in < "$end" && check_out > "$start"',
+      filter: pbFilter(
+        'listing = {:listing} && ($statuses) && '
+        'check_in < {:end} && check_out > {:start}',
+        params,
+      ),
     );
     return result.totalItems > 0;
   }
@@ -230,8 +243,6 @@ class PocketBaseBookingsRepository implements BookingsRepository {
     final utc = DateTime.utc(date.year, date.month, date.day);
     return utc.toIso8601String();
   }
-
-  String _escape(String value) => value.replaceAll('"', '');
 
   String _messageFor(ClientException error) {
     final response = error.response;

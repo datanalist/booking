@@ -27,6 +27,7 @@ import argparse
 import json
 import mimetypes
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -34,6 +35,52 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Collection names are literals. Never take them from env/CLI without this check.
+_PB_COLLECTIONS = frozenset({"users", "listings", "bookings", "_superusers"})
+_PB_PLACEHOLDER = re.compile(r"\{:([A-Za-z_][A-Za-z0-9_]*)\}")
+_PB_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def require_collection(name: str) -> str:
+    """Allow only known collection names in seed-script API paths."""
+    if name not in _PB_COLLECTIONS:
+        raise ValueError(f"unknown PocketBase collection: {name!r}")
+    return name
+
+
+def pb_filter(expr: str, params: dict[str, object] | None = None) -> str:
+    """Bind {:name} placeholders. Field names stay as literals in expr.
+
+    Same idea as lib/data/pocketbase_filter.dart — do not concatenate user
+    (or record) text into a PocketBase filter string.
+    """
+    if not params:
+        return expr
+    for key in params:
+        if not _PB_IDENT.fullmatch(key):
+            raise ValueError(f"filter param names must be identifiers: {key!r}")
+
+    def repl(match: re.Match[str]) -> str:
+        key = match.group(1)
+        if key not in params:
+            return match.group(0)
+        return _pb_literal(params[key])
+
+    return _PB_PLACEHOLDER.sub(repl, expr)
+
+
+def _pb_literal(value: object) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    text = str(value).replace("\\", "\\\\").replace("'", "\\'")
+    return f"'{text}'"
+
+
 SEED_PASSWORD = "SeedPass123!"
 SEED_DOMAIN = "@seed.booking.local"
 
@@ -348,29 +395,36 @@ class PocketBase:
                 last_error = exc
         raise RuntimeError(f"superuser auth failed: {last_error}")
 
+    def _records_path(self, collection: str, record_id: str | None = None) -> str:
+        name = urllib.parse.quote(require_collection(collection), safe="")
+        path = f"/api/collections/{name}/records"
+        if record_id:
+            path = f"{path}/{urllib.parse.quote(record_id, safe='')}"
+        return path
+
     def first(self, collection: str, flt: str) -> dict | None:
         data = self.request(
             "GET",
-            f"/api/collections/{collection}/records",
+            self._records_path(collection),
             query={"page": "1", "perPage": "1", "filter": flt},
         )
         items = data.get("items") or []
         return items[0] if items else None
 
     def delete(self, collection: str, record_id: str) -> None:
-        self.request("DELETE", f"/api/collections/{collection}/records/{record_id}")
+        self.request("DELETE", self._records_path(collection, record_id))
 
     def create(self, collection: str, body: dict) -> dict:
         return self.request(
             "POST",
-            f"/api/collections/{collection}/records",
+            self._records_path(collection),
             json_body=body,
         )
 
     def update(self, collection: str, record_id: str, body: dict) -> dict:
         return self.request(
             "PATCH",
-            f"/api/collections/{collection}/records/{record_id}",
+            self._records_path(collection, record_id),
             json_body=body,
         )
 
@@ -409,9 +463,7 @@ class PocketBase:
         chunks.append(f"--{boundary}--\r\n".encode())
         body = b"".join(chunks)
         method = "PATCH" if record_id else "POST"
-        path = f"/api/collections/{collection}/records"
-        if record_id:
-            path = f"{path}/{record_id}"
+        path = self._records_path(collection, record_id)
         return self.request(
             method,
             path,
@@ -470,7 +522,10 @@ def users_has_phone(pb: PocketBase) -> bool:
 def seed_auth_stub_user(pb: PocketBase) -> dict:
     """Create or refresh example@mail.com used by the Email auth tab."""
     has_phone = users_has_phone(pb)
-    existing = pb.first("users", f'email = "{AUTH_STUB_USER["email"]}"')
+    existing = pb.first(
+        "users",
+        pb_filter("email = {:email}", {"email": AUTH_STUB_USER["email"]}),
+    )
     body = {
         "email": AUTH_STUB_USER["email"],
         "emailVisibility": True,
@@ -503,7 +558,10 @@ def seed_users(pb: PocketBase) -> dict[str, str]:
     ids: dict[str, str] = {}
     has_phone = users_has_phone(pb)
     for user in USERS:
-        existing = pb.first("users", f'email = "{user["email"]}"')
+        existing = pb.first(
+            "users",
+            pb_filter("email = {:email}", {"email": user["email"]}),
+        )
         body = {
             "email": user["email"],
             "emailVisibility": False,
@@ -539,7 +597,10 @@ def seed_listings(pb: PocketBase, user_ids: dict[str, str], reset: bool) -> None
     if reset:
         for title in titles:
             while True:
-                found = pb.first("listings", f'title = "{title}"')
+                found = pb.first(
+                    "listings",
+                    pb_filter("title = {:title}", {"title": title}),
+                )
                 if not found:
                     break
                 pb.delete("listings", found["id"])
@@ -549,7 +610,10 @@ def seed_listings(pb: PocketBase, user_ids: dict[str, str], reset: bool) -> None
         host_id = user_ids[item["host"]]
         existing = pb.first(
             "listings",
-            f'title = "{item["title"]}" && host = "{host_id}"',
+            pb_filter(
+                "title = {:title} && host = {:host}",
+                {"title": item["title"], "host": host_id},
+            ),
         )
         fields = listing_fields(item, host_id)
         files = [("photos", ROOT / rel) for rel in item["photos"]]
