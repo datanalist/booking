@@ -112,6 +112,39 @@ String formatSearchDate(DateTime date) {
   return (first: first, last: last, initial: initial);
 }
 
+Future<DateTime?> showStayDatePicker(
+  BuildContext context, {
+  required bool checkOut,
+  required DateTime today,
+  DateTime? currentCheckIn,
+  DateTime? currentCheckOut,
+}) {
+  final bounds = stayDatePickerBounds(
+    checkOut: checkOut,
+    today: today,
+    currentCheckIn: currentCheckIn,
+    currentCheckOut: currentCheckOut,
+  );
+  return showDatePicker(
+    context: context,
+    locale: const Locale('ru', 'RU'),
+    initialDate: bounds.initial,
+    firstDate: bounds.first,
+    lastDate: bounds.last,
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            primary: AppColors.orange,
+            onPrimary: AppColors.white,
+          ),
+        ),
+        child: child!,
+      );
+    },
+  );
+}
+
 ({DateTime? checkIn, DateTime? checkOut}) completeSearchStayDates({
   DateTime? checkIn,
   DateTime? checkOut,
@@ -315,29 +348,12 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
   Future<void> _pickDate({required bool checkOut}) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final bounds = stayDatePickerBounds(
+    final picked = await showStayDatePicker(
+      context,
       checkOut: checkOut,
       today: today,
       currentCheckIn: _checkIn,
       currentCheckOut: _checkOut,
-    );
-    final picked = await showDatePicker(
-      context: context,
-      locale: const Locale('ru', 'RU'),
-      initialDate: bounds.initial,
-      firstDate: bounds.first,
-      lastDate: bounds.last,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.orange,
-              onPrimary: AppColors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked == null) return;
     setState(() {

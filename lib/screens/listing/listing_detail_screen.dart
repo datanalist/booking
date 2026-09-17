@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../data/auth_repository.dart';
-import '../../data/booking.dart';
+import '../../data/booking_draft.dart';
 import '../../data/bookings_repository.dart';
 import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
@@ -12,6 +11,7 @@ import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
 import 'host_listings_screen.dart';
 import 'listing_detail.dart';
+import 'stay_dates_sheet.dart';
 
 const _meta = Color(0xFF525252);
 const _divider = Color(0xFFFFE3B7);
@@ -28,6 +28,7 @@ class ListingDetailScreen extends StatefulWidget {
     this.initialDetail,
     this.repository,
     this.bookingsRepository,
+    this.draftStore,
     this.adults = 1,
     this.children = 0,
     this.pets = 0,
@@ -39,6 +40,7 @@ class ListingDetailScreen extends StatefulWidget {
   final ListingDetail? initialDetail;
   final ListingsRepository? repository;
   final BookingsRepository? bookingsRepository;
+  final BookingDraftStore? draftStore;
   final int adults;
   final int children;
   final int pets;
@@ -51,6 +53,7 @@ class ListingDetailScreen extends StatefulWidget {
     ListingDetail? initialDetail,
     ListingsRepository? repository,
     BookingsRepository? bookingsRepository,
+    BookingDraftStore? draftStore,
     int adults = 1,
     int children = 0,
     int pets = 0,
@@ -64,6 +67,7 @@ class ListingDetailScreen extends StatefulWidget {
           initialDetail: initialDetail,
           repository: repository,
           bookingsRepository: bookingsRepository,
+          draftStore: draftStore,
           adults: adults,
           children: children,
           pets: pets,
@@ -118,6 +122,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       onFavorite: widget.onFavorite,
       repository: _repository,
       bookingsRepository: widget.bookingsRepository,
+      draftStore: widget.draftStore,
       adults: widget.adults,
       children: widget.children,
       pets: widget.pets,
@@ -208,10 +213,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ),
             _BookingBar(
               listing: listing,
-              adults: widget.adults,
-              children: widget.children,
-              pets: widget.pets,
-              bookingsRepository: widget.bookingsRepository,
+              draftStore: widget.draftStore,
             ),
           ],
         ),
@@ -885,17 +887,11 @@ class _HostListings extends StatelessWidget {
 class _BookingBar extends StatefulWidget {
   const _BookingBar({
     required this.listing,
-    this.adults = 1,
-    this.children = 0,
-    this.pets = 0,
-    this.bookingsRepository,
+    this.draftStore,
   });
 
   final SearchListing listing;
-  final int adults;
-  final int children;
-  final int pets;
-  final BookingsRepository? bookingsRepository;
+  final BookingDraftStore? draftStore;
 
   @override
   State<_BookingBar> createState() => _BookingBarState();
@@ -903,15 +899,15 @@ class _BookingBar extends StatefulWidget {
 
 class _BookingBarState extends State<_BookingBar> {
   late SearchListing _stay;
-  var _submitting = false;
 
-  BookingsRepository get _bookings =>
-      widget.bookingsRepository ?? BookingsRepositoryScope.instance;
+  BookingDraftStore get _drafts =>
+      widget.draftStore ?? BookingDraftStore.instance;
 
   @override
   void initState() {
     super.initState();
     _stay = widget.listing;
+    _restoreDraft();
   }
 
   @override
@@ -919,12 +915,24 @@ class _BookingBarState extends State<_BookingBar> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.listing.id != widget.listing.id) {
       _stay = widget.listing;
+      _restoreDraft();
       return;
     }
     _stay = widget.listing.withStay(
       checkIn: _stay.checkIn,
       checkOut: _stay.checkOut,
     );
+  }
+
+  Future<void> _restoreDraft() async {
+    final draft = await _drafts.load(listingId: widget.listing.id);
+    if (!mounted || draft == null) return;
+    setState(() {
+      _stay = widget.listing.withStay(
+        checkIn: draft.checkIn,
+        checkOut: draft.checkOut,
+      );
+    });
   }
 
   Future<void> _pickStayDates() async {
@@ -948,74 +956,39 @@ class _BookingBarState extends State<_BookingBar> {
     required DateTime today,
     DateTime? checkIn,
   }) {
-    final bounds = stayDatePickerBounds(
+    return showStayDatePicker(
+      context,
       checkOut: checkOut,
       today: today,
       currentCheckIn: checkIn ?? _stay.checkIn,
       currentCheckOut: _stay.checkOut,
     );
-    return showDatePicker(
-      context: context,
-      locale: const Locale('ru', 'RU'),
-      initialDate: bounds.initial,
-      firstDate: bounds.first,
-      lastDate: bounds.last,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.orange,
-              onPrimary: AppColors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
   }
 
-  Future<void> _requestBooking() async {
+  Future<void> _openStayDates() async {
     final listing = _stay;
-    if (listing.stayNightCount <= 0 ||
-        listing.checkIn == null ||
-        listing.checkOut == null) {
-      _toast('Выберите даты заезда и выезда');
-      return;
-    }
-    final session = AuthRepositoryScope.session.value;
-    final signedIn = session != null && session.userId.isNotEmpty;
-    if (!signedIn) {
-      _toast('Войдите, чтобы забронировать жилье');
-      return;
-    }
-    if (_submitting) return;
-    setState(() => _submitting = true);
-    try {
-      await _bookings.create(
-        listing: listing,
-        checkIn: listing.checkIn!,
-        checkOut: listing.checkOut!,
-        adults: widget.adults < 1 ? 1 : widget.adults,
-        children: widget.children,
-        pets: widget.pets,
+    final saved = await _drafts.load(listingId: listing.id);
+    if (!mounted) return;
+    final result = await StayDatesSheet.show(
+      context,
+      checkIn: saved?.checkIn ?? listing.checkIn,
+      checkOut: saved?.checkOut ?? listing.checkOut,
+    );
+    if (!mounted || result == null) return;
+    await _drafts.save(
+      BookingDraft(
+        listingId: listing.id,
+        checkIn: result.checkIn,
+        checkOut: result.checkOut,
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _stay = widget.listing.withStay(
+        checkIn: result.checkIn,
+        checkOut: result.checkOut,
       );
-      if (!mounted) return;
-      _toast('Запрос на бронирование отправлен владельцу');
-    } on BookingException catch (error) {
-      if (!mounted) return;
-      _toast(error.message);
-    } catch (_) {
-      if (!mounted) return;
-      _toast('Не удалось отправить запрос на бронирование');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
-  }
-
-  void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    });
   }
 
   @override
@@ -1117,20 +1090,14 @@ class _BookingBarState extends State<_BookingBar> {
                 height: 52,
                 child: FilledButton(
                   key: const ValueKey('listing-book-button'),
-                  onPressed: _submitting ? null : _requestBooking,
+                  onPressed: _openStayDates,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Забронировать'),
+                  child: const Text('Забронировать'),
                 ),
               ),
             ],

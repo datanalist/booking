@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
-import 'package:booking/data/auth_repository.dart';
-import 'package:booking/data/booking.dart';
+import 'package:booking/data/booking_draft.dart';
 import 'package:booking/screens/listing/listing_detail.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
+import 'package:booking/screens/listing/stay_dates_sheet.dart';
 import 'package:booking/theme/app_theme.dart';
 
 import 'fixtures/demo_listings.dart';
 import 'fixtures/fake_bookings.dart';
 
 Widget _app(Widget home) {
-  return MaterialApp(theme: AppTheme.light, home: home);
+  return MaterialApp(
+    theme: AppTheme.light,
+    locale: const Locale('ru', 'RU'),
+    supportedLocales: const [Locale('ru', 'RU')],
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
+    home: home,
+  );
 }
 
 void main() {
@@ -225,12 +236,11 @@ void main() {
     expect(find.byKey(const ValueKey('listing-detail-old-town')), findsOneWidget);
   });
 
-  testWidgets('booking requires dates and a signed-in session', (tester) async {
+  testWidgets('booking button opens stay dates instead of writing a booking', (
+    tester,
+  ) async {
     final bookings = FakeBookingsRepository();
-    final previousSession = AuthRepositoryScope.session.value;
-    addTearDown(() => AuthRepositoryScope.session.value = previousSession);
-    AuthRepositoryScope.session.value = null;
-
+    final drafts = BookingDraftStore.memory();
     final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
     await tester.pumpWidget(
       _app(
@@ -240,25 +250,29 @@ void main() {
           initialDetail: ListingDetail.fromListing(listing),
           onFavorite: (_) {},
           bookingsRepository: bookings,
+          draftStore: drafts,
         ),
       ),
     );
 
     await tester.tap(find.byKey(const ValueKey('listing-book-button')));
-    await tester.pump();
-    expect(find.text('Выберите даты заезда и выезда'), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(StayDatesSheet), findsOneWidget);
+    expect(find.text('Даты проживания'), findsOneWidget);
+    expect(find.text('Дата заезда'), findsOneWidget);
+    expect(find.text('Дата выезда'), findsOneWidget);
+    expect(find.text('Вернуться'), findsOneWidget);
+    expect(find.text('Сохранить'), findsOneWidget);
     expect(bookings.created, isEmpty);
+    expect(await drafts.load(listingId: listing.id), isNull);
   });
 
-  testWidgets('booking button writes a pending_host stay', (tester) async {
+  testWidgets('saving stay dates keeps a local draft and skips PocketBase', (
+    tester,
+  ) async {
     final bookings = FakeBookingsRepository();
-    final previousSession = AuthRepositoryScope.session.value;
-    addTearDown(() => AuthRepositoryScope.session.value = previousSession);
-    AuthRepositoryScope.session.value = const AuthSession(
-      userId: 'guest-1',
-      email: 'guest@example.com',
-    );
-
+    final drafts = BookingDraftStore.memory();
     final listing = kDemoListings
         .firstWhere((item) => item.id == 'studio-msk')
         .withStay(
@@ -273,19 +287,30 @@ void main() {
           initialDetail: ListingDetail.fromListing(listing),
           onFavorite: (_) {},
           bookingsRepository: bookings,
-          adults: 2,
+          draftStore: drafts,
         ),
       ),
     );
 
     await tester.tap(find.byKey(const ValueKey('listing-book-button')));
     await tester.pumpAndSettle();
+    expect(find.text('12.09.2026'), findsOneWidget);
+    expect(find.text('15.09.2026'), findsOneWidget);
 
-    expect(bookings.created, hasLength(1));
-    expect(bookings.created.single.status, BookingStatus.pendingHost);
-    expect(bookings.created.single.listingId, 'studio-msk');
-    expect(bookings.created.single.adults, 2);
-    expect(bookings.created.single.total, 9102);
-    expect(find.text('Запрос на бронирование отправлен владельцу'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('stay-dates-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(StayDatesSheet), findsNothing);
+    expect(bookings.created, isEmpty);
+    final draft = await drafts.load(listingId: 'studio-msk');
+    expect(draft, isNotNull);
+    expect(draft!.checkIn, DateTime(2026, 9, 12));
+    expect(draft.checkOut, DateTime(2026, 9, 15));
+    expect(find.text('3 ночи'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('listing-book-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('12.09.2026'), findsOneWidget);
+    expect(find.text('15.09.2026'), findsOneWidget);
   });
 }
