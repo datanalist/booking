@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:booking/data/auth_callback.dart';
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/screens/auth/photo_access.dart';
 
@@ -12,6 +13,8 @@ class FakeAuthRepository implements AuthRepository {
   bool failOtpVerify = false;
   bool failProfile = false;
   bool existingProfile = false;
+  bool completeOnPoll = false;
+  int pollCount = 0;
 
   AuthSession session = const AuthSession(
     userId: 'user00000000001',
@@ -23,16 +26,51 @@ class FakeAuthRepository implements AuthRepository {
       session.userId.isEmpty ? null : session;
 
   @override
+  Future<AuthSession?> restoreSession() async {
+    final current = currentSession();
+    AuthRepositoryScope.session.value = current;
+    return current;
+  }
+
+  @override
+  Future<AuthSession?> completeFromAuthUri(Uri uri) async {
+    if (!AuthCallback.matches(uri)) return null;
+    if (failOtpVerify) {
+      throw const AuthException(
+        'Ссылка недействительна или устарела. Запросите новое письмо',
+      );
+    }
+    session = AuthSession(
+      userId: session.userId.isEmpty ? 'user00000000001' : session.userId,
+      email: lastEmail ?? session.email,
+      profileComplete: existingProfile,
+      displayName: existingProfile ? 'Гость Тестов' : '',
+    );
+    AuthRepositoryScope.session.value = session;
+    return session;
+  }
+
+  @override
+  Future<AuthSession?> pollMagicLogin(String otpId) async {
+    pollCount++;
+    if (!completeOnPoll) return null;
+    return completeFromAuthUri(
+      Uri.parse('vallome-booking://auth-callback?token=poll'),
+    );
+  }
+
+  @override
   Future<void> signOut() async {
     session = const AuthSession(userId: '', email: '');
     AuthRepositoryScope.session.value = null;
+    AuthRepositoryScope.authLinkError.value = null;
   }
 
   @override
   Future<OtpChallenge> requestEmailOtp(String email) async {
     lastEmail = email;
     if (failOtpRequest) {
-      throw const AuthException('Не удалось отправить код на эту почту');
+      throw const AuthException('Не удалось отправить письмо на эту почту');
     }
     return OtpChallenge(
       otpId: 'otp-email',

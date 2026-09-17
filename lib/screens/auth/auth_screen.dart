@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../data/auth_repository.dart';
 import '../../shell/main_shell.dart';
 import '../../theme/app_theme.dart';
+import 'magic_link_wait_screen.dart';
 import 'otp_screen.dart';
 import 'register_screen.dart';
 
@@ -20,7 +21,7 @@ const _disabledFill = Color(0x1A1D1B20);
 const _disabledLabel = Color(0x991D1B20);
 
 /// Экран авторизации по макетам `1:14841`, `1:14880`, `1:14900`.
-/// Одно поле: email или телефон. Email — реальный OTP, телефон — заглушка.
+/// Одно поле: email или телефон. Email — magic link, телефон — заглушка OTP.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({
     super.key,
@@ -93,11 +94,17 @@ class _AuthScreenState extends State<AuthScreen> {
       if (!mounted) return;
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (context) => OtpScreen(
-            challenge: challenge,
-            authRepository: _auth,
-            onVerified: _afterVerified,
-          ),
+          builder: (context) => challenge.channel == OtpChannel.email
+              ? MagicLinkWaitScreen(
+                  challenge: challenge,
+                  authRepository: _auth,
+                  onVerified: _afterVerified,
+                )
+              : OtpScreen(
+                  challenge: challenge,
+                  authRepository: _auth,
+                  onVerified: _afterVerified,
+                ),
         ),
       );
     } on AuthException catch (error) {
@@ -163,79 +170,104 @@ class _AuthScreenState extends State<AuthScreen> {
         backgroundColor: _authBg,
         resizeToAvoidBottomInset: true,
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 40, 16, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Авторизация',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 28,
-                    height: 45 / 28,
-                    color: Color(0xFF000000),
-                  ),
-                ),
-                const SizedBox(height: 102),
-                _AuthIdentityField(
-                  controller: _identity,
-                  focusNode: _identityFocus,
-                  onChanged: (_) => setState(() {}),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    _error!,
-                    key: const ValueKey<String>('auth-email-error'),
-                    style: const TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontWeight: FontWeight.w400,
-                      fontSize: 14,
-                      height: 1.3,
-                      color: Color(0xFFE34043),
-                    ),
-                  ),
-                ],
-                const Spacer(),
-                _AuthTermsCheckbox(
-                  accepted: _acceptedTerms,
-                  onChanged: (value) => setState(() => _acceptedTerms = value),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _canContinue ? _onContinue : null,
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(56),
-                    backgroundColor: AppColors.orange,
-                    foregroundColor: AppColors.white,
-                    disabledBackgroundColor: _disabledFill,
-                    disabledForegroundColor: _disabledLabel,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    textStyle: const TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontWeight: FontWeight.w400,
-                      fontSize: 16,
-                      height: 1.25,
-                    ),
-                  ),
-                  child: _busy
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.white,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const padding = EdgeInsets.fromLTRB(16, 40, 16, 24);
+              const titleH = 45.0;
+              const fieldH = 56.0;
+              const termsH = 48.0;
+              const buttonH = 56.0;
+              const buttonGap = 16.0;
+              const errorGap = 12.0;
+              const errorLineH = 18.0;
+              final available = constraints.maxHeight - padding.vertical;
+              final errorBlock = _error != null ? errorGap + errorLineH : 0.0;
+              final fixed =
+                  titleH + fieldH + errorBlock + termsH + buttonGap + buttonH;
+              final gap = (available - fixed).clamp(16.0, 102.0);
+              final extra = (available - fixed - gap).clamp(0.0, double.infinity);
+              return SingleChildScrollView(
+                padding: padding,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: available),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Авторизация',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: AppTheme.fontFamily,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 28,
+                          height: 45 / 28,
+                          color: Color(0xFF000000),
+                        ),
+                      ),
+                      SizedBox(height: gap),
+                      _AuthIdentityField(
+                        controller: _identity,
+                        focusNode: _identityFocus,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: errorGap),
+                        Text(
+                          _error!,
+                          key: const ValueKey<String>('auth-email-error'),
+                          style: const TextStyle(
+                            fontFamily: AppTheme.fontFamily,
+                            fontWeight: FontWeight.w400,
+                            fontSize: 14,
+                            height: 1.3,
+                            color: Color(0xFFE34043),
                           ),
-                        )
-                      : const Text('Далее'),
+                        ),
+                      ],
+                      SizedBox(height: extra),
+                      _AuthTermsCheckbox(
+                        accepted: _acceptedTerms,
+                        onChanged: (value) =>
+                            setState(() => _acceptedTerms = value),
+                      ),
+                      const SizedBox(height: buttonGap),
+                      FilledButton(
+                        onPressed: _canContinue ? _onContinue : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(56),
+                          backgroundColor: AppColors.orange,
+                          foregroundColor: AppColors.white,
+                          disabledBackgroundColor: _disabledFill,
+                          disabledForegroundColor: _disabledLabel,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          textStyle: const TextStyle(
+                            fontFamily: AppTheme.fontFamily,
+                            fontWeight: FontWeight.w400,
+                            fontSize: 16,
+                            height: 1.25,
+                          ),
+                        ),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.white,
+                                ),
+                              )
+                            : const Text('Далее'),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),

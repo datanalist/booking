@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/auth_repository.dart';
+import '../../data/booking.dart';
+import '../../data/bookings_repository.dart';
 import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
@@ -24,6 +27,10 @@ class ListingDetailScreen extends StatefulWidget {
     required this.onFavorite,
     this.initialDetail,
     this.repository,
+    this.bookingsRepository,
+    this.adults = 1,
+    this.children = 0,
+    this.pets = 0,
   });
 
   final SearchListing listing;
@@ -31,6 +38,10 @@ class ListingDetailScreen extends StatefulWidget {
   final ValueChanged<String> onFavorite;
   final ListingDetail? initialDetail;
   final ListingsRepository? repository;
+  final BookingsRepository? bookingsRepository;
+  final int adults;
+  final int children;
+  final int pets;
 
   static Future<void> open(
     BuildContext context, {
@@ -39,6 +50,10 @@ class ListingDetailScreen extends StatefulWidget {
     required ValueChanged<String> onFavorite,
     ListingDetail? initialDetail,
     ListingsRepository? repository,
+    BookingsRepository? bookingsRepository,
+    int adults = 1,
+    int children = 0,
+    int pets = 0,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -48,6 +63,10 @@ class ListingDetailScreen extends StatefulWidget {
           onFavorite: onFavorite,
           initialDetail: initialDetail,
           repository: repository,
+          bookingsRepository: bookingsRepository,
+          adults: adults,
+          children: children,
+          pets: pets,
         ),
       ),
     );
@@ -98,6 +117,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       favorites: widget.favorites,
       onFavorite: widget.onFavorite,
       repository: _repository,
+      bookingsRepository: widget.bookingsRepository,
+      adults: widget.adults,
+      children: widget.children,
+      pets: widget.pets,
     );
   }
 
@@ -183,7 +206,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                 ],
               ),
             ),
-            _BookingBar(listing: listing),
+            _BookingBar(
+              listing: listing,
+              adults: widget.adults,
+              children: widget.children,
+              pets: widget.pets,
+              bookingsRepository: widget.bookingsRepository,
+            ),
           ],
         ),
       ),
@@ -854,9 +883,19 @@ class _HostListings extends StatelessWidget {
 }
 
 class _BookingBar extends StatefulWidget {
-  const _BookingBar({required this.listing});
+  const _BookingBar({
+    required this.listing,
+    this.adults = 1,
+    this.children = 0,
+    this.pets = 0,
+    this.bookingsRepository,
+  });
 
   final SearchListing listing;
+  final int adults;
+  final int children;
+  final int pets;
+  final BookingsRepository? bookingsRepository;
 
   @override
   State<_BookingBar> createState() => _BookingBarState();
@@ -864,6 +903,10 @@ class _BookingBar extends StatefulWidget {
 
 class _BookingBarState extends State<_BookingBar> {
   late SearchListing _stay;
+  var _submitting = false;
+
+  BookingsRepository get _bookings =>
+      widget.bookingsRepository ?? BookingsRepositoryScope.instance;
 
   @override
   void initState() {
@@ -929,6 +972,50 @@ class _BookingBarState extends State<_BookingBar> {
         );
       },
     );
+  }
+
+  Future<void> _requestBooking() async {
+    final listing = _stay;
+    if (listing.stayNightCount <= 0 ||
+        listing.checkIn == null ||
+        listing.checkOut == null) {
+      _toast('Выберите даты заезда и выезда');
+      return;
+    }
+    final session = AuthRepositoryScope.session.value;
+    final signedIn = session != null && session.userId.isNotEmpty;
+    if (!signedIn) {
+      _toast('Войдите, чтобы забронировать жилье');
+      return;
+    }
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    try {
+      await _bookings.create(
+        listing: listing,
+        checkIn: listing.checkIn!,
+        checkOut: listing.checkOut!,
+        adults: widget.adults < 1 ? 1 : widget.adults,
+        children: widget.children,
+        pets: widget.pets,
+      );
+      if (!mounted) return;
+      _toast('Запрос на бронирование отправлен владельцу');
+    } on BookingException catch (error) {
+      if (!mounted) return;
+      _toast(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Не удалось отправить запрос на бронирование');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -1029,14 +1116,21 @@ class _BookingBarState extends State<_BookingBar> {
                 width: double.infinity,
                 height: 52,
                 child: FilledButton(
-                  onPressed: () {},
+                  key: const ValueKey('listing-book-button'),
+                  onPressed: _submitting ? null : _requestBooking,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('Забронировать'),
+                  child: _submitting
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Забронировать'),
                 ),
               ),
             ],

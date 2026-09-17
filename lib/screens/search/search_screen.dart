@@ -284,6 +284,9 @@ class _SearchScreenState extends State<SearchScreen> {
       favorites: _favorites,
       onFavorite: _toggleFavorite,
       repository: _repository,
+      adults: _query.adults < 1 ? 1 : _query.adults,
+      children: _query.children,
+      pets: _query.pets,
     );
   }
 }

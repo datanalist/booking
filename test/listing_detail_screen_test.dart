@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:booking/data/auth_repository.dart';
+import 'package:booking/data/booking.dart';
 import 'package:booking/screens/listing/listing_detail.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
 import 'package:booking/theme/app_theme.dart';
 
 import 'fixtures/demo_listings.dart';
+import 'fixtures/fake_bookings.dart';
 
 Widget _app(Widget home) {
   return MaterialApp(theme: AppTheme.light, home: home);
@@ -220,5 +223,69 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('listing-detail-old-town')), findsOneWidget);
+  });
+
+  testWidgets('booking requires dates and a signed-in session', (tester) async {
+    final bookings = FakeBookingsRepository();
+    final previousSession = AuthRepositoryScope.session.value;
+    addTearDown(() => AuthRepositoryScope.session.value = previousSession);
+    AuthRepositoryScope.session.value = null;
+
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: <String>{},
+          initialDetail: ListingDetail.fromListing(listing),
+          onFavorite: (_) {},
+          bookingsRepository: bookings,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('listing-book-button')));
+    await tester.pump();
+    expect(find.text('Выберите даты заезда и выезда'), findsOneWidget);
+    expect(bookings.created, isEmpty);
+  });
+
+  testWidgets('booking button writes a pending_host stay', (tester) async {
+    final bookings = FakeBookingsRepository();
+    final previousSession = AuthRepositoryScope.session.value;
+    addTearDown(() => AuthRepositoryScope.session.value = previousSession);
+    AuthRepositoryScope.session.value = const AuthSession(
+      userId: 'guest-1',
+      email: 'guest@example.com',
+    );
+
+    final listing = kDemoListings
+        .firstWhere((item) => item.id == 'studio-msk')
+        .withStay(
+          checkIn: DateTime(2026, 9, 12),
+          checkOut: DateTime(2026, 9, 15),
+        );
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: <String>{},
+          initialDetail: ListingDetail.fromListing(listing),
+          onFavorite: (_) {},
+          bookingsRepository: bookings,
+          adults: 2,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('listing-book-button')));
+    await tester.pumpAndSettle();
+
+    expect(bookings.created, hasLength(1));
+    expect(bookings.created.single.status, BookingStatus.pendingHost);
+    expect(bookings.created.single.listingId, 'studio-msk');
+    expect(bookings.created.single.adults, 2);
+    expect(bookings.created.single.total, 9102);
+    expect(find.text('Запрос на бронирование отправлен владельцу'), findsOneWidget);
   });
 }

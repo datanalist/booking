@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/data/auth_repository.dart';
+import 'package:booking/screens/auth/magic_link_wait_screen.dart';
 import 'package:booking/screens/auth/otp_screen.dart';
 import 'package:booking/screens/auth/register_screen.dart';
 
@@ -170,5 +171,108 @@ void main() {
       find.byKey(const ValueKey<String>('auth-camera-access-dialog')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('magic link wait has no code field and completes on session', (
+    tester,
+  ) async {
+    final previous = AuthRepositoryScope.session.value;
+    final previousError = AuthRepositoryScope.authLinkError.value;
+    addTearDown(() {
+      AuthRepositoryScope.session.value = previous;
+      AuthRepositoryScope.authLinkError.value = previousError;
+    });
+    AuthRepositoryScope.session.value = null;
+    AuthRepositoryScope.authLinkError.value = null;
+
+    final auth = FakeAuthRepository();
+    AuthSession? session;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MagicLinkWaitScreen(
+          challenge: const OtpChallenge(
+            otpId: 'otp-email',
+            channel: OtpChannel.email,
+            destination: 'me@example.com',
+          ),
+          authRepository: auth,
+          onVerified: (value) => session = value,
+          resendSeconds: 1,
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey<String>('auth-magic-wait')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('auth-otp-field')), findsNothing);
+    expect(find.text('Продолжить'), findsNothing);
+    expect(find.textContaining('Авторизоваться'), findsOneWidget);
+
+    AuthRepositoryScope.session.value = const AuthSession(
+      userId: 'user00000000001',
+      email: 'me@example.com',
+    );
+    await tester.pump();
+    expect(session, isNotNull);
+    expect(session!.email, 'me@example.com');
+  });
+
+  testWidgets('magic link wait completes after server poll', (tester) async {
+    final previous = AuthRepositoryScope.session.value;
+    addTearDown(() => AuthRepositoryScope.session.value = previous);
+    AuthRepositoryScope.session.value = null;
+
+    final auth = FakeAuthRepository()..completeOnPoll = true;
+    AuthSession? session;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MagicLinkWaitScreen(
+          challenge: const OtpChallenge(
+            otpId: 'otp-email',
+            channel: OtpChannel.email,
+            destination: 'me@example.com',
+          ),
+          authRepository: auth,
+          onVerified: (value) => session = value,
+          resendSeconds: 20,
+          pollInterval: const Duration(milliseconds: 20),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(auth.pollCount, greaterThan(0));
+    expect(session, isNotNull);
+    expect(session!.email, 'new.user@mail.com');
+  });
+
+  testWidgets('magic link wait resend becomes tappable after the timer', (
+    tester,
+  ) async {
+    final previous = AuthRepositoryScope.session.value;
+    addTearDown(() => AuthRepositoryScope.session.value = previous);
+    AuthRepositoryScope.session.value = null;
+
+    final auth = FakeAuthRepository();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MagicLinkWaitScreen(
+          challenge: const OtpChallenge(
+            otpId: 'otp-email',
+            channel: OtpChannel.email,
+            destination: 'me@example.com',
+          ),
+          authRepository: auth,
+          resendSeconds: 1,
+        ),
+      ),
+    );
+
+    expect(find.text('00:01'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+    await tester.tap(find.text('Отправить письмо повторно'));
+    await tester.pumpAndSettle();
+    expect(auth.lastEmail, 'me@example.com');
   });
 }

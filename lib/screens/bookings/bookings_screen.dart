@@ -1,12 +1,18 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../data/auth_repository.dart';
+import '../../data/booking.dart';
+import '../../data/bookings_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/listing_image.dart';
 
 /// Вкладка «Бронирования» по клиентским фреймам «Брони» 393×852.
 /// Макет: `1:11948` (текущие с карточками), сегмент прошлых — `1:12013`.
 class BookingsScreen extends StatefulWidget {
-  const BookingsScreen({super.key});
+  const BookingsScreen({super.key, this.repository});
+
+  final BookingsRepository? repository;
 
   @override
   State<BookingsScreen> createState() => _BookingsScreenState();
@@ -16,13 +22,58 @@ enum _BookingsSegment { current, past }
 
 class _BookingsScreenState extends State<BookingsScreen> {
   _BookingsSegment _segment = _BookingsSegment.current;
+  var _items = const <Booking>[];
+  var _loading = false;
+  Object? _error;
 
-  static const _current = <_BookingStub>[];
+  BookingsRepository get _repository =>
+      widget.repository ?? BookingsRepositoryScope.instance;
 
-  static const _past = <_BookingStub>[];
+  List<Booking> get _visible {
+    return [
+      for (final item in _items)
+        if (_segment == _BookingsSegment.past
+            ? item.status.isPast
+            : !item.status.isPast)
+          item,
+    ];
+  }
 
-  List<_BookingStub> get _items =>
-      _segment == _BookingsSegment.current ? _current : _past;
+  @override
+  void initState() {
+    super.initState();
+    AuthRepositoryScope.session.addListener(_onSession);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    AuthRepositoryScope.session.removeListener(_onSession);
+    super.dispose();
+  }
+
+  void _onSession() => _load();
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final items = await _repository.fetchMine();
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error;
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,20 +88,35 @@ class _BookingsScreenState extends State<BookingsScreen> {
               onChanged: (value) => setState(() => _segment = value),
             ),
           ),
-          Expanded(
-            child: _items.isEmpty
-                ? _EmptyBookings(segment: _segment)
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(24, 48, 24, 16),
-                    itemCount: _items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 24),
-                    itemBuilder: (context, index) {
-                      return _BookingCard(booking: _items[index]);
-                    },
-                  ),
-          ),
+          Expanded(child: _body()),
         ],
       ),
+    );
+  }
+
+  Widget _body() {
+    if (_loading && _items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null && _items.isEmpty) {
+      return Center(
+        child: TextButton(
+          onPressed: _load,
+          child: const Text('Не удалось загрузить бронирования'),
+        ),
+      );
+    }
+    final items = _visible;
+    if (items.isEmpty) {
+      return _EmptyBookings(segment: _segment);
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(24, 48, 24, 16),
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 24),
+      itemBuilder: (context, index) {
+        return _BookingCard(booking: items[index]);
+      },
     );
   }
 }
@@ -142,10 +208,11 @@ class _EmptyBookings extends StatelessWidget {
 class _BookingCard extends StatelessWidget {
   const _BookingCard({required this.booking});
 
-  final _BookingStub booking;
+  final Booking booking;
 
   @override
   Widget build(BuildContext context) {
+    final chip = _chipFor(booking.status);
     return SizedBox(
       height: 92,
       child: Row(
@@ -153,22 +220,10 @@ class _BookingCard extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.asset(
-              booking.imageAsset,
+            child: ListingImage(
+              booking.photo,
               width: 90,
               height: 90,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const ColoredBox(
-                color: Color(0xFFE8E8E8),
-                child: SizedBox(
-                  width: 90,
-                  height: 90,
-                  child: Icon(
-                    Icons.home_outlined,
-                    color: AppColors.tabInactive,
-                  ),
-                ),
-              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -177,7 +232,7 @@ class _BookingCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  booking.title,
+                  booking.title.isEmpty ? 'Бронирование' : booking.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -193,7 +248,7 @@ class _BookingCard extends StatelessWidget {
                   children: [
                     Flexible(
                       child: Text(
-                        booking.dates,
+                        booking.datesLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -216,7 +271,7 @@ class _BookingCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      booking.guests,
+                      booking.guestsLabel,
                       style: const TextStyle(
                         fontFamily: AppTheme.fontFamily,
                         fontWeight: FontWeight.w400,
@@ -227,9 +282,9 @@ class _BookingCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (booking.status != null) ...[
+                if (chip != null) ...[
                   const SizedBox(height: 8),
-                  _StatusChip(status: booking.status!),
+                  _StatusChip(status: chip),
                 ],
               ],
             ),
@@ -276,6 +331,20 @@ enum _BookingStatus {
   cancelled,
 }
 
+_BookingStatus? _chipFor(BookingStatus status) {
+  return switch (status) {
+    BookingStatus.pendingHost ||
+    BookingStatus.cancelRequested =>
+      _BookingStatus.awaitingOwner,
+    BookingStatus.awaitingPrepayment => _BookingStatus.awaitingPrepayment,
+    BookingStatus.confirmed ||
+    BookingStatus.changeRequested =>
+      _BookingStatus.confirmed,
+    BookingStatus.cancelled => _BookingStatus.cancelled,
+    BookingStatus.completed => null,
+  };
+}
+
 extension on _BookingStatus {
   String get label => switch (this) {
         _BookingStatus.awaitingPrepayment => 'ожидание предоплаты',
@@ -298,20 +367,4 @@ extension on _BookingStatus {
         _BookingStatus.awaitingOwner => const Color(0xFFB26A00),
         _BookingStatus.cancelled => AppColors.tabInactive,
       };
-}
-
-class _BookingStub {
-  const _BookingStub({
-    required this.title,
-    required this.dates,
-    required this.guests,
-    required this.imageAsset,
-    this.status,
-  });
-
-  final String title;
-  final String dates;
-  final String guests;
-  final String imageAsset;
-  final _BookingStatus? status;
 }

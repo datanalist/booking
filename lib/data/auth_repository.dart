@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 
+import 'auth_callback.dart';
 import 'pocketbase_client.dart';
 
 /// Заглушка только для вкладки телефона (код на номер не отправляем).
@@ -85,18 +86,23 @@ abstract class AuthRepository {
   });
 
   AuthSession? currentSession();
+  Future<AuthSession?> restoreSession();
+  Future<AuthSession?> completeFromAuthUri(Uri uri);
+  Future<AuthSession?> pollMagicLogin(String otpId);
   Future<void> signOut();
 }
 
 class AuthRepositoryScope {
   static AuthRepository instance = PocketBaseAuthRepository();
   static final ValueNotifier<AuthSession?> session = ValueNotifier<AuthSession?>(null);
+  static final ValueNotifier<String?> authLinkError = ValueNotifier<String?>(null);
 }
 
 class PocketBaseAuthRepository implements AuthRepository {
-  PocketBaseAuthRepository({PocketBase? client}) : _pb = client ?? pocketBase;
+  PocketBaseAuthRepository({this._client});
 
-  final PocketBase _pb;
+  final PocketBase? _client;
+  PocketBase get _pb => _client ?? pocketBase;
   AuthSession? _session;
   String _pendingPhone = '';
 
@@ -104,11 +110,96 @@ class PocketBaseAuthRepository implements AuthRepository {
   AuthSession? currentSession() => _session ?? _fromRecord(_pb.authStore.record);
 
   @override
+  Future<AuthSession?> restoreSession() async {
+    if (!_pb.authStore.isValid) {
+      _session = null;
+      AuthRepositoryScope.session.value = null;
+      return null;
+    }
+    try {
+      final auth = await _pb.collection('users').authRefresh();
+      _session = _fromRecord(auth.record);
+    } on ClientException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await signOut();
+        return null;
+      }
+      _session = _fromRecord(_pb.authStore.record);
+    }
+    if (_session == null || _session!.userId.isEmpty) {
+      await signOut();
+      return null;
+    }
+    AuthRepositoryScope.session.value = _session;
+    return _session;
+  }
+
+  @override
+  Future<AuthSession?> completeFromAuthUri(Uri uri) async {
+    if (!AuthCallback.matches(uri)) return null;
+    final token = AuthCallback.token(uri);
+    if (token != null && token.isNotEmpty) {
+      return _signInWithToken(token);
+    }
+    final otpId = AuthCallback.otpId(uri);
+    final code = AuthCallback.code(uri);
+    if (otpId != null && code != null) {
+      return verifyEmailOtp(otpId: otpId, code: code);
+    }
+    throw const AuthException(
+      'Ссылка недействительна или устарела. Запросите новое письмо',
+    );
+  }
+
+  @override
+  Future<AuthSession?> pollMagicLogin(String otpId) async {
+    final id = otpId.trim();
+    if (id.isEmpty) return null;
+    try {
+      final raw = await _pb.send(
+        '/api/vallome/magic-wait',
+        query: {'id': id},
+      );
+      final token = raw is Map ? raw['token']?.toString() ?? '' : '';
+      if (token.isEmpty) return null;
+      return _signInWithToken(token);
+    } on ClientException catch (error) {
+      if (error.statusCode == 404 ||
+          error.statusCode == 204 ||
+          error.statusCode == 400) {
+        return null;
+      }
+      return null;
+    }
+  }
+
+  Future<AuthSession> _signInWithToken(String token) async {
+    try {
+      _pb.authStore.save(token, _pb.authStore.record);
+      final auth = await _pb.collection('users').authRefresh();
+      _session = _fromRecord(auth.record);
+      if (_session == null || _session!.userId.isEmpty) {
+        throw const AuthException(
+          'Ссылка недействительна или устарела. Запросите новое письмо',
+        );
+      }
+      AuthRepositoryScope.session.value = _session;
+      return _session!;
+    } on AuthException {
+      rethrow;
+    } on ClientException catch (error) {
+      _pb.authStore.clear();
+      throw AuthException(_messageFor(error, otp: true));
+    }
+  }
+
+  @override
   Future<void> signOut() async {
     _session = null;
     _pendingPhone = '';
     _pb.authStore.clear();
     AuthRepositoryScope.session.value = null;
+    AuthRepositoryScope.authLinkError.value = null;
   }
 
   @override
@@ -333,10 +424,10 @@ class PocketBaseAuthRepository implements AuthRepository {
   }) {
     final status = error.statusCode;
     if (otp && (status == 400 || status == 401 || status == 403)) {
-      return 'Неверный код';
+      return 'Ссылка недействительна или устарела. Запросите новое письмо';
     }
     if (email && (status == 400 || status == 403)) {
-      return 'Не удалось отправить код на эту почту';
+      return 'Не удалось отправить письмо на эту почту';
     }
     if (status == 400 || status == 401 || status == 403) {
       return 'Не удалось продолжить. Проверьте данные';

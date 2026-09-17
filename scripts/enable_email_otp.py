@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Enable 5-digit email OTP on PocketBase `users` and report SMTP status.
+"""Enable passwordless email magic-link (OTP under the hood) on PocketBase `users`.
 
 Reads POCKETBASE_URL / POCKETBASE_SU / POCKETBASE_SU_PASSWORD from env or `.env.local`.
 Optional SMTP_* keys are applied only if present (never printed).
+Sender display name defaults to vallome.booking.
 """
 
 from __future__ import annotations
@@ -19,11 +20,24 @@ from seed_listings import PocketBase, env, load_dotenv  # noqa: E402
 OTP_LENGTH = 5
 OTP_DURATION = 600
 OTP_TEMPLATE = {
-    "subject": "Код подтверждения GlobalStay",
+    "subject": "Вход в vallome.booking",
     "body": (
-        "<p>Ваш код подтверждения: <strong>{OTP}</strong></p>"
-        "<p>Код действует несколько минут. Если вы не запрашивали вход, "
-        "просто проигнорируйте это письмо.</p>"
+        '<!doctype html><html lang="ru"><body style="margin:0;padding:0;background:#ffffff;">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;">'
+        '<tr><td align="center" style="padding:56px 24px;">'
+        '<table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;">'
+        '<tr><td align="center" style="font-family:Georgia,\'Times New Roman\',Times,serif;font-size:34px;font-weight:700;color:#111111;letter-spacing:0.04em;padding-bottom:56px;">vallome.booking</td></tr>'
+        '<tr><td align="center" style="font-family:Arial,Helvetica,sans-serif;font-size:28px;color:#1a1a1a;padding-bottom:36px;line-height:1.3;">Уведомление о входе</td></tr>'
+        '<tr><td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#4a4a4a;padding-bottom:36px;">Нажмите кнопку ниже, чтобы продолжить.</td></tr>'
+        '<tr><td align="center" style="padding-bottom:48px;">'
+        '<a href="{APP_URL}/api/vallome/magic-auth?id={OTP_ID}&code={OTP}" target="_blank" rel="noopener" '
+        'style="display:inline-block;background:#6B8AFF;color:#ffffff;text-decoration:none;'
+        "font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.2;padding:14px 40px;border-radius:6px;\">"
+        "Авторизоваться</a>"
+        "</td></tr>"
+        '<tr><td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#4a4a4a;">'
+        "Ссылка действительна 10 минут с момента отправки.</td></tr>"
+        "</table></td></tr></table></body></html>"
     ),
 }
 
@@ -118,7 +132,16 @@ def main() -> int:
     smtp_user = env("SMTP_USERNAME")
     smtp_password = env("SMTP_PASSWORD")
     smtp_port = env("SMTP_PORT")
+    sender_name = env("SMTP_SENDER_NAME", "vallome.booking")
+    meta = dict(settings.get("meta") or {})
+    meta_patch = dict(meta)
+    meta_patch["senderName"] = sender_name
+
     if smtp_host and smtp_user and smtp_password:
+        if env("SMTP_SENDER"):
+            meta_patch["senderAddress"] = env("SMTP_SENDER")
+        elif smtp_user and not meta_patch.get("senderAddress"):
+            meta_patch["senderAddress"] = smtp_user
         pb.request(
             "PATCH",
             "/api/settings",
@@ -132,20 +155,23 @@ def main() -> int:
                     "tls": env("SMTP_TLS", "true").lower() != "false",
                     "authMethod": env("SMTP_AUTH_METHOD", "PLAIN"),
                 },
-                "meta": {
-                    "senderName": env("SMTP_SENDER_NAME", "GlobalStay"),
-                    "senderAddress": env("SMTP_SENDER", smtp_user),
-                },
+                "meta": meta_patch,
             },
         )
-        print("smtp: updated from SMTP_* env")
-    elif not smtp.get("enabled"):
-        print(
-            "smtp: DISABLED — email codes will not send until SMTP is configured",
-            file=sys.stderr,
-        )
-        return 3
-    print("deploy pb_hooks/otp_signup.pb.js next to pb_data so new emails get a users row")
+        print("smtp: updated from SMTP_* env; senderName:", sender_name)
+    else:
+        if meta.get("senderName") != sender_name:
+            pb.request("PATCH", "/api/settings", json_body={"meta": meta_patch})
+            print("meta.senderName:", sender_name)
+        else:
+            print("meta.senderName:", meta.get("senderName"))
+        if not smtp.get("enabled"):
+            print(
+                "smtp: DISABLED — magic-link emails will not send until SMTP is configured",
+                file=sys.stderr,
+            )
+            return 3
+    print("deploy pb_hooks/*.pb.js next to the PocketBase executable (pb_hooks/)")
     return 0
 
 

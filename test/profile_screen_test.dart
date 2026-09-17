@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/data/auth_repository.dart';
+import 'package:booking/data/bookings_repository.dart';
 import 'package:booking/screens/profile/profile_screen.dart';
 import 'package:booking/shell/main_shell.dart';
 
 import 'fixtures/fake_auth.dart';
+import 'fixtures/fake_bookings.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -16,6 +18,7 @@ void main() {
   setUp(() {
     previousAuth = AuthRepositoryScope.instance;
     previousSession = AuthRepositoryScope.session.value;
+    BookingsRepositoryScope.instance = FakeBookingsRepository();
   });
 
   tearDown(() {

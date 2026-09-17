@@ -15,9 +15,10 @@ class ListingsRepositoryScope {
 }
 
 class PocketBaseListingsRepository implements ListingsRepository {
-  PocketBaseListingsRepository({PocketBase? client}) : _pb = client ?? pocketBase;
+  PocketBaseListingsRepository({this._client});
 
-  final PocketBase _pb;
+  final PocketBase? _client;
+  PocketBase get _pb => _client ?? pocketBase;
 
   static const _expand = 'host';
   static const _published = 'status = "published"';

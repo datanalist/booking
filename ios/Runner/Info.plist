@@ -8,6 +8,21 @@
 	<string>Нужен доступ к фото, чтобы выбрать фото профиля.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Нужен доступ к галерее, чтобы сохранить фото профиля.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>ru.vallome.booking.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>vallome-booking</string>
+			</array>
+		</dict>
+	</array>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

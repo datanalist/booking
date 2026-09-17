@@ -37,7 +37,7 @@ void main() {
     expect(find.text('me@example.com'), findsOneWidget);
   });
 
-  testWidgets('continue requests email OTP after terms are accepted', (
+  testWidgets('continue requests email magic link after terms are accepted', (
     tester,
   ) async {
     final auth = FakeAuthRepository();
@@ -57,11 +57,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(auth.lastEmail, 'me@example.com');
-    expect(find.text('Введите код'), findsOneWidget);
-    expect(
-      find.textContaining('me@example.com'),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey<String>('auth-magic-wait')), findsOneWidget);
+    expect(find.textContaining('me@example.com'), findsOneWidget);
+    expect(find.textContaining('Авторизоваться'), findsOneWidget);
+    expect(find.text('Введите код'), findsNothing);
+    expect(find.byKey(const ValueKey<String>('auth-otp-field')), findsNothing);
   });
 
   testWidgets('phone number requests stub OTP', (tester) async {
@@ -93,7 +93,7 @@ void main() {
     await tester.tap(find.text('Далее'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Не удалось отправить код на эту почту'), findsOneWidget);
+    expect(find.text('Не удалось отправить письмо на эту почту'), findsOneWidget);
     expect(find.text('Авторизация'), findsOneWidget);
   });
 
@@ -132,6 +132,24 @@ void main() {
     _tapLink(tester, kAuthTermsLinkLabel);
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('auth-terms-page')), findsOneWidget);
+  });
+
+  testWidgets('auth screen does not overflow when the keyboard is open', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 3;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 420);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuthScreen(authRepository: FakeAuthRepository())),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.text('Далее'), findsOneWidget);
   });
 }
 

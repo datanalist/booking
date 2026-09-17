@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../data/auth_repository.dart';
 import '../../data/birthdate.dart';
+import '../../shell/main_shell.dart';
 import '../../theme/app_theme.dart';
 import 'photo_access.dart';
 
@@ -125,7 +126,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
         limitedBrowse: limited,
       );
       if (!mounted) return;
-      widget.onCompleted?.call(session);
+      if (widget.onCompleted != null) {
+        widget.onCompleted!(session);
+        return;
+      }
+      Navigator.of(context).pushAndRemoveUntil(
+        PageRouteBuilder<void>(
+          pageBuilder: (context, animation, secondaryAnimation) {
+            return const MainShell();
+          },
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 350),
+        ),
+        (route) => false,
+      );
     } on AuthException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
