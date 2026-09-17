@@ -13,6 +13,7 @@ import 'package:booking/theme/app_theme.dart';
 
 import 'fixtures/demo_listings.dart';
 import 'fixtures/fake_bookings.dart';
+import 'fixtures/fake_notifications.dart';
 
 Widget _app(Widget home) {
   return MaterialApp(
@@ -209,6 +210,7 @@ void main() {
     );
     final drafts = BookingDraftStore.memory(_draft());
     final bookings = FakeBookingsRepository();
+    final notifications = FakeNotificationsRepository();
     Booking? created;
     await tester.pumpWidget(
       _app(
@@ -223,6 +225,7 @@ void main() {
                     draft: _draft(),
                     draftStore: drafts,
                     bookingsRepository: bookings,
+                    notificationsRepository: notifications,
                     onBookingCreated: (booking) => created = booking,
                   );
                 },
@@ -249,6 +252,14 @@ void main() {
     expect(bookings.created.single.status, BookingStatus.pendingHost);
     expect(created, bookings.created.single);
     expect(await drafts.load(), isNull);
+    expect(find.byKey(const ValueKey('booking-request-sent-dialog')), findsOneWidget);
+    expect(find.text('Запрос на бронирование отправлен'), findsOneWidget);
+    expect(find.byKey(const ValueKey('confirmation-sheet')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('booking-request-sent-ok')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('booking-request-sent-dialog')), findsNothing);
     expect(find.byKey(const ValueKey('confirmation-sheet')), findsNothing);
   });
 

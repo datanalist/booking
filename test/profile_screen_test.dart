@@ -3,27 +3,35 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/bookings_repository.dart';
+import 'package:booking/data/notifications_repository.dart';
 import 'package:booking/screens/profile/profile_screen.dart';
 import 'package:booking/shell/main_shell.dart';
 
 import 'fixtures/fake_auth.dart';
 import 'fixtures/fake_bookings.dart';
+import 'fixtures/fake_notifications.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late AuthRepository previousAuth;
   late AuthSession? previousSession;
+  late NotificationsRepository previousNotifications;
 
   setUp(() {
     previousAuth = AuthRepositoryScope.instance;
     previousSession = AuthRepositoryScope.session.value;
+    previousNotifications = NotificationsRepositoryScope.instance;
     BookingsRepositoryScope.instance = FakeBookingsRepository();
+    NotificationsRepositoryScope.instance = FakeNotificationsRepository();
+    NotificationsRepositoryScope.setUnread(0);
   });
 
   tearDown(() {
     AuthRepositoryScope.instance = previousAuth;
     AuthRepositoryScope.session.value = previousSession;
+    NotificationsRepositoryScope.instance = previousNotifications;
+    NotificationsRepositoryScope.setUnread(0);
   });
 
   testWidgets('profile shows stub identity and menu items', (tester) async {
@@ -37,7 +45,7 @@ void main() {
     expect(find.text('+7 (900) 123-45-67'), findsOneWidget);
     expect(find.text('Личные данные'), findsOneWidget);
     expect(find.text('Уведомления'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('2'), findsNothing);
     expect(find.text('Написать в поддержку'), findsOneWidget);
     expect(find.text('Выйти из аккаунта'), findsOneWidget);
     expect(find.text('Удалить аккаунт'), findsOneWidget);

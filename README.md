@@ -32,7 +32,7 @@
 | Брони | Живые записи коллекции `bookings`: «Предстоящие» и «Архив» (`completed` / `cancelled`). Пустой таб — иллюстрация и текст по макету Figma `1:11894` |
 | Избранное | UI карточек, список пустой (серверное избранное не читается) |
 | Чаты | Макет списка на локальных заглушках |
-| Профиль | Имя и аватар сессии; личные данные, выход и удаление аккаунта работают; остальные пункты меню пока заглушки |
+| Профиль | Имя и аватар сессии; личные данные, уведомления, выход и удаление аккаунта работают; поддержка пока заглушка |
 
 **Поиск и карточка**
 - Публичные `listings` со `status = published`, хозяин через `expand=host`
@@ -40,7 +40,7 @@
 - Форма «Снять жилье» — отдельный экран (`MaterialPageRoute`), не modal-sheet: так поле города принимает клавиатуру на Android 16
 - Чипы под шапкой — только параметры этой формы (город, даты, гости)
 - Список и карта с пинами; фото с файлового API PocketBase (`ListingImage`)
-- Деталка объявления свёрстана по макету Figma `1:10782` (герой, удобства, отзывы, хозяин, другие объявления, sticky **Забронировать**). «Смотреть все» открывает список объявлений хозяина; **Забронировать** открывает шит «Даты проживания» (Figma `1:11757`), после **Сохранить** — шит «Гости» (Figma `1:11776`), после ещё одного **Сохранить** — шит подтверждения «Бронирование» (Figma `1:11497`). Даты и гости до подтверждения живут только на устройстве (`SharedPreferences`, ключ `booking_draft`: listing id + заезд + выезд + adults/children/pets). **Вернуться** на карточке подтверждения сбрасывает весь локальный черновик (`BookingDraftStore.clear()`). **Забронировать** на этой карточке пишет запись в PocketBase `bookings` (`BookingsRepository.create`, статус `pending_host`) и затем очищает черновик; без сессии показывается «Войдите, чтобы забронировать жилье», запись не создаётся. Правила календаря те же, что у поиска (`stayDatePickerBounds` / `completeSearchStayDates`); степперы гостей — как в поиске (взрослые от 1, дети и животные от 0, потолок 16), `pets_allowed` объявления блокирует животных. Экран успешного уведомления после создания — следующий шаг.
+- Деталка объявления свёрстана по макету Figma `1:10782` (герой, удобства, отзывы, хозяин, другие объявления, sticky **Забронировать**). «Смотреть все» открывает список объявлений хозяина; **Забронировать** открывает шит «Даты проживания» (Figma `1:11757`), после **Сохранить** — шит «Гости» (Figma `1:11776`), после ещё одного **Сохранить** — шит подтверждения «Бронирование» (Figma `1:11497`). Даты и гости до подтверждения живут только на устройстве (`SharedPreferences`, ключ `booking_draft`: listing id + заезд + выезд + adults/children/pets). **Вернуться** на карточке подтверждения сбрасывает весь локальный черновик (`BookingDraftStore.clear()`). **Забронировать** на этой карточке пишет запись в PocketBase `bookings` (`BookingsRepository.create`, статус `pending_host`) и затем очищает черновик; без сессии показывается «Войдите, чтобы забронировать жилье», запись не создаётся. Сразу после успешного create поверх шита всплывает модалка Figma `1:11832` («Запрос на бронирование отправлен» / «Ожидайте подтверждение… 12 часов» / **Ок**) — центрированная карточка 16px на барьере `#525353`, не snackbar и не bottom sheet. **Ок** закрывает попап и шит подтверждения. Параллельно клиент пишет строку в PocketBase `notifications` (title/body из макета, `user` = сессия, `booking` + `listing` с созданной брони); если create уведомления отклонят правила, попап всё равно показывается. Тот же текст уходит в Профиль → **Уведомления** (Figma `1:11396`). Правила календаря те же, что у поиска (`stayDatePickerBounds` / `completeSearchStayDates`); степперы гостей — как в поиске (взрослые от 1, дети и животные от 0, потолок 16), `pets_allowed` объявления блокирует животных.
 - Сердце избранного — глиф Iconly (`FavoriteHeartButton`); состояние локальное, вкладка «Избранное» с PocketBase не связана
 
 **Личные данные**
@@ -52,6 +52,11 @@
 - После сохранения имя и аватар на вкладке «Профиль» берутся из обновлённой сессии
 - Дата рождения — `ДД.ММ.ГГГГ`, 18+; младше 18 лет остаются с `limited_browse`
 - Фото — тот же запрос доступа и `image_picker`, что и при регистрации; грант помнится, круг кропа можно двигать по снимку
+
+**Уведомления**
+- Профиль → **Уведомления** (макет Figma `1:11396`): полноэкранный список, как «Личные данные», не bottom sheet. Карточка с кремовой заливкой, обводкой и красной точкой непрочитанного (ассет `images/profile/unread-dot-7.svg`, 7×7)
+- Записи читаются из PocketBase `notifications` (`NotificationsRepository.fetchMine`, `user =` текущая сессия через `pbFilter`). Бейдж в меню — живой unread count, 0 не рисуется (больше не заглушка «2»)
+- После бронирования в инбоксе тот же заголовок, что у попапа `1:11832`; в теле подставляется название жилья, если оно есть. Макет `1:11396` показывает чужой сценарий («Владелец подтвердил вашу бронь» / предоплата) — это не этот шаг
 
 **Авторизация**
 - Email: свой адрес → письмо от **vallome.booking** с кнопкой **Авторизоваться**. Поля кода нет. Запись в `users` появляется **только после** клика по ссылке, не в момент запроса письма. После клика вернитесь в приложение: экран ожидания сам подхватывает сессию (опрос `/api/vallome/magic-wait`). Ссылки `vallome-booking://` на Ubuntu открывают магазин приложений — на компьютере ими не пользоваться
@@ -85,7 +90,7 @@ flutter run -d linux --dart-define=POCKETBASE_URL=https://example.com
 
 Схема коллекций — [`pb_schema.json`](pb_schema.json) и [`docs/pocketbase-schema.md`](docs/pocketbase-schema.md). Сервер (Caddy, TLS) — [`docs/pocketbase-server.md`](docs/pocketbase-server.md).
 
-**Запросы к PocketBase.** Клиент не склеивает пользовательские строки в `filter`. Значения подставляются через `pbFilter` (`lib/data/pocketbase_filter.dart`) с плейсхолдерами `{:name}` — тот же синтаксис, что у `PocketBase.filter` в Dart SDK. Имена коллекций только из `PbCollection` (`users`, `listings`, `bookings`), не из ввода. Пример:
+**Запросы к PocketBase.** Клиент не склеивает пользовательские строки в `filter`. Значения подставляются через `pbFilter` (`lib/data/pocketbase_filter.dart`) с плейсхолдерами `{:name}` — тот же синтаксис, что у `PocketBase.filter` в Dart SDK. Имена коллекций только из `PbCollection` (`users`, `listings`, `bookings`, `notifications`), не из ввода. Пример:
 
 ```dart
 final filter = pbFilter(
@@ -104,6 +109,7 @@ python3 scripts/seed_listings.py
 python3 scripts/seed_listings.py --reset   # удалить сид-объявления и создать заново
 python3 scripts/enable_email_otp.py        # magic-link (OTP) на email + SMTP, отправитель vallome.booking
 python3 scripts/ensure_bookings.py         # коллекция bookings, правила и индексы
+python3 scripts/ensure_notifications.py    # коллекция notifications (инбокс), createRule = текущий user
 bash scripts/push_emulator_gallery.sh      # фото профиля в галерею эмулятора
 ```
 
@@ -120,6 +126,8 @@ ssh root@159.194.252.80 'install -o pocketbase -g pocketbase -m 644 /tmp/change_
 | `magic_link.pb.js` | `POST /api/vallome/magic-request` шлёт письмо без записи в БД; пользователь создаётся при клике «Авторизоваться»; `/api/vallome/magic-auth` и `/api/vallome/magic-wait`; подтверждённая заявка на смену email применяется здесь |
 | `change_email.pb.js` | `POST /api/vallome/change-email`: заявка на смену email текущего пользователя; адрес применяется только после magic-link на новый ящик |
 | `bookings_overlap.pb.js` | Запрет пересечения дат на занятом жилье |
+
+Отдельного хука `/api/vallome/` для уведомлений нет: клиент пишет в `notifications` сам, если `createRule` пускает `@request.body.user = @request.auth.id` (как у `bookings`). Коллекцию поднимает `scripts/ensure_notifications.py`.
 
 Пять опубликованных объявлений (Москва, Казань, Санкт-Петербург) и один черновик. Пароль сид-пользователей каталога: `SeedPass123!`.
 
@@ -206,7 +214,7 @@ Booking/
 │   ├── main.dart
 │   ├── theme/app_theme.dart
 │   ├── config/                    # PocketBase URL, Mapbox
-│   ├── data/                      # клиент PB, auth, listings, bookings, pbFilter
+│   ├── data/                      # клиент PB, auth, listings, bookings, notifications, pbFilter
 │   ├── widgets/                   # ListingImage, FavoriteHeartButton, confirm dialog
 │   ├── shell/main_shell.dart      # нижняя панель
 │   └── screens/
@@ -214,21 +222,23 @@ Booking/
 │       ├── onboarding_screen.dart
 │       ├── auth/                  # email magic-link, phone stub, регистрация, фото
 │       ├── search/                # каталог, карта, фильтры, запрос
-│       ├── listing/               # деталка, даты, гости, подтверждение брони, объявления хозяина
+│       ├── listing/               # деталка, даты, гости, подтверждение брони, попап 1:11832, объявления хозяина
 │       ├── bookings/              # предстоящие / архив из API; пустой таб Figma 1:11894
 │       ├── favorites/
 │       ├── chat/
-│       └── profile/               # меню, личные данные, выход
+│       └── profile/               # меню, личные данные, уведомления 1:11396, выход
 ├── pb_hooks/                      # JS-хуки PocketBase (копировать на VPS; без change_email.pb.js смена почты в профиле не работает)
 ├── scripts/
 │   ├── seed_listings.py
 │   ├── enable_email_otp.py
 │   ├── ensure_bookings.py
+│   ├── ensure_notifications.py
 │   └── push_emulator_gallery.sh
 ├── test/
 │   ├── fixtures/demo_listings.dart
 │   ├── fixtures/fake_auth.dart
 │   ├── fixtures/fake_bookings.dart
+│   ├── fixtures/fake_notifications.dart
 │   ├── widget_test.dart
 │   ├── pocketbase_filter_test.dart
 │   ├── auth_screen_test.dart
@@ -237,6 +247,7 @@ Booking/
 │   ├── search_screen_test.dart
 │   ├── listing_detail_screen_test.dart
 │   ├── booking_confirmation_sheet_test.dart
+│   ├── notifications_test.dart
 │   ├── bookings_screen_test.dart
 │   ├── profile_screen_test.dart
 │   └── personal_data_screen_test.dart

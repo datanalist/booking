@@ -16,6 +16,7 @@ import 'package:booking/theme/app_theme.dart';
 
 import 'fixtures/demo_listings.dart';
 import 'fixtures/fake_bookings.dart';
+import 'fixtures/fake_notifications.dart';
 
 Widget _app(Widget home) {
   return MaterialApp(
@@ -471,6 +472,7 @@ void main() {
     );
     addTearDown(() => AuthRepositoryScope.session.value = null);
     final bookings = FakeBookingsRepository();
+    final notifications = FakeNotificationsRepository();
     final drafts = BookingDraftStore.memory();
     Booking? created;
     final listing = kDemoListings
@@ -487,6 +489,7 @@ void main() {
           initialDetail: ListingDetail.fromListing(listing),
           onFavorite: (_) {},
           bookingsRepository: bookings,
+          notificationsRepository: notifications,
           draftStore: drafts,
           onBookingCreated: (booking) => created = booking,
         ),
@@ -508,6 +511,14 @@ void main() {
     expect(created, bookings.created.single);
     expect(created!.status, BookingStatus.pendingHost);
     expect(await drafts.load(), isNull);
+    expect(find.byKey(const ValueKey('booking-request-sent-dialog')), findsOneWidget);
+    expect(find.text('Запрос на бронирование отправлен'), findsOneWidget);
+    expect(find.byType(BookingConfirmationSheet), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('booking-request-sent-ok')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('booking-request-sent-dialog')), findsNothing);
     expect(find.byType(BookingConfirmationSheet), findsNothing);
     expect(find.text('Выберите даты'), findsOneWidget);
   });

@@ -5,10 +5,13 @@ import '../../data/auth_repository.dart';
 import '../../data/booking.dart';
 import '../../data/booking_draft.dart';
 import '../../data/bookings_repository.dart';
+import '../../data/inbox_notification.dart';
+import '../../data/notifications_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
+import 'booking_request_sent_dialog.dart';
 import 'guests_sheet.dart';
 import 'listing_icons.dart';
 import 'stay_dates_sheet.dart';
@@ -66,6 +69,7 @@ class BookingConfirmationSheet extends StatefulWidget {
     required this.draft,
     this.draftStore,
     this.bookingsRepository,
+    this.notificationsRepository,
     this.onBookingCreated,
   });
 
@@ -73,8 +77,7 @@ class BookingConfirmationSheet extends StatefulWidget {
   final BookingDraft draft;
   final BookingDraftStore? draftStore;
   final BookingsRepository? bookingsRepository;
-
-  /// Task 5 will show the Figma success notification from this callback.
+  final NotificationsRepository? notificationsRepository;
   final ValueChanged<Booking>? onBookingCreated;
 
   static Future<Booking?> show(
@@ -83,6 +86,7 @@ class BookingConfirmationSheet extends StatefulWidget {
     required BookingDraft draft,
     BookingDraftStore? draftStore,
     BookingsRepository? bookingsRepository,
+    NotificationsRepository? notificationsRepository,
     ValueChanged<Booking>? onBookingCreated,
   }) {
     return showModalBottomSheet<Booking>(
@@ -98,6 +102,7 @@ class BookingConfirmationSheet extends StatefulWidget {
         draft: draft,
         draftStore: draftStore,
         bookingsRepository: bookingsRepository,
+        notificationsRepository: notificationsRepository,
         onBookingCreated: onBookingCreated,
       ),
     );
@@ -118,6 +123,9 @@ class _BookingConfirmationSheetState extends State<BookingConfirmationSheet> {
 
   BookingsRepository get _bookings =>
       widget.bookingsRepository ?? BookingsRepositoryScope.instance;
+
+  NotificationsRepository get _notifications =>
+      widget.notificationsRepository ?? NotificationsRepositoryScope.instance;
 
   @override
   void initState() {
@@ -209,8 +217,15 @@ class _BookingConfirmationSheetState extends State<BookingConfirmationSheet> {
         pets: _draft.pets,
       );
       await _drafts.clear();
+      try {
+        await _notifications.createForBooking(booking);
+      } on NotificationException catch (_) {
+        // Попап 1:11832 — основной UX; инбокс не должен его блокировать.
+      } catch (_) {}
       if (!mounted) return;
       widget.onBookingCreated?.call(booking);
+      await showBookingRequestSentDialog(context);
+      if (!mounted) return;
       Navigator.pop(context, booking);
     } on BookingException catch (error) {
       if (!mounted) return;

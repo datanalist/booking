@@ -8,6 +8,7 @@ import '../../data/booking.dart';
 import '../../data/booking_draft.dart';
 import '../../data/bookings_repository.dart';
 import '../../data/listings_repository.dart';
+import '../../data/notifications_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
 import '../../widgets/listing_image.dart';
@@ -37,6 +38,7 @@ class ListingDetailScreen extends StatefulWidget {
     this.initialDetail,
     this.repository,
     this.bookingsRepository,
+    this.notificationsRepository,
     this.draftStore,
     this.onBookingCreated,
     this.adults = 1,
@@ -50,6 +52,7 @@ class ListingDetailScreen extends StatefulWidget {
   final ListingDetail? initialDetail;
   final ListingsRepository? repository;
   final BookingsRepository? bookingsRepository;
+  final NotificationsRepository? notificationsRepository;
   final BookingDraftStore? draftStore;
   final ValueChanged<Booking>? onBookingCreated;
   final int adults;
@@ -64,6 +67,7 @@ class ListingDetailScreen extends StatefulWidget {
     ListingDetail? initialDetail,
     ListingsRepository? repository,
     BookingsRepository? bookingsRepository,
+    NotificationsRepository? notificationsRepository,
     BookingDraftStore? draftStore,
     ValueChanged<Booking>? onBookingCreated,
     int adults = 1,
@@ -79,6 +83,7 @@ class ListingDetailScreen extends StatefulWidget {
           initialDetail: initialDetail,
           repository: repository,
           bookingsRepository: bookingsRepository,
+          notificationsRepository: notificationsRepository,
           draftStore: draftStore,
           onBookingCreated: onBookingCreated,
           adults: adults,
@@ -135,6 +140,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       onFavorite: widget.onFavorite,
       repository: _repository,
       bookingsRepository: widget.bookingsRepository,
+      notificationsRepository: widget.notificationsRepository,
       draftStore: widget.draftStore,
       onBookingCreated: widget.onBookingCreated,
       adults: widget.adults,
@@ -247,6 +253,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
               listing: listing,
               draftStore: widget.draftStore,
               bookingsRepository: widget.bookingsRepository,
+              notificationsRepository: widget.notificationsRepository,
               onBookingCreated: widget.onBookingCreated,
               adults: widget.adults,
               children: widget.children,
@@ -960,6 +967,7 @@ class _BookingBar extends StatefulWidget {
     required this.listing,
     this.draftStore,
     this.bookingsRepository,
+    this.notificationsRepository,
     this.onBookingCreated,
     this.adults = StayGuests.minAdults,
     this.children = StayGuests.minChildren,
@@ -969,6 +977,7 @@ class _BookingBar extends StatefulWidget {
   final SearchListing listing;
   final BookingDraftStore? draftStore;
   final BookingsRepository? bookingsRepository;
+  final NotificationsRepository? notificationsRepository;
   final ValueChanged<Booking>? onBookingCreated;
   final int adults;
   final int children;
@@ -1114,6 +1123,7 @@ class _BookingBarState extends State<_BookingBar> {
       draft: draft,
       draftStore: _drafts,
       bookingsRepository: widget.bookingsRepository,
+      notificationsRepository: widget.notificationsRepository,
       onBookingCreated: widget.onBookingCreated,
     );
     if (!mounted) return;

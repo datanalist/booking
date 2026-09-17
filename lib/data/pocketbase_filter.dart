@@ -30,8 +30,9 @@ abstract final class PbCollection {
   static const users = 'users';
   static const listings = 'listings';
   static const bookings = 'bookings';
+  static const notifications = 'notifications';
 
-  static const Set<String> known = {users, listings, bookings};
+  static const Set<String> known = {users, listings, bookings, notifications};
 
   /// Возвращает [name], если это литерал из [known].
   ///
