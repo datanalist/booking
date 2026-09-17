@@ -4,12 +4,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/screens/auth/magic_link_wait_screen.dart';
 import 'package:booking/screens/auth/otp_screen.dart';
+import 'package:booking/screens/auth/photo_access.dart';
 import 'package:booking/screens/auth/register_screen.dart';
 
 import 'fixtures/fake_auth.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    PhotoAccessMemory.instance = PhotoAccessMemory.memory();
+  });
+
+  tearDown(() {
+    PhotoAccessMemory.instance = PhotoAccessMemory();
+  });
 
   testWidgets('wrong email code shows error banner', (tester) async {
     final auth = FakeAuthRepository()..failOtpVerify = true;
@@ -165,12 +174,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey<String>('auth-photo-grid')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey<String>('auth-photo-camera-tile')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey<String>('auth-camera-access-dialog')),
-      findsOneWidget,
-    );
+    await tester.tap(find.byKey(const ValueKey<String>('auth-photo-gallery-tile')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.byType(PhotoCropScreen), findsOneWidget);
+    expect(find.text('Сохранить'), findsOneWidget);
   });
 
   testWidgets('magic link wait has no code field and completes on session', (

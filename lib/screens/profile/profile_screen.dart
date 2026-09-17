@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../data/auth_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import '../auth/auth_screen.dart';
+import 'personal_data_screen.dart';
 
 const _menuFill = Color(0xFFFFFBF2);
 const _menuStroke = Color(0xFFFFF3D0);
@@ -127,6 +129,10 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 36),
                 _ProfileMenu(
+                  onPersonalData: () => PersonalDataScreen.open(
+                    context,
+                    authRepository: _auth,
+                  ),
                   onLogout: () => _onLogout(context),
                   onDeleteAccount: () => _onDeleteAccount(context),
                 ),
@@ -141,19 +147,23 @@ class ProfileScreen extends StatelessWidget {
 
 class _ProfileMenu extends StatelessWidget {
   const _ProfileMenu({
+    required this.onPersonalData,
     required this.onLogout,
     required this.onDeleteAccount,
   });
 
+  final VoidCallback onPersonalData;
   final VoidCallback onLogout;
   final VoidCallback onDeleteAccount;
 
   @override
   Widget build(BuildContext context) {
     final items = <_MenuItemData>[
-      const _MenuItemData(
+      _MenuItemData(
+        key: const ValueKey<String>('profile-personal-data'),
         icon: Icons.person_outline,
         label: 'Личные данные',
+        onTap: onPersonalData,
       ),
       const _MenuItemData(
         icon: Icons.notifications_none_outlined,
@@ -302,164 +312,24 @@ class _NotificationBadge extends StatelessWidget {
   }
 }
 
-const _confirmBarrier = Color(0xFF525353);
-const _confirmTitleColor = Color(0xFF1A1B1D);
-
 Future<bool?> showLogoutConfirmDialog(BuildContext context) {
-  return _showProfileConfirmDialog(
+  return showAppConfirmDialog(
     context,
     title: 'Выйти из аккаунта?',
+    dialogKey: 'profile-logout-dialog',
+    noKey: 'profile-logout-no',
+    yesKey: 'profile-logout-yes',
     barrierLabel: 'logout-confirm',
-    dialogKey: const ValueKey<String>('profile-logout-dialog'),
-    noKey: const ValueKey<String>('profile-logout-no'),
-    yesKey: const ValueKey<String>('profile-logout-yes'),
   );
 }
 
-/// Модалка удаления аккаунта по макету (фрейм 1:14585).
 Future<bool?> showDeleteAccountConfirmDialog(BuildContext context) {
-  return _showProfileConfirmDialog(
+  return showAppConfirmDialog(
     context,
     title: 'Удалить аккаунт?',
+    dialogKey: 'profile-delete-dialog',
+    noKey: 'profile-delete-no',
+    yesKey: 'profile-delete-yes',
     barrierLabel: 'delete-account-confirm',
-    dialogKey: const ValueKey<String>('profile-delete-dialog'),
-    noKey: const ValueKey<String>('profile-delete-no'),
-    yesKey: const ValueKey<String>('profile-delete-yes'),
   );
-}
-
-Future<bool?> _showProfileConfirmDialog(
-  BuildContext context, {
-  required String title,
-  required String barrierLabel,
-  required Key dialogKey,
-  required Key noKey,
-  required Key yesKey,
-}) {
-  return showGeneralDialog<bool>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: barrierLabel,
-    barrierColor: _confirmBarrier,
-    pageBuilder: (context, animation, secondaryAnimation) {
-      return _ProfileConfirmDialog(
-        title: title,
-        dialogKey: dialogKey,
-        noKey: noKey,
-        yesKey: yesKey,
-      );
-    },
-    transitionDuration: const Duration(milliseconds: 200),
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      return FadeTransition(opacity: animation, child: child);
-    },
-  );
-}
-
-/// Общая модалка «Нет» / «Да» (выход 1:14582, удаление 1:14585).
-class _ProfileConfirmDialog extends StatelessWidget {
-  const _ProfileConfirmDialog({
-    required this.title,
-    required this.dialogKey,
-    required this.noKey,
-    required this.yesKey,
-  });
-
-  final String title;
-  final Key dialogKey;
-  final Key noKey;
-  final Key yesKey;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 19),
-        child: Material(
-          color: Colors.transparent,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 355),
-            child: DecoratedBox(
-              key: dialogKey,
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        height: 1,
-                        letterSpacing: 0.018,
-                        color: _confirmTitleColor,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      height: 52,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              key: noKey,
-                              onPressed: () => Navigator.of(context).pop(false),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(52),
-                                foregroundColor: AppColors.orange,
-                                side: const BorderSide(color: AppColors.orange),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontFamily: AppTheme.fontFamily,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                  height: 1.2,
-                                ),
-                              ),
-                              child: const Text('Нет'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton(
-                              key: yesKey,
-                              onPressed: () => Navigator.of(context).pop(true),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(52),
-                                backgroundColor: AppColors.orange,
-                                foregroundColor: AppColors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontFamily: AppTheme.fontFamily,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                  height: 1.2,
-                                ),
-                              ),
-                              child: const Text('Да'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -27,6 +27,10 @@ void main() {
     expect(parseBirthdate('01.01.1990', now: now), DateTime(1990, 1, 1));
   });
 
+  test('formats calendar date as DD.MM.YYYY', () {
+    expect(formatBirthdate(DateTime(1995, 8, 17)), '17.08.1995');
+  });
+
   test('age helper treats under 18 as not adult', () {
     final now = DateTime(2026, 9, 16);
     expect(isAdult(DateTime(2010, 1, 1), now: now), isFalse);

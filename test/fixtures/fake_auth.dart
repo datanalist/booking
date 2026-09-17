@@ -9,6 +9,7 @@ class FakeAuthRepository implements AuthRepository {
   String? lastEmail;
   String? lastPhone;
   String? lastOtp;
+  String? lastUpdatedEmail;
   bool failOtpRequest = false;
   bool failOtpVerify = false;
   bool failProfile = false;
@@ -168,6 +169,40 @@ class FakeAuthRepository implements AuthRepository {
     );
     return session;
   }
+
+  @override
+  Future<AuthSession> updatePersonalData({
+    required String firstName,
+    required String lastName,
+    required DateTime birthdate,
+    required String email,
+    File? avatar,
+    bool limitedBrowse = false,
+  }) async {
+    if (session.userId.isEmpty) {
+      throw const AuthException(
+        'Войдите в аккаунт, чтобы сохранить данные',
+      );
+    }
+    if (failProfile) {
+      throw const AuthException('Не удалось сохранить профиль');
+    }
+    lastUpdatedEmail = email.trim();
+    session = AuthSession(
+      userId: session.userId,
+      email: email.trim(),
+      phone: session.phone,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      displayName: '${firstName.trim()} ${lastName.trim()}',
+      avatarUrl: session.avatarUrl,
+      birthdate: birthdate,
+      profileComplete: true,
+      limitedBrowse: limitedBrowse,
+    );
+    AuthRepositoryScope.session.value = session;
+    return session;
+  }
 }
 
 class FakePhotoLibrary implements PhotoLibrary {
@@ -176,12 +211,22 @@ class FakePhotoLibrary implements PhotoLibrary {
   bool galleryGranted;
   bool cameraGranted;
   bool captureCalled = false;
+  int galleryRequests = 0;
+  int cameraRequests = 0;
+  bool? lastGalleryLimited;
 
   @override
-  Future<bool> requestGallery({required bool limited}) async => galleryGranted;
+  Future<bool> requestGallery({required bool limited}) async {
+    galleryRequests += 1;
+    lastGalleryLimited = limited;
+    return galleryGranted;
+  }
 
   @override
-  Future<bool> requestCamera() async => cameraGranted;
+  Future<bool> requestCamera() async {
+    cameraRequests += 1;
+    return cameraGranted;
+  }
 
   @override
   Future<List<PhotoAssetItem>> list({int limit = 90}) async {
@@ -194,7 +239,7 @@ class FakePhotoLibrary implements PhotoLibrary {
   @override
   Future<File?> load(PhotoAssetItem item) async {
     final file = File('${Directory.systemTemp.path}/fake_gallery.png');
-    await file.writeAsBytes(_png);
+    file.writeAsBytesSync(_png);
     return file;
   }
 
@@ -202,7 +247,7 @@ class FakePhotoLibrary implements PhotoLibrary {
   Future<File?> capture() async {
     captureCalled = true;
     final file = File('${Directory.systemTemp.path}/fake_camera.png');
-    await file.writeAsBytes(_png);
+    file.writeAsBytesSync(_png);
     return file;
   }
 
