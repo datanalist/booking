@@ -2,7 +2,7 @@
 
 Клиентское Flutter-приложение для бронирования жилья. Макет: [Figma — Booking](https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking).
 
-Бэкенд — PocketBase на `https://pb.booking.vallome.ru`. Каталог опубликованных объявлений клиент читает по API; брони, избранное и чаты ещё не подключены. Вход по email — passwordless OTP в коллекцию `users`.
+Бэкенд — PocketBase на `https://pb.booking.vallome.ru`. Каталог опубликованных объявлений и брони гостя клиент читает и пишет по API; избранное и чаты ещё не подключены. Вход по email — письмо с кнопкой **Авторизоваться** (под капотом OTP коллекции `users`, без ввода кода).
 
 ## Что сделано
 
@@ -29,7 +29,7 @@
 | Вкладка | Состояние |
 | --- | --- |
 | Поиск | Живой каталог из PocketBase, карта Mapbox, фильтры, карточка объявления |
-| Брони | UI сегментов «Текущие» / «Прошлые», список пустой |
+| Брони | Живые записи коллекции `bookings`: «Текущие» и «Прошлые» (`completed` / `cancelled`) |
 | Избранное | UI карточек, список пустой (серверное избранное не читается) |
 | Чаты | Макет списка на локальных заглушках |
 | Профиль | Имя и аватар сессии после входа; пункты меню пока локальные заглушки |
@@ -40,23 +40,24 @@
 - Форма «Снять жилье» — отдельный экран (`MaterialPageRoute`), не modal-sheet: так поле города принимает клавиатуру на Android 16
 - Чипы под шапкой — только параметры этой формы (город, даты, гости)
 - Список и карта с пинами; фото с файлового API PocketBase (`ListingImage`)
-- Деталка: галерея, удобства, хозяин; «Смотреть все» открывает список объявлений хозяина
+- Деталка: галерея, удобства, хозяин; «Смотреть все» открывает список объявлений хозяина; **Забронировать** создаёт запись `pending_host` в `bookings`
 - Сердце избранного — глиф Iconly (`FavoriteHeartButton`); состояние локальное, вкладка «Избранное» с PocketBase не связана
 
 **Авторизация**
-- Email: свой адрес → 5-значный код из письма (`requestOTP` / `authWithOTP`). Заглушки `example@mail.com` нет
+- Email: свой адрес → письмо от **vallome.booking** с кнопкой **Авторизоваться**. Поля кода нет. После клика вернитесь в приложение: экран ожидания сам подхватывает сессию (опрос `/api/vallome/magic-wait`). Ссылки `vallome-booking://` на Ubuntu открывают магазин приложений — на компьютере ими не пользоваться
+- Сессия пишется в `SharedPreferences` (`pb_auth`) и переживает перезапуск: сплэш сразу открывает оболочку или дорегистрацию
 - Телефон пока заглушка: тап по полю подставляет `+79999999999`, код `77777`
-- Чекбокс пользовательского соглашения обязателен до **Продолжить**
+- Чекбокс пользовательского соглашения обязателен до **Далее**
 - Новый пользователь заполняет имя, фамилию, дату рождения (18+) и фото профиля
 - Доступ к фото / камере — диалоги в стиле iOS (Figma), затем системный picker (`image_picker`). `photo_manager` не используем: его Kotlin-плагин надолго вешает Gradle
 - Образец фото в галерею эмулятора: `bash scripts/push_emulator_gallery.sh`
 
-**Ещё не сделано:** настоящий OTP по телефону, создание брони, серверные избранное и чаты.
+**Ещё не сделано:** настоящий OTP по телефону, оплата предоплаты и ответ хозяина, серверные избранное и чаты.
 
 **Прочее**
 - Тема `AppTheme`, locale `ru_RU`, edge-to-edge, скрыт debug-banner
-- Нативный Android splash — белый фон, подпись GlobalStay; в манифесте `INTERNET` и `windowSoftInputMode=adjustPan`
-- Виджет-тесты: сплэш → онбординг → auth/OTP/регистрация, поиск, фильтры, деталка (репозиторий подменяется фикстурой)
+- Нативный Android splash — белый фон, подпись GlobalStay; в манифесте `INTERNET` и `windowSoftInputMode=adjustResize` (клавиатура не ломает экран авторизации)
+- Виджет-тесты: сплэш → онбординг → auth/magic-link/регистрация, поиск, фильтры, деталка, брони (репозиторий подменяется фикстурой)
 
 ## Бэкенд
 
@@ -68,18 +69,27 @@ flutter run -d linux --dart-define=POCKETBASE_URL=https://example.com
 
 Схема коллекций — [`pb_schema.json`](pb_schema.json) и [`docs/pocketbase-schema.md`](docs/pocketbase-schema.md). Сервер (Caddy, TLS) — [`docs/pocketbase-server.md`](docs/pocketbase-server.md).
 
-Каталог для разработки наполняет идемпотентный сид (нужны `POCKETBASE_SU` и `POCKETBASE_SU_PASSWORD` в `.env.local`, шаблон — [`.env.example`](.env.example)):
+Каталог и схему для разработки наполняют идемпотентные скрипты (нужны `POCKETBASE_SU` и `POCKETBASE_SU_PASSWORD` в `.env.local`, шаблон — [`.env.example`](.env.example)):
 
 ```bash
 python3 scripts/seed_listings.py
 python3 scripts/seed_listings.py --reset   # удалить сид-объявления и создать заново
-python3 scripts/enable_email_otp.py        # 5-значный OTP на email + SMTP
+python3 scripts/enable_email_otp.py        # magic-link (OTP) на email + SMTP, отправитель vallome.booking
+python3 scripts/ensure_bookings.py         # коллекция bookings, правила и индексы
 bash scripts/push_emulator_gallery.sh      # фото профиля в галерею эмулятора
 ```
 
+Хуки PocketBase (`pb_hooks/`) на сервере в `/opt/pocketbase/pb_hooks` с `--hooksDir=/opt/pocketbase/pb_hooks`:
+
+| Файл | Зачем |
+| --- | --- |
+| `otp_signup.pb.js` | Создать `users`, если email ещё нет — иначе письмо не уйдёт |
+| `magic_link.pb.js` | HTML письма с кнопкой **Авторизоваться**, маршруты `/api/vallome/magic-auth` и `/api/vallome/magic-wait` |
+| `bookings_overlap.pb.js` | Запрет пересечения дат на занятом жилье |
+
 Пять опубликованных объявлений (Москва, Казань, Санкт-Петербург) и один черновик. Пароль сид-пользователей каталога: `SeedPass123!`.
 
-Вход в приложении: свой email → код из письма. Телефон пока заглушка `+79999999999` / код `77777`.
+Вход в приложении: свой email → письмо → **Авторизоваться** → вернуться в приложение. Телефон пока заглушка `+79999999999` / код `77777`.
 
 Токен Mapbox — `config/mapbox.env` (не в git) или `--dart-define=MAPBOX_TOKEN=...`. Пример: `config/mapbox.env.example`.
 
@@ -161,31 +171,35 @@ Booking/
 │   ├── main.dart
 │   ├── theme/app_theme.dart
 │   ├── config/                    # PocketBase URL, Mapbox
-│   ├── data/                      # клиент PB, ListingsRepository, AuthRepository
+│   ├── data/                      # клиент PB, auth, listings, bookings
 │   ├── widgets/                   # ListingImage, FavoriteHeartButton
 │   ├── shell/main_shell.dart      # нижняя панель
 │   └── screens/
 │       ├── splash_screen.dart
 │       ├── onboarding_screen.dart
-│       ├── auth/                  # email/phone, OTP, регистрация, фото
+│       ├── auth/                  # email magic-link, phone stub, регистрация, фото
 │       ├── search/                # каталог, карта, фильтры, запрос
 │       ├── listing/               # деталка и список объявлений хозяина
-│       ├── bookings/
+│       ├── bookings/              # текущие / прошлые из API
 │       ├── favorites/
 │       ├── chat/
 │       └── profile/
+├── pb_hooks/                      # JS-хуки PocketBase (копировать на VPS)
 ├── scripts/
 │   ├── seed_listings.py
 │   ├── enable_email_otp.py
+│   ├── ensure_bookings.py
 │   └── push_emulator_gallery.sh
 ├── test/
 │   ├── fixtures/demo_listings.dart
 │   ├── fixtures/fake_auth.dart
+│   ├── fixtures/fake_bookings.dart
 │   ├── widget_test.dart
 │   ├── auth_screen_test.dart
 │   ├── otp_register_test.dart
 │   ├── search_screen_test.dart
-│   └── listing_detail_screen_test.dart
+│   ├── listing_detail_screen_test.dart
+│   └── bookings_screen_test.dart
 ├── images/
 ├── fonts/
 ├── docs/
