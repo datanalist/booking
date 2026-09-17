@@ -201,12 +201,16 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
       );
       if (!mounted) return;
       if (emailChanged) {
+        final nextEmail = _email.text.trim();
         await _auth.signOut();
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder<void>(
             pageBuilder: (context, animation, secondaryAnimation) {
-              return AuthScreen(authRepository: _auth);
+              return AuthScreen(
+                authRepository: _auth,
+                initialIdentity: nextEmail,
+              );
             },
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);

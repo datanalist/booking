@@ -435,9 +435,8 @@ class PocketBaseAuthRepository implements AuthRepository {
       'limited_browse': limitedBrowse,
     };
     final currentEmail = _pb.authStore.record!.get<String>('email', '');
-    if (identity.toLowerCase() != currentEmail.toLowerCase()) {
-      body['email'] = identity;
-    }
+    final emailChanged =
+        identity.toLowerCase() != currentEmail.toLowerCase();
 
     final files = <http.MultipartFile>[];
     if (avatar != null) {
@@ -451,17 +450,57 @@ class PocketBaseAuthRepository implements AuthRepository {
     }
 
     try {
+      if (emailChanged) {
+        await _applyEmailChange(identity);
+      }
       final record = await _pb
           .collection(PbCollection.users)
           .update(recordId, body: body, files: files);
-      _session = _fromRecord(record, fallbackEmail: identity);
+      final session = _fromRecord(record, fallbackEmail: currentEmail);
+      if (session == null) {
+        throw const AuthException('Не удалось сохранить профиль');
+      }
+      _session = session;
       AuthRepositoryScope.session.value = _session;
       return _session!;
+    } on AuthException {
+      rethrow;
     } on ClientException catch (error) {
       if (_isExistingEmail(error)) {
         throw const AuthException('Этот email уже занят');
       }
       throw AuthException(_messageFor(error));
+    }
+  }
+
+  /// Stages a pending email change. PocketBase rejects PATCH `users.email`
+  /// without manage access; the address is applied only after magic-link
+  /// login to the new inbox.
+  Future<void> _applyEmailChange(String email) async {
+    try {
+      await _pb.send(
+        '/api/vallome/change-email',
+        method: 'POST',
+        body: {'email': email},
+      );
+    } on ClientException catch (error) {
+      if (_isExistingEmail(error)) {
+        throw const AuthException('Этот email уже занят');
+      }
+      final status = error.statusCode;
+      final message = error.response['message']?.toString() ?? '';
+      if (message == 'Введите корректный email') {
+        throw const AuthException('Введите корректный email');
+      }
+      if (message == 'Этот email уже занят') {
+        throw const AuthException('Этот email уже занят');
+      }
+      if (status == 400 || status == 401 || status == 403 || status == 404) {
+        throw const AuthException('Не удалось сменить email');
+      }
+      throw const AuthException(
+        'Не удалось сменить email. Проверьте соединение',
+      );
     }
   }
 
@@ -515,11 +554,17 @@ class PocketBaseAuthRepository implements AuthRepository {
 
   static bool _isExistingEmail(ClientException error) {
     if (error.statusCode != 400) return false;
+    if (error.response['message']?.toString() == 'Этот email уже занят') {
+      return true;
+    }
     final data = error.response['data'];
     if (data is! Map) return false;
     final email = data['email'];
     if (email is! Map) return false;
-    return email['code'] == 'validation_not_unique';
+    final code = email['code']?.toString() ?? '';
+    final message = email['message']?.toString() ?? '';
+    return code == 'validation_not_unique' ||
+        message == 'Этот email уже занят';
   }
 
   static String _messageFor(

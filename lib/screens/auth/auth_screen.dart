@@ -27,6 +27,7 @@ class AuthScreen extends StatefulWidget {
     super.key,
     this.authRepository,
     this.onSignedIn,
+    this.initialIdentity = '',
   });
 
   final AuthRepository? authRepository;
@@ -34,12 +35,15 @@ class AuthScreen extends StatefulWidget {
   /// После полного входа. Если не задан — открывается оболочка.
   final ValueChanged<AuthSession>? onSignedIn;
 
+  /// Подстановка после выхода из‑за смены email.
+  final String initialIdentity;
+
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  final _identity = TextEditingController();
+  late final TextEditingController _identity;
   final _identityFocus = FocusNode();
   bool _busy = false;
   bool _acceptedTerms = false;
@@ -47,6 +51,12 @@ class _AuthScreenState extends State<AuthScreen> {
 
   AuthRepository get _auth =>
       widget.authRepository ?? AuthRepositoryScope.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    _identity = TextEditingController(text: widget.initialIdentity);
+  }
 
   @override
   void dispose() {

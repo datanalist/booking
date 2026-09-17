@@ -37,6 +37,22 @@ void main() {
     expect(find.text('me@example.com'), findsOneWidget);
   });
 
+  testWidgets('initialIdentity prefills the identity field', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AuthScreen(
+          authRepository: FakeAuthRepository(),
+          initialIdentity: 'anna.ivanova@mail.com',
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<TextField>(identityField()).controller?.text,
+      'anna.ivanova@mail.com',
+    );
+  });
+
   testWidgets('continue requests email magic link after terms are accepted', (
     tester,
   ) async {

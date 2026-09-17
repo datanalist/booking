@@ -13,6 +13,8 @@ class FakeAuthRepository implements AuthRepository {
   bool failOtpRequest = false;
   bool failOtpVerify = false;
   bool failProfile = false;
+  bool failEmailOccupied = false;
+  final occupiedEmails = <String>{};
   bool failDeleteAccount = false;
   bool existingProfile = false;
   bool completeOnPoll = false;
@@ -187,10 +189,14 @@ class FakeAuthRepository implements AuthRepository {
     if (failProfile) {
       throw const AuthException('Не удалось сохранить профиль');
     }
+    if (failEmailOccupied ||
+        occupiedEmails.contains(email.trim().toLowerCase())) {
+      throw const AuthException('Этот email уже занят');
+    }
     lastUpdatedEmail = email.trim();
     session = AuthSession(
       userId: session.userId,
-      email: email.trim(),
+      email: session.email,
       phone: session.phone,
       firstName: firstName.trim(),
       lastName: lastName.trim(),

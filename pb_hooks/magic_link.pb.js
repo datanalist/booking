@@ -97,6 +97,7 @@ function magicAuthHandler(e) {
   const INVALID_MSG = "Ссылка недействительна или устарела."
   const EXPIRED_MSG =
     "Ссылка недействительна или устарела. Запросите новое письмо в приложении."
+  const OCCUPIED_MSG = "Этот email уже занят."
 
   function str(value) {
     return value == null ? "" : String(value)
@@ -281,30 +282,99 @@ function magicAuthHandler(e) {
       throw new Error("expired")
     }
     const email = str(pending.email).trim().toLowerCase()
+    const changeUserId = str(pending.userId).trim()
     if (!email) {
       throw new Error("invalid")
     }
+
+    function findUserByEmail(identity) {
+      try {
+        const found = e.app.findAuthRecordByEmail("users", identity)
+        if (found) return found
+      } catch (err) {}
+      try {
+        const found = e.app.findFirstRecordByFilter(
+          "users",
+          "email = {:email}",
+          { email: identity },
+        )
+        if (found) return found
+      } catch (err) {}
+      return null
+    }
+
+    function clearEmailChange(userId, identity) {
+      try {
+        if (identity) $app.store().remove("emailChange:" + identity)
+        if (userId) $app.store().remove("emailChangeUser:" + userId)
+      } catch (err) {}
+    }
+
     var record = null
-    try {
-      record = e.app.findAuthRecordByEmail("users", email)
-    } catch (err) {}
-    if (!record) {
-      const collection = e.app.findCollectionByNameOrId("users")
-      record = new Record(collection)
+    if (changeUserId) {
+      try {
+        record = e.app.findRecordById("users", changeUserId)
+      } catch (err) {}
+      if (!record) {
+        throw new Error("invalid")
+      }
+      const occupier = findUserByEmail(email)
+      if (occupier && occupier.id !== record.id) {
+        clearEmailChange(record.id, email)
+        throw new Error("occupied")
+      }
       record.setEmail(email)
-      record.setRandomPassword()
       if (typeof record.setVerified === "function") {
         record.setVerified(true)
       }
-      e.app.save(record)
-    } else {
-      const isVerified =
-        typeof record.verified === "function"
-          ? record.verified()
-          : !!record.get("verified")
-      if (!isVerified && typeof record.setVerified === "function") {
-        record.setVerified(true)
+      try {
         e.app.save(record)
+      } catch (err) {
+        const text = str(err).toLowerCase()
+        if (text.indexOf("unique") >= 0 || text.indexOf("email") >= 0) {
+          clearEmailChange(record.id, email)
+          throw new Error("occupied")
+        }
+        throw err
+      }
+      clearEmailChange(record.id, email)
+    } else {
+      record = findUserByEmail(email)
+      if (!record) {
+        const collection = e.app.findCollectionByNameOrId("users")
+        record = new Record(collection)
+        record.setEmail(email)
+        record.setRandomPassword()
+        if (typeof record.setVerified === "function") {
+          record.setVerified(true)
+        }
+        try {
+          e.app.save(record)
+        } catch (err) {
+          const text = str(err).toLowerCase()
+          if (text.indexOf("unique") >= 0 || text.indexOf("email") >= 0) {
+            throw new Error("occupied")
+          }
+          throw err
+        }
+      } else {
+        const isVerified =
+          typeof record.verified === "function"
+            ? record.verified()
+            : !!record.get("verified")
+        if (!isVerified && typeof record.setVerified === "function") {
+          record.setVerified(true)
+          e.app.save(record)
+        }
+        try {
+          const stored = str($app.store().get("emailChangeUser:" + record.id))
+          if (stored && stored !== "null" && stored !== "undefined") {
+            const prev = JSON.parse(stored)
+            const oldEmail = str(prev && prev.email).trim().toLowerCase()
+            if (oldEmail) $app.store().remove("emailChange:" + oldEmail)
+            $app.store().remove("emailChangeUser:" + record.id)
+          }
+        } catch (err) {}
       }
     }
     try {
@@ -374,6 +444,9 @@ function magicAuthHandler(e) {
       return sendHtml(200, successPage(token))
     } catch (err) {
       logErr(err)
+      if (str(err).indexOf("occupied") >= 0) {
+        return sendHtml(400, errorPage(OCCUPIED_MSG))
+      }
       return sendHtml(400, errorPage(EXPIRED_MSG))
     }
   } catch (err) {
@@ -519,12 +592,42 @@ function magicRequestHandler(e) {
     }
     const otpId = randomId()
     const code = randomCode()
+    var changeUserId = ""
+    try {
+      const raw = str($app.store().get("emailChange:" + email))
+      if (raw && raw !== "null" && raw !== "undefined") {
+        const change = JSON.parse(raw)
+        if (
+          change &&
+          str(change.userId) &&
+          Number(change.expires || 0) >= Date.now()
+        ) {
+          var occupier = null
+          try {
+            occupier = e.app.findAuthRecordByEmail("users", email)
+          } catch (err) {}
+          try {
+            if (!occupier) {
+              occupier = e.app.findFirstRecordByFilter(
+                "users",
+                "email = {:email}",
+                { email: email },
+              )
+            }
+          } catch (err) {}
+          if (!occupier || occupier.id === str(change.userId)) {
+            changeUserId = str(change.userId)
+          }
+        }
+      }
+    } catch (err) {}
     $app.store().set(
       "magicPending:" + otpId,
       JSON.stringify({
         email: email,
         code: code,
         expires: Date.now() + TTL_MS,
+        userId: changeUserId,
       }),
     )
     sendMail(email, otpId, code)

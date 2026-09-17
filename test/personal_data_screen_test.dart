@@ -389,6 +389,15 @@ void main() {
     expect(auth.currentSession(), isNull);
     expect(AuthRepositoryScope.session.value, isNull);
     expect(find.text('Авторизация'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey<String>('auth-identity-field')),
+          )
+          .controller
+          ?.text,
+      'anna.ivanova@mail.com',
+    );
     expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsNothing);
     expect(find.text('Личные данные'), findsNothing);
   });
@@ -425,6 +434,50 @@ void main() {
     expect(find.byKey(const ValueKey<String>('personal-data-error')), findsOneWidget);
     expect(find.text('Не удалось сохранить профиль'), findsOneWidget);
     expect(find.text('Авторизация'), findsNothing);
+  });
+
+  testWidgets('occupied email stays signed in with a specific error', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository()
+      ..session = guestSession()
+      ..occupiedEmails.add('taken@mail.com');
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PersonalDataScreen(authRepository: auth),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('personal-data-email')),
+      'Taken@Mail.com',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-email-yes')));
+    await tester.pumpAndSettle();
+
+    expect(auth.lastUpdatedEmail, isNull);
+    expect(auth.session.email, 'vladislav_kovalenko@gmail.com');
+    expect(auth.session.firstName, 'Владислав');
+    expect(auth.currentSession(), isNotNull);
+    expect(find.byKey(const ValueKey<String>('personal-data-error')), findsOneWidget);
+    expect(find.text('Этот email уже занят'), findsOneWidget);
+    expect(find.text('Авторизация'), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey<String>('personal-data-email')),
+          )
+          .controller
+          ?.text,
+      'Taken@Mail.com',
+    );
   });
 
   testWidgets('avatar tap shows the access dialog the first time', (

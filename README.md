@@ -47,7 +47,7 @@
 - Профиль → **Личные данные** (макет Figma `1:14538`)
 - Форма подставляет текущие `first_name`, `last_name`, `birthdate`, `email` и `avatar` сессии
 - **Сохранить** пишет только запись текущего пользователя в PocketBase `users` (id из auth store, тело запроса через SDK, без склейки SQL/filter)
-- Если email изменился (без учёта регистра и пробелов по краям), **Сохранить** сначала показывает модалку в стиле выхода: **Нет** или тап вне карточки отменяет сохранение и возвращает в поле текущий email сессии; **Да** записывает анкету, затем выходит из аккаунта (`AuthRepository.signOut`) и открывает экран авторизации — старый токен не оставляем
+- Если email изменился (без учёта регистра и пробелов по краям), **Сохранить** сначала показывает модалку в стиле выхода: **Нет** или тап вне карточки отменяет сохранение и возвращает в поле текущий email сессии; **Да** сначала проверяет уникальность нового адреса (`POST /api/vallome/change-email`): **один пользователь — один email**, занятый в `users` или уже заявленный другим гостем адрес даёт «Этот email уже занят», сессия остаётся, имя/фото не пишутся. Свободный адрес ставит заявку, затем клиент пишет имя/дату/фото и выходит на авторизацию с подставленным новым адресом. Почта записи меняется только после magic-link **на новый ящик**. Если к этому моменту адрес уже занят, страница ссылки показывает «Этот email уже занят», запись не трогается. Вход по старому адресу снимает заявку.
 - Если email тот же, сохранение как раньше: без модалки, возврат на вкладку «Профиль»
 - После сохранения имя и аватар на вкладке «Профиль» берутся из обновлённой сессии
 - Дата рождения — `ДД.ММ.ГГГГ`, 18+; младше 18 лет остаются с `limited_browse`
@@ -107,12 +107,18 @@ python3 scripts/ensure_bookings.py         # коллекция bookings, пра
 bash scripts/push_emulator_gallery.sh      # фото профиля в галерею эмулятора
 ```
 
-Хуки PocketBase (`pb_hooks/`) на сервере в `/opt/pocketbase/pb_hooks` с `--hooksDir=/opt/pocketbase/pb_hooks`:
+Хуки PocketBase (`pb_hooks/`) на сервере в `/opt/pocketbase/pb_hooks` с `--hooksDir=/opt/pocketbase/pb_hooks`. Новый файл (например `change_email.pb.js`):
+
+```bash
+scp pb_hooks/change_email.pb.js root@159.194.252.80:/tmp/change_email.pb.js
+ssh root@159.194.252.80 'install -o pocketbase -g pocketbase -m 644 /tmp/change_email.pb.js /opt/pocketbase/pb_hooks/change_email.pb.js && systemctl restart pocketbase'
+```
 
 | Файл | Зачем |
 | --- | --- |
 | `otp_signup.pb.js` | Не создаёт `users` на запрос письма |
-| `magic_link.pb.js` | `POST /api/vallome/magic-request` шлёт письмо без записи в БД; пользователь создаётся при клике «Авторизоваться»; `/api/vallome/magic-auth` и `/api/vallome/magic-wait` |
+| `magic_link.pb.js` | `POST /api/vallome/magic-request` шлёт письмо без записи в БД; пользователь создаётся при клике «Авторизоваться»; `/api/vallome/magic-auth` и `/api/vallome/magic-wait`; подтверждённая заявка на смену email применяется здесь |
+| `change_email.pb.js` | `POST /api/vallome/change-email`: заявка на смену email текущего пользователя; адрес применяется только после magic-link на новый ящик |
 | `bookings_overlap.pb.js` | Запрет пересечения дат на занятом жилье |
 
 Пять опубликованных объявлений (Москва, Казань, Санкт-Петербург) и один черновик. Пароль сид-пользователей каталога: `SeedPass123!`.
@@ -213,7 +219,7 @@ Booking/
 │       ├── favorites/
 │       ├── chat/
 │       └── profile/               # меню, личные данные, выход
-├── pb_hooks/                      # JS-хуки PocketBase (копировать на VPS)
+├── pb_hooks/                      # JS-хуки PocketBase (копировать на VPS; без change_email.pb.js смена почты в профиле не работает)
 ├── scripts/
 │   ├── seed_listings.py
 │   ├── enable_email_otp.py
