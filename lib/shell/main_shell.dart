@@ -54,7 +54,9 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value:
-          (_index == 0 ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          (_index == 0 || _index == 1
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark)
               .copyWith(
                 statusBarColor: Colors.transparent,
                 systemNavigationBarColor: AppColors.tabBarFill,

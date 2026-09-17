@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -49,15 +50,23 @@ void main() {
     await tester.pumpWidget(_app(const BookingsScreen()));
     await tester.pumpAndSettle();
 
+    expect(find.text('Предстоящие'), findsOneWidget);
+    expect(find.text('Архив'), findsOneWidget);
+    expect(find.byType(SvgPicture), findsOneWidget);
+    final illustration = tester.widget<SvgPicture>(find.byType(SvgPicture));
+    expect(illustration.width, 171.532);
+    expect(illustration.height, 160);
+    expect(tester.getSize(find.byType(SvgPicture)).width, closeTo(171.532, 0.6));
+    expect(tester.getSize(find.byType(SvgPicture)).height, closeTo(160, 0.6));
     expect(
-      find.text('Забронированное жилье будет отображаться здесь'),
+      find.text('Забронированное жилье\nбудет отображаться здесь'),
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Прошлые'));
+    await tester.tap(find.text('Архив'));
     await tester.pumpAndSettle();
     expect(
-      find.text('История бронирований будет отображаться здесь'),
+      find.text('Архив бронирований\nбудет отображаться здесь'),
       findsOneWidget,
     );
   });
@@ -81,7 +90,7 @@ void main() {
     expect(find.text('ожидание подтверждения от владельца'), findsOneWidget);
     expect(find.text('Лофт у Казанского кремля'), findsNothing);
 
-    await tester.tap(find.text('Прошлые'));
+    await tester.tap(find.text('Архив'));
     await tester.pumpAndSettle();
     expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
     expect(find.text('отменено'), findsOneWidget);
