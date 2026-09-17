@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../data/booking_draft.dart';
 import '../../data/bookings_repository.dart';
@@ -11,13 +14,16 @@ import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
 import 'host_listings_screen.dart';
 import 'listing_detail.dart';
+import 'listing_icons.dart';
 import 'stay_dates_sheet.dart';
 
-const _meta = Color(0xFF525252);
+const _meta = Color(0xFF525353);
 const _divider = Color(0xFFFFE3B7);
 const _reviewFill = Color(0x0FFBC028);
 const _reviewStroke = Color(0x2BFBC028);
-const _badgeGreen = Color(0xFF49CB5E);
+const _badgeGreen = Color.fromRGBO(73, 204, 95, 0.97);
+const _heroOverlay = Color.fromRGBO(16, 51, 99, 0.05);
+const _dotInactive = Color.fromRGBO(251, 192, 40, 0.17);
 
 class ListingDetailScreen extends StatefulWidget {
   const ListingDetailScreen({
@@ -142,7 +148,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     final favorite = _isFavorite(listing.id);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
+      value: SystemUiOverlayStyle.light.copyWith(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: AppColors.white,
         systemNavigationBarIconBrightness: Brightness.dark,
@@ -170,23 +176,41 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                      padding: const EdgeInsets.only(top: 24, bottom: 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _Header(detail: detail),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: _Header(detail: detail),
+                          ),
                           const SizedBox(height: 20),
-                          const _Hairline(),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: _Hairline(),
+                          ),
                           const SizedBox(height: 20),
-                          _Amenities(items: detail.amenities),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: _Amenities(items: detail.amenities),
+                          ),
                           const SizedBox(height: 20),
-                          const _Hairline(),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: _Hairline(),
+                          ),
                           const SizedBox(height: 20),
                           _Reviews(detail: detail),
                           const SizedBox(height: 20),
-                          const _Hairline(),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: _Hairline(),
+                          ),
                           const SizedBox(height: 20),
-                          _Host(host: detail.host),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: _Host(host: detail.host),
+                          ),
                           if (detail.hostListings.isNotEmpty) ...[
                             const SizedBox(height: 20),
                             _HostListings(
@@ -254,7 +278,13 @@ class _HeroGallery extends StatelessWidget {
             itemCount: photos.length,
             onPageChanged: onPageChanged,
             itemBuilder: (context, page) {
-              return ListingImage(photos[page], fit: BoxFit.cover);
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  ListingImage(photos[page], fit: BoxFit.cover),
+                  const ColoredBox(color: _heroOverlay),
+                ],
+              );
             },
           ),
           Positioned(
@@ -269,9 +299,9 @@ class _HeroGallery extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _CircleButton(
-                      icon: Icons.arrow_back,
                       tooltip: 'Назад',
                       onTap: onBack,
+                      child: const _BackArrowIcon(),
                     ),
                     FavoriteHeartButton(
                       key: const ValueKey('listing-hero-favorite'),
@@ -298,16 +328,14 @@ class _HeroGallery extends StatelessWidget {
 
 class _CircleButton extends StatelessWidget {
   const _CircleButton({
-    required this.icon,
+    required this.child,
     required this.onTap,
     required this.tooltip,
-    this.color = AppColors.textPrimary,
   });
 
-  final IconData icon;
+  final Widget child;
   final VoidCallback onTap;
   final String tooltip;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -322,9 +350,32 @@ class _CircleButton extends StatelessWidget {
           child: SizedBox(
             width: 36,
             height: 36,
-            child: Icon(icon, size: 20, color: color),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: Center(child: child),
+              ),
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BackArrowIcon extends StatelessWidget {
+  const _BackArrowIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: math.pi / 2,
+      child: SvgPicture.asset(
+        'images/profile/arrow-left.svg',
+        width: 13.1667,
+        height: 7.33333,
+        excludeFromSemantics: true,
       ),
     );
   }
@@ -348,9 +399,7 @@ class _PhotoDots extends StatelessWidget {
             width: i == index ? 16 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: i == index
-                  ? AppColors.white
-                  : AppColors.white.withValues(alpha: 0.55),
+              color: i == index ? AppColors.white : _dotInactive,
               borderRadius: BorderRadius.circular(50),
             ),
           ),
@@ -378,14 +427,14 @@ class _Header extends StatelessWidget {
             fontWeight: FontWeight.w700,
             fontSize: 18,
             height: 1.2,
-            letterSpacing: 0.02,
+            letterSpacing: 0.018,
             color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
-        _MetaRow(icon: Icons.location_on_outlined, label: detail.address),
+        _MetaRow(icon: ListingFigmaIcon.mapPin16, label: detail.address),
         const SizedBox(height: 6),
-        _MetaRow(icon: Icons.home_outlined, label: listing.type),
+        _MetaRow(icon: ListingFigmaIcon.home16, label: listing.type),
         const SizedBox(height: 12),
         Text(
           detail.description,
@@ -405,14 +454,14 @@ class _Header extends StatelessWidget {
 class _MetaRow extends StatelessWidget {
   const _MetaRow({required this.icon, required this.label});
 
-  final IconData icon;
+  final Widget icon;
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: _meta),
+        icon,
         const SizedBox(width: 6),
         Expanded(
           child: Text(
@@ -527,50 +576,54 @@ class _Reviews extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Text(
-              'Отзывы',
-              style: TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                height: 1.40,
-                color: AppColors.textPrimary,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              const Text(
+                'Отзывы',
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  height: 1.40,
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              listing.rating,
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                height: 1.50,
-                color: AppColors.textPrimary,
+              const SizedBox(width: 4),
+              Text(
+                listing.rating,
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  height: 1.50,
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(Icons.star, size: 18, color: AppColors.yellow),
-            const SizedBox(width: 2),
-            Text(
-              reviewCountLabel(count),
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                height: 1.50,
-                color: AppColors.textPrimary,
+              const SizedBox(width: 2),
+              ListingFigmaIcon.star18,
+              const SizedBox(width: 2),
+              Text(
+                reviewCountLabel(count),
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  height: 1.50,
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-            const Spacer(),
-            const _SeeAll(),
-          ],
+              const Spacer(),
+              const _SeeAll(),
+            ],
+          ),
         ),
         if (detail.reviews.isNotEmpty) ...[
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -674,7 +727,7 @@ class _ReviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          _Stars(count: review.stars, size: 13),
+          _ReviewStars(count: review.stars),
           const SizedBox(height: 10),
           Text(
             review.text,
@@ -715,7 +768,11 @@ class _Host extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            _Avatar(label: host.name, size: 40),
+            _Avatar(
+              label: host.name,
+              url: host.avatarUrl,
+              size: 56,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -755,8 +812,8 @@ class _Host extends StatelessWidget {
                           color: _meta,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      const Flexible(child: _Stars(count: 5, size: 12)),
+                      const SizedBox(width: 2),
+                      const Flexible(child: _HostStars()),
                     ],
                   ),
                 ],
@@ -771,12 +828,12 @@ class _Host extends StatelessWidget {
           children: [
             if (host.verified)
               const _HostBadge(
-                icon: Icons.verified_outlined,
+                icon: ListingFigmaIcon.security,
                 label: 'Верификация пройдена',
               ),
             if (host.years > 0)
               _HostBadge(
-                icon: Icons.calendar_month_outlined,
+                icon: ListingFigmaIcon.time,
                 label: yearsHostingLabel(host.years),
               ),
           ],
@@ -789,7 +846,7 @@ class _Host extends StatelessWidget {
 class _HostBadge extends StatelessWidget {
   const _HostBadge({required this.icon, required this.label});
 
-  final IconData icon;
+  final Widget icon;
   final String label;
 
   @override
@@ -803,7 +860,7 @@ class _HostBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: AppColors.white),
+          icon,
           const SizedBox(width: 4),
           Text(
             label,
@@ -841,29 +898,33 @@ class _HostListings extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Другие объявления владельца',
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  height: 1.40,
-                  color: AppColors.textPrimary,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Другие объявления владельца',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    height: 1.40,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
-            ),
-            _SeeAll(
-              key: const ValueKey('listing-host-see-all'),
-              onTap: onSeeAll,
-            ),
-          ],
+              _SeeAll(
+                key: const ValueKey('listing-host-see-all'),
+                onTap: onSeeAll,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
             children: [
               for (var i = 0; i < listings.length; i++) ...[
@@ -872,6 +933,7 @@ class _HostListings extends StatelessWidget {
                   listing: listings[i],
                   favorite: favorites.contains(listings[i].id),
                   width: 260,
+                  showFavorite: false,
                   onTap: () => onOpen(listings[i]),
                   onFavorite: () => onFavorite(listings[i].id),
                 ),
@@ -1016,7 +1078,7 @@ class _BookingBarState extends State<_BookingBar> {
                       fontFamily: AppTheme.fontFamily,
                       fontWeight: FontWeight.w700,
                       fontSize: 18,
-                      letterSpacing: 0.02,
+                      letterSpacing: 0.018,
                       color: AppColors.textPrimary,
                     ),
                   ),
@@ -1108,11 +1170,10 @@ class _BookingBarState extends State<_BookingBar> {
   }
 }
 
-class _Stars extends StatelessWidget {
-  const _Stars({required this.count, required this.size});
+class _ReviewStars extends StatelessWidget {
+  const _ReviewStars({required this.count});
 
   final int count;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -1121,25 +1182,51 @@ class _Stars extends StatelessWidget {
       children: [
         for (var i = 0; i < 5; i++) ...[
           if (i != 0) const SizedBox(width: 6),
-          Icon(
-            Icons.star,
-            size: size,
-            color: i < count ? AppColors.yellow : const Color(0xFFE8E8E8),
-          ),
+          i < count
+              ? ListingFigmaIcon.reviewStarOn
+              : ListingFigmaIcon.reviewStarOff,
         ],
       ],
     );
   }
 }
 
+class _HostStars extends StatelessWidget {
+  const _HostStars();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListingFigmaIcon.star12,
+        SizedBox(width: 2),
+        ListingFigmaIcon.star12,
+        SizedBox(width: 2),
+        ListingFigmaIcon.star12,
+        SizedBox(width: 2),
+        ListingFigmaIcon.star12,
+        SizedBox(width: 2),
+        ListingFigmaIcon.star12,
+      ],
+    );
+  }
+}
+
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.label, required this.size});
+  const _Avatar({required this.label, required this.size, this.url = ''});
 
   final String label;
+  final String url;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    if (url.isNotEmpty) {
+      return ClipOval(
+        child: ListingImage(url, width: size, height: size, fit: BoxFit.cover),
+      );
+    }
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: const Color(0xFFFFE3B7),

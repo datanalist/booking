@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:booking/data/booking_draft.dart';
 import 'package:booking/screens/listing/listing_detail.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
+import 'package:booking/screens/listing/listing_icons.dart';
 import 'package:booking/screens/listing/stay_dates_sheet.dart';
 import 'package:booking/theme/app_theme.dart';
 
@@ -128,6 +129,73 @@ void main() {
     expect(find.text('9 102 ₽'), findsOneWidget);
     expect(find.text('3 034 ₽ / ночь'), findsOneWidget);
     expect(find.text('3 ночи'), findsOneWidget);
+  });
+
+  testWidgets('reviews block keeps rating but does not invent guest cards', (
+    tester,
+  ) async {
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail(
+      listing: listing,
+      address: listing.address,
+      description: listing.description,
+      photos: listing.photos,
+      amenities: listing.amenities,
+      reviews: const [],
+      host: listing.host!,
+      hostListings: const [],
+    );
+
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: <String>{},
+          initialDetail: detail,
+          onFavorite: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.text('Отзывы'), findsOneWidget);
+    expect(find.text('Антон Киривлянов'), findsNothing);
+    expect(find.text('Ирина Куленкова'), findsNothing);
+  });
+
+  testWidgets('listing page uses figma icon boxes and leaves', (tester) async {
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail.fromListing(listing);
+
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: <String>{},
+          initialDetail: detail,
+          onFavorite: (_) {},
+        ),
+      ),
+    );
+
+    expect(tester.getSize(find.byWidget(ListingFigmaIcon.mapPin16)), const Size(16, 16));
+    expect(tester.getSize(find.byWidget(ListingFigmaIcon.home16)), const Size(16, 16));
+    expect(tester.getSize(find.byWidget(ListingFigmaIcon.star18)), const Size(18, 18));
+    expect(tester.getSize(find.byWidget(ListingFigmaIcon.security)), const Size(16, 16));
+    expect(tester.getSize(find.byWidget(ListingFigmaIcon.time)), const Size(16, 16));
+
+    final pin = tester.widget<ListingFigmaIcon>(
+      find.byWidget(ListingFigmaIcon.mapPin16),
+    );
+    expect(pin.leaf, const Size.square(16));
+    final headerStar = tester.widget<ListingFigmaIcon>(
+      find.byWidget(ListingFigmaIcon.star18),
+    );
+    expect(headerStar.leaf, const Size(14.5028, 13.7499));
+    final reviewStar = tester.widget<ListingFigmaIcon>(
+      find.byWidget(ListingFigmaIcon.reviewStarOn).first,
+    );
+    expect(reviewStar.box, const Size(13, 12));
+    expect(reviewStar.leaf, const Size(13.0506, 12.2396));
   });
 
   testWidgets('favorite on the listing page updates the shared set', (

@@ -5,8 +5,9 @@ import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
 import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
+import 'listing_icons.dart';
 
-const _meta = Color(0xFF525252);
+const _meta = Color(0xFF525353);
 const _cardStroke = Color(0x2BFBC028);
 
 /// Полный список объявлений хозяина по макету Figma `1:11268`.
@@ -158,6 +159,7 @@ class HostListingCard extends StatelessWidget {
     required this.onTap,
     required this.onFavorite,
     this.width = double.infinity,
+    this.showFavorite = true,
   });
 
   final SearchListing listing;
@@ -165,6 +167,7 @@ class HostListingCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onFavorite;
   final double width;
+  final bool showFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -192,16 +195,18 @@ class HostListingCard extends StatelessWidget {
                       width: double.infinity,
                       fit: BoxFit.cover,
                     ),
-                    Positioned(
-                      top: 12,
-                      right: 12,
-                      child: FavoriteHeartButton(
-                        favorite: favorite,
-                        size: 32,
-                        iconSize: 18,
-                        onTap: onFavorite,
+                    const ColoredBox(color: Color.fromRGBO(16, 51, 99, 0.05)),
+                    if (showFavorite)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: FavoriteHeartButton(
+                          favorite: favorite,
+                          size: 32,
+                          iconSize: 18,
+                          onTap: onFavorite,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -228,11 +233,11 @@ class HostListingCard extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         _TinyMeta(
-                          icon: Icons.location_on_outlined,
+                          icon: ListingFigmaIcon.mapPin14,
                           label: listing.city,
                         ),
                         _TinyMeta(
-                          icon: Icons.home_outlined,
+                          icon: ListingFigmaIcon.home14,
                           label: listing.type,
                         ),
                       ],
@@ -251,11 +256,7 @@ class HostListingCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 2),
-                        const Icon(
-                          Icons.star,
-                          size: 16,
-                          color: AppColors.yellow,
-                        ),
+                        ListingFigmaIcon.star16,
                         const SizedBox(width: 2),
                         Text(
                           reviewCountLabel(
@@ -285,7 +286,7 @@ class HostListingCard extends StatelessWidget {
 class _TinyMeta extends StatelessWidget {
   const _TinyMeta({required this.icon, required this.label});
 
-  final IconData icon;
+  final Widget icon;
   final String label;
 
   @override
@@ -293,7 +294,7 @@ class _TinyMeta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: _meta),
+        icon,
         const SizedBox(width: 4),
         Text(
           label,
