@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/data/auth_repository.dart';
+import 'package:booking/screens/auth/photo_access.dart';
 import 'package:booking/screens/profile/personal_data_screen.dart';
 import 'package:booking/screens/profile/profile_screen.dart';
 import 'package:booking/theme/app_theme.dart';
@@ -14,15 +15,19 @@ void main() {
 
   late AuthRepository previousAuth;
   late AuthSession? previousSession;
+  late PhotoAccessMemory previousPhotoAccess;
 
   setUp(() {
     previousAuth = AuthRepositoryScope.instance;
     previousSession = AuthRepositoryScope.session.value;
+    previousPhotoAccess = PhotoAccessMemory.instance;
+    PhotoAccessMemory.instance = PhotoAccessMemory.memory();
   });
 
   tearDown(() {
     AuthRepositoryScope.instance = previousAuth;
     AuthRepositoryScope.session.value = previousSession;
+    PhotoAccessMemory.instance = previousPhotoAccess;
   });
 
   AuthSession guestSession() {
@@ -420,5 +425,94 @@ void main() {
     expect(find.byKey(const ValueKey<String>('personal-data-error')), findsOneWidget);
     expect(find.text('Не удалось сохранить профиль'), findsOneWidget);
     expect(find.text('Авторизация'), findsNothing);
+  });
+
+  testWidgets('avatar tap shows the access dialog the first time', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository()..session = guestSession();
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PersonalDataScreen(
+          authRepository: auth,
+          photoLibrary: FakePhotoLibrary(),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-avatar')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('auth-photo-access-dialog')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Полный доступ'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('auth-photo-grid')), findsOneWidget);
+    expect(await PhotoAccessMemory.instance.hasGranted(), isTrue);
+  });
+
+  testWidgets('avatar tap skips the access dialog after a grant', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository()..session = guestSession();
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+    await PhotoAccessMemory.instance.markGranted();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PersonalDataScreen(
+          authRepository: auth,
+          photoLibrary: FakePhotoLibrary(),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-avatar')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('auth-photo-access-dialog')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('auth-photo-grid')), findsOneWidget);
+  });
+
+  testWidgets('avatar tap asks again after the user denies access', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository()..session = guestSession();
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PersonalDataScreen(
+          authRepository: auth,
+          photoLibrary: FakePhotoLibrary(),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-avatar')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Не предоставлять'));
+    await tester.pumpAndSettle();
+    expect(await PhotoAccessMemory.instance.hasGranted(), isFalse);
+    expect(find.byKey(const ValueKey<String>('auth-photo-grid')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-avatar')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('auth-photo-access-dialog')),
+      findsOneWidget,
+    );
   });
 }

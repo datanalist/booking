@@ -198,12 +198,22 @@ class FakePhotoLibrary implements PhotoLibrary {
   bool galleryGranted;
   bool cameraGranted;
   bool captureCalled = false;
+  int galleryRequests = 0;
+  int cameraRequests = 0;
+  bool? lastGalleryLimited;
 
   @override
-  Future<bool> requestGallery({required bool limited}) async => galleryGranted;
+  Future<bool> requestGallery({required bool limited}) async {
+    galleryRequests += 1;
+    lastGalleryLimited = limited;
+    return galleryGranted;
+  }
 
   @override
-  Future<bool> requestCamera() async => cameraGranted;
+  Future<bool> requestCamera() async {
+    cameraRequests += 1;
+    return cameraGranted;
+  }
 
   @override
   Future<List<PhotoAssetItem>> list({int limit = 90}) async {
@@ -216,7 +226,7 @@ class FakePhotoLibrary implements PhotoLibrary {
   @override
   Future<File?> load(PhotoAssetItem item) async {
     final file = File('${Directory.systemTemp.path}/fake_gallery.png');
-    await file.writeAsBytes(_png);
+    file.writeAsBytesSync(_png);
     return file;
   }
 
@@ -224,7 +234,7 @@ class FakePhotoLibrary implements PhotoLibrary {
   Future<File?> capture() async {
     captureCalled = true;
     final file = File('${Directory.systemTemp.path}/fake_camera.png');
-    await file.writeAsBytes(_png);
+    file.writeAsBytesSync(_png);
     return file;
   }
 

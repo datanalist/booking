@@ -59,20 +59,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _onAvatarTap() async {
-    final choice = await showPhotoAccessDialog(context);
-    if (!mounted || choice == null || choice == PhotoAccessChoice.deny) return;
-    final granted = await _photos.requestGallery(
-      limited: choice == PhotoAccessChoice.limited,
-    );
-    if (!granted || !mounted) return;
-    final picked = await Navigator.of(context).push<File>(
-      MaterialPageRoute(
-        builder: (context) => PhotoPickerScreen(library: _photos),
-      ),
-    );
-    if (picked == null || !mounted) return;
-    final cropped = await Navigator.of(context).push<File>(
-      MaterialPageRoute(builder: (context) => PhotoCropScreen(file: picked)),
+    final cropped = await pickCroppedAvatar(
+      context: context,
+      library: _photos,
     );
     if (cropped == null || !mounted) return;
     setState(() => _avatar = cropped);
