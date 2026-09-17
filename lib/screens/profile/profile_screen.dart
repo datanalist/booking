@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../data/auth_repository.dart';
 import '../../theme/app_theme.dart';
 import '../auth/auth_screen.dart';
+import 'personal_data_screen.dart';
 
 const _menuFill = Color(0xFFFFFBF2);
 const _menuStroke = Color(0xFFFFF3D0);
@@ -98,7 +99,13 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 36),
-                _ProfileMenu(onLogout: () => _onLogout(context)),
+                _ProfileMenu(
+                  onPersonalData: () => PersonalDataScreen.open(
+                    context,
+                    authRepository: _auth,
+                  ),
+                  onLogout: () => _onLogout(context),
+                ),
               ],
             ),
           );
@@ -109,16 +116,22 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _ProfileMenu extends StatelessWidget {
-  const _ProfileMenu({required this.onLogout});
+  const _ProfileMenu({
+    required this.onPersonalData,
+    required this.onLogout,
+  });
 
+  final VoidCallback onPersonalData;
   final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
     final items = <_MenuItemData>[
-      const _MenuItemData(
+      _MenuItemData(
+        key: const ValueKey<String>('profile-personal-data'),
         icon: Icons.person_outline,
         label: 'Личные данные',
+        onTap: onPersonalData,
       ),
       const _MenuItemData(
         icon: Icons.notifications_none_outlined,

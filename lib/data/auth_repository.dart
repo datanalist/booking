@@ -85,6 +85,17 @@ abstract class AuthRepository {
     bool limitedBrowse = false,
   });
 
+  /// Обновляет анкету текущего пользователя. Id записи берётся из auth store,
+  /// не из ввода: чужой `users` так не переписать.
+  Future<AuthSession> updatePersonalData({
+    required String firstName,
+    required String lastName,
+    required DateTime birthdate,
+    required String email,
+    File? avatar,
+    bool limitedBrowse = false,
+  });
+
   AuthSession? currentSession();
   Future<AuthSession?> restoreSession();
   Future<AuthSession?> completeFromAuthUri(Uri uri);
@@ -365,6 +376,73 @@ class PocketBaseAuthRepository implements AuthRepository {
     }
   }
 
+  @override
+  Future<AuthSession> updatePersonalData({
+    required String firstName,
+    required String lastName,
+    required DateTime birthdate,
+    required String email,
+    File? avatar,
+    bool limitedBrowse = false,
+  }) async {
+    final recordId = _pb.authStore.record?.id ?? '';
+    if (!_pb.authStore.isValid || recordId.isEmpty) {
+      throw const AuthException(
+        'Войдите в аккаунт, чтобы сохранить данные',
+      );
+    }
+
+    final first = _sanitizeName(firstName);
+    final last = _sanitizeName(lastName);
+    final identity = email.trim();
+    if (first.isEmpty || last.isEmpty) {
+      throw const AuthException('Укажите имя и фамилию');
+    }
+    if (!_looksLikeEmail(identity)) {
+      throw const AuthException('Введите корректный email');
+    }
+
+    final display = '$first $last';
+    final body = <String, dynamic>{
+      'first_name': first,
+      'last_name': last,
+      'name': display,
+      'birthdate':
+          '${birthdate.year.toString().padLeft(4, '0')}-${birthdate.month.toString().padLeft(2, '0')}-${birthdate.day.toString().padLeft(2, '0')} 00:00:00.000Z',
+      'emailVisibility': true,
+      'limited_browse': limitedBrowse,
+    };
+    final currentEmail = _pb.authStore.record!.get<String>('email', '');
+    if (identity.toLowerCase() != currentEmail.toLowerCase()) {
+      body['email'] = identity;
+    }
+
+    final files = <http.MultipartFile>[];
+    if (avatar != null) {
+      files.add(
+        http.MultipartFile.fromBytes(
+          'avatar',
+          await avatar.readAsBytes(),
+          filename: 'avatar.jpg',
+        ),
+      );
+    }
+
+    try {
+      final record = await _pb
+          .collection('users')
+          .update(recordId, body: body, files: files);
+      _session = _fromRecord(record, fallbackEmail: identity);
+      AuthRepositoryScope.session.value = _session;
+      return _session!;
+    } on ClientException catch (error) {
+      if (_isExistingEmail(error)) {
+        throw const AuthException('Этот email уже занят');
+      }
+      throw AuthException(_messageFor(error));
+    }
+  }
+
   AuthSession? _fromRecord(RecordModel? record, {String fallbackEmail = ''}) {
     if (record == null) return null;
     final email = record.get<String>('email', fallbackEmail);
@@ -399,6 +477,14 @@ class PocketBaseAuthRepository implements AuthRepository {
 
   static bool _looksLikeEmail(String value) {
     return value.contains('@') && value.contains('.');
+  }
+
+  static final _nameCleanup = RegExp(r'\s+');
+
+  static String _sanitizeName(String raw) {
+    final trimmed = raw.trim().replaceAll(_nameCleanup, ' ');
+    if (trimmed.length <= 80) return trimmed;
+    return trimmed.substring(0, 80);
   }
 
   static String _randomPassword() {

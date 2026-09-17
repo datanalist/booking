@@ -8,6 +8,14 @@ class BirthdateParseException implements Exception {
 
 final _digits = RegExp(r'[^0-9]');
 
+/// Календарная дата как на макете: `17.08.1995`.
+String formatBirthdate(DateTime date) {
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final year = date.year.toString().padLeft(4, '0');
+  return '$day.$month.$year';
+}
+
 /// Маска ввода: `12` → `12.`, `1203` → `12.03.`, `12031990` → `12.03.1990`.
 String maskBirthdateInput(String raw) {
   final digits = raw.replaceAll(_digits, '');

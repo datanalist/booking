@@ -155,6 +155,39 @@ class FakeAuthRepository implements AuthRepository {
     );
     return session;
   }
+
+  @override
+  Future<AuthSession> updatePersonalData({
+    required String firstName,
+    required String lastName,
+    required DateTime birthdate,
+    required String email,
+    File? avatar,
+    bool limitedBrowse = false,
+  }) async {
+    if (session.userId.isEmpty) {
+      throw const AuthException(
+        'Войдите в аккаунт, чтобы сохранить данные',
+      );
+    }
+    if (failProfile) {
+      throw const AuthException('Не удалось сохранить профиль');
+    }
+    session = AuthSession(
+      userId: session.userId,
+      email: email.trim(),
+      phone: session.phone,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      displayName: '${firstName.trim()} ${lastName.trim()}',
+      avatarUrl: session.avatarUrl,
+      birthdate: birthdate,
+      profileComplete: true,
+      limitedBrowse: limitedBrowse,
+    );
+    AuthRepositoryScope.session.value = session;
+    return session;
+  }
 }
 
 class FakePhotoLibrary implements PhotoLibrary {
