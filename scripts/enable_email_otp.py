@@ -107,9 +107,9 @@ def main() -> int:
         "otp": _ensure_otp(collection),
         "fields": _relax_required_for_otp(fields),
     }
-    if collection.get("createRule") is None:
-        patch["createRule"] = ""
-        print("createRule was admin-only; opening it for OTP signup")
+    if collection.get("createRule") == "":
+        patch["createRule"] = None
+        print("createRule was public; locking to admin-only (user is created after magic-link)")
 
     pb.request("PATCH", "/api/collections/users", json_body=patch)
     after = pb.request("GET", "/api/collections/users")

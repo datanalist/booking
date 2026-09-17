@@ -257,6 +257,62 @@ function magicAuthHandler(e) {
     return str(otp[field] || "")
   }
 
+  function consumePending(otpId, password) {
+    var raw = ""
+    try {
+      raw = str($app.store().get("magicPending:" + otpId))
+    } catch (err) {}
+    if (!raw || raw === "null" || raw === "undefined") {
+      return ""
+    }
+    var pending
+    try {
+      pending = JSON.parse(raw)
+    } catch (err) {
+      throw new Error("invalid")
+    }
+    if (!pending || str(pending.code) !== str(password)) {
+      throw new Error("invalid")
+    }
+    if (Number(pending.expires || 0) < Date.now()) {
+      try {
+        $app.store().remove("magicPending:" + otpId)
+      } catch (err) {}
+      throw new Error("expired")
+    }
+    const email = str(pending.email).trim().toLowerCase()
+    if (!email) {
+      throw new Error("invalid")
+    }
+    var record = null
+    try {
+      record = e.app.findAuthRecordByEmail("users", email)
+    } catch (err) {}
+    if (!record) {
+      const collection = e.app.findCollectionByNameOrId("users")
+      record = new Record(collection)
+      record.setEmail(email)
+      record.setRandomPassword()
+      if (typeof record.setVerified === "function") {
+        record.setVerified(true)
+      }
+      e.app.save(record)
+    } else {
+      const isVerified =
+        typeof record.verified === "function"
+          ? record.verified()
+          : !!record.get("verified")
+      if (!isVerified && typeof record.setVerified === "function") {
+        record.setVerified(true)
+        e.app.save(record)
+      }
+    }
+    try {
+      $app.store().remove("magicPending:" + otpId)
+    } catch (err) {}
+    return record.newAuthToken()
+  }
+
   function consumeOtp(otpId, password) {
     const otp = e.app.findOTPById(otpId)
     if (!otp) {
@@ -310,7 +366,10 @@ function magicAuthHandler(e) {
       return sendHtml(400, errorPage(INVALID_MSG))
     }
     try {
-      const token = consumeOtp(id, code)
+      var token = consumePending(id, code)
+      if (!token) {
+        token = consumeOtp(id, code)
+      }
       rememberToken(id, token)
       return sendHtml(200, successPage(token))
     } catch (err) {
@@ -323,6 +382,163 @@ function magicAuthHandler(e) {
   }
 }
 
+function magicRequestHandler(e) {
+  const TTL_MS = 10 * 60 * 1000
+
+  function str(value) {
+    return value == null ? "" : String(value)
+  }
+
+  function htmlEscape(value) {
+    return str(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+  }
+
+  function queryEscape(value) {
+    var s = str(value)
+    try {
+      if (typeof encodeURIComponent === "function") return encodeURIComponent(s)
+    } catch (err) {}
+    return s.replace(/[^A-Za-z0-9\-_.~]/g, function (ch) {
+      var hex = ch.charCodeAt(0).toString(16).toUpperCase()
+      if (hex.length < 2) hex = "0" + hex
+      return "%" + hex
+    })
+  }
+
+  function looksLikeEmail(value) {
+    return value.indexOf("@") > 0 && value.indexOf(".") > value.indexOf("@")
+  }
+
+  function randomId() {
+    try {
+      return $security.randomStringWithAlphabet(
+        15,
+        "abcdefghijklmnopqrstuvwxyz0123456789",
+      )
+    } catch (err) {}
+    var alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+    var out = ""
+    for (var i = 0; i < 15; i++) {
+      out += alphabet.charAt(Math.floor(Math.random() * alphabet.length))
+    }
+    return out
+  }
+
+  function randomCode() {
+    try {
+      return $security.randomStringWithAlphabet(5, "0123456789")
+    } catch (err) {}
+    return String(10000 + Math.floor(Math.random() * 90000))
+  }
+
+  function appUrl() {
+    try {
+      const meta = $app.settings().meta || {}
+      const url = str(meta.appURL || meta.appUrl).replace(/\/$/, "")
+      if (url) return url
+    } catch (err) {}
+    return "https://pb.booking.vallome.ru"
+  }
+
+  function magicLink(otpId, password) {
+    return (
+      appUrl() +
+      "/api/vallome/magic-auth?id=" +
+      queryEscape(otpId) +
+      "&code=" +
+      queryEscape(password)
+    )
+  }
+
+  function emailHtml(href) {
+    return (
+      '<!doctype html><html lang="ru"><body style="margin:0;padding:0;background:#ffffff;">' +
+      '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;">' +
+      '<tr><td align="center" style="padding:56px 24px;">' +
+      '<table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;">' +
+      '<tr><td align="center" style="font-family:Georgia,\'Times New Roman\',Times,serif;font-size:34px;font-weight:700;color:#111111;letter-spacing:0.04em;padding-bottom:56px;">vallome.booking</td></tr>' +
+      '<tr><td align="center" style="font-family:Arial,Helvetica,sans-serif;font-size:28px;color:#1a1a1a;padding-bottom:36px;line-height:1.3;">Уведомление о входе</td></tr>' +
+      '<tr><td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#4a4a4a;padding-bottom:36px;">Нажмите кнопку ниже, чтобы продолжить.</td></tr>' +
+      '<tr><td align="center" style="padding-bottom:48px;">' +
+      '<a href="' +
+      href +
+      '" target="_blank" rel="noopener" style="display:inline-block;background:#6B8AFF;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.2;padding:14px 40px;border-radius:6px;">Авторизоваться</a>' +
+      "</td></tr>" +
+      '<tr><td align="left" style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#4a4a4a;">Ссылка действительна 10 минут с момента отправки.</td></tr>' +
+      "</table></td></tr></table></body></html>"
+    )
+  }
+
+  function readEmail() {
+    var fromInfo = ""
+    try {
+      const info = e.requestInfo()
+      const body = (info && info.body) || {}
+      fromInfo = str(body.email || body.identity || "")
+    } catch (err) {}
+    var fromForm = ""
+    try {
+      fromForm = str(e.request.formValue("email"))
+    } catch (err) {}
+    return (fromInfo || fromForm).trim().toLowerCase()
+  }
+
+  function sendMail(email, otpId, password) {
+    const link = magicLink(otpId, password)
+    const meta = $app.settings().meta || {}
+    const message = new MailerMessage({
+      from: {
+        address: str(meta.senderAddress),
+        name: str(meta.senderName || "vallome.booking"),
+      },
+      to: [{ address: email }],
+      subject: "Вход в vallome.booking",
+      html: emailHtml(htmlEscape(link)),
+      text:
+        "vallome.booking\n\nУведомление о входе\n\n" +
+        "Нажмите кнопку «Авторизоваться» или откройте ссылку: " +
+        link +
+        "\n\nСсылка действительна 10 минут с момента отправки.",
+    })
+    $app.newMailClient().send(message)
+  }
+
+  function fail(status, text) {
+    return e.json(status, { message: text })
+  }
+
+  try {
+    const email = readEmail()
+    if (!looksLikeEmail(email)) {
+      return fail(400, "Введите корректный email")
+    }
+    const otpId = randomId()
+    const code = randomCode()
+    $app.store().set(
+      "magicPending:" + otpId,
+      JSON.stringify({
+        email: email,
+        code: code,
+        expires: Date.now() + TTL_MS,
+      }),
+    )
+    sendMail(email, otpId, code)
+    return e.json(200, { otpId: otpId })
+  } catch (err) {
+    console.log("magic-request: " + err)
+    try {
+      $app.logger().error("magic-request failed", "error", String(err))
+    } catch (logErr) {}
+    return fail(500, "Не удалось отправить письмо на эту почту")
+  }
+}
+
+routerAdd("POST", "/api/vallome/magic-request", magicRequestHandler)
 routerAdd("GET", "/api/vallome/magic-auth", magicAuthHandler)
 routerAdd("POST", "/api/vallome/magic-auth", magicAuthHandler)
 

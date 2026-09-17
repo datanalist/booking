@@ -25,7 +25,7 @@
 - `balance`: number, default 0 — сумма к выводу (**ТЗ**)
 - `fcm_token`: text — пуш (**интерпретация**; поля в UI нет)
 
-Вход гостя по email — встроенный OTP коллекции `users` (длина 5, TTL 600 с, SMTP). Отдельной коллекции кодов нет. `requestOTP` сам запись не создаёт: без `users` с этим email письмо не уходит, клиент всё равно получает фиктивный `otpId`. Автосоздание — `pb_hooks/otp_signup.pb.js` и `PocketBaseAuthRepository.requestEmailOtp`. Поля `roles` / `name` / `first_name` / `last_name` не required. Включить OTP: `python3 scripts/enable_email_otp.py`.
+Вход гостя по email — письмо с кнопкой (TTL 600 с, SMTP). Клиент вызывает `POST /api/vallome/magic-request`: письмо уходит **без** записи в `users`. Строка в `users` создаётся только когда гость подтверждает ссылку (`/api/vallome/magic-auth`). Публичный `createRule` у `users` закрыт (только админ / хук). Поля `roles` / `name` / `first_name` / `last_name` не required. Включить OTP+SMTP: `python3 scripts/enable_email_otp.py`.
 
 ### `listings`
 

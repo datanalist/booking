@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -210,32 +209,24 @@ class PocketBaseAuthRepository implements AuthRepository {
       throw const AuthException('Введите корректный email');
     }
     try {
-      // Без записи в users PocketBase не шлёт письмо, но отдаёт фиктивный otpId.
-      await _ensureUserForEmailOtp(identity);
-      final result = await _pb.collection(PbCollection.users).requestOTP(identity);
+      final raw = await _pb.send(
+        '/api/vallome/magic-request',
+        method: 'POST',
+        body: {'email': identity},
+      );
+      final otpId = raw is Map ? '${raw['otpId'] ?? ''}'.trim() : '';
+      if (otpId.isEmpty) {
+        throw const AuthException('Не удалось отправить письмо на эту почту');
+      }
       _pendingPhone = '';
       return OtpChallenge(
-        otpId: result.otpId,
+        otpId: otpId,
         channel: OtpChannel.email,
         destination: identity,
       );
+    } on AuthException {
+      rethrow;
     } on ClientException catch (error) {
-      throw AuthException(_messageFor(error, email: true));
-    }
-  }
-
-  Future<void> _ensureUserForEmailOtp(String email) async {
-    try {
-      final password = _randomPassword();
-      await _pb.collection(PbCollection.users).create(
-        body: {
-          'email': email,
-          'password': password,
-          'passwordConfirm': password,
-        },
-      );
-    } on ClientException catch (error) {
-      if (_isExistingEmail(error) || error.statusCode == 403) return;
       throw AuthException(_messageFor(error, email: true));
     }
   }
@@ -337,24 +328,22 @@ class PocketBaseAuthRepository implements AuthRepository {
             .collection(PbCollection.users)
             .update(_pb.authStore.record!.id, body: body, files: files);
       } else {
-        final identity = email.trim();
-        if (!_looksLikeEmail(identity)) {
-          throw const AuthException('Укажите email, чтобы сохранить профиль');
-        }
-        final password = _randomPassword();
-        record = await _pb
-            .collection(PbCollection.users)
-            .create(
-              body: {
-                ...body,
-                'email': identity,
-                'password': password,
-                'passwordConfirm': password,
-              },
-              files: files,
-            );
-        await _pb.collection(PbCollection.users).authWithPassword(identity, password);
-        record = _pb.authStore.record ?? record;
+        // Телефон пока заглушка: локальная сессия, без строки в users.
+        _session = AuthSession(
+          userId: '',
+          email: email.trim(),
+          phone: phone.trim().isNotEmpty
+              ? phone.trim()
+              : (_pendingPhone.isEmpty ? kAuthPhoneStub : _pendingPhone),
+          firstName: first,
+          lastName: last,
+          displayName: display,
+          birthdate: birthdate,
+          profileComplete: true,
+          limitedBrowse: limitedBrowse,
+        );
+        AuthRepositoryScope.session.value = _session;
+        return _session!;
       }
       _session = _fromRecord(record, fallbackEmail: email);
       AuthRepositoryScope.session.value = _session;
@@ -402,22 +391,6 @@ class PocketBaseAuthRepository implements AuthRepository {
     return value.contains('@') && value.contains('.');
   }
 
-  static String _randomPassword() {
-    const chars =
-        'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#';
-    final random = Random.secure();
-    return List.generate(18, (_) => chars[random.nextInt(chars.length)]).join();
-  }
-
-  static bool _isExistingEmail(ClientException error) {
-    if (error.statusCode != 400) return false;
-    final data = error.response['data'];
-    if (data is! Map) return false;
-    final email = data['email'];
-    if (email is! Map) return false;
-    return email['code'] == 'validation_not_unique';
-  }
-
   static String _messageFor(
     ClientException error, {
     bool email = false,
@@ -427,7 +400,7 @@ class PocketBaseAuthRepository implements AuthRepository {
     if (otp && (status == 400 || status == 401 || status == 403)) {
       return 'Ссылка недействительна или устарела. Запросите новое письмо';
     }
-    if (email && (status == 400 || status == 403)) {
+    if (email && (status == 400 || status == 403 || status >= 500)) {
       return 'Не удалось отправить письмо на эту почту';
     }
     if (status == 400 || status == 401 || status == 403) {
