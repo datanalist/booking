@@ -90,6 +90,9 @@ abstract class AuthRepository {
   Future<AuthSession?> completeFromAuthUri(Uri uri);
   Future<AuthSession?> pollMagicLogin(String otpId);
   Future<void> signOut();
+
+  /// Удаляет запись текущего пользователя в PocketBase и сбрасывает сессию.
+  Future<void> deleteAccount();
 }
 
 class AuthRepositoryScope {
@@ -200,6 +203,35 @@ class PocketBaseAuthRepository implements AuthRepository {
     _pb.authStore.clear();
     AuthRepositoryScope.session.value = null;
     AuthRepositoryScope.authLinkError.value = null;
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    final recordId = _pb.authStore.record?.id ?? '';
+    final sessionId = currentSession()?.userId ?? '';
+
+    if (recordId.isEmpty || !_pb.authStore.isValid) {
+      await signOut();
+      return;
+    }
+
+    // Только текущий пользователь из сессии — id не берём из ввода и не
+    // подставляем в filter-строку.
+    if (sessionId.isNotEmpty && sessionId != recordId) {
+      throw const AuthException('Не удалось удалить аккаунт');
+    }
+    if (!_isPocketBaseId(recordId)) {
+      throw const AuthException('Не удалось удалить аккаунт');
+    }
+
+    try {
+      await _pb.collection(PbCollection.users).delete(recordId);
+    } on ClientException catch (error) {
+      if (error.statusCode != 404) {
+        throw AuthException(_deleteMessageFor(error));
+      }
+    }
+    await signOut();
   }
 
   @override
@@ -391,6 +423,10 @@ class PocketBaseAuthRepository implements AuthRepository {
     return value.contains('@') && value.contains('.');
   }
 
+  static final _pocketBaseId = RegExp(r'^[a-z0-9]{15}$');
+
+  static bool _isPocketBaseId(String value) => _pocketBaseId.hasMatch(value);
+
   static String _messageFor(
     ClientException error, {
     bool email = false,
@@ -407,5 +443,13 @@ class PocketBaseAuthRepository implements AuthRepository {
       return 'Не удалось продолжить. Проверьте данные';
     }
     return 'Не удалось продолжить. Проверьте соединение';
+  }
+
+  static String _deleteMessageFor(ClientException error) {
+    final status = error.statusCode;
+    if (status == 400 || status == 401 || status == 403) {
+      return 'Не удалось удалить аккаунт';
+    }
+    return 'Не удалось удалить аккаунт. Проверьте соединение';
   }
 }
