@@ -149,6 +149,11 @@ void main() {
     expect(AuthRepositoryScope.session.value?.displayName, 'Анна Иванова');
     expect(find.text('Анна Иванова'), findsOneWidget);
     expect(find.text('Владислав Коваленко'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('personal-data-email-dialog')),
+      findsNothing,
+    );
+    expect(auth.currentSession(), isNotNull);
   });
 
   testWidgets('invalid birthdate stays on the form with an error', (
@@ -204,5 +209,205 @@ void main() {
     expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsNothing);
     expect(auth.session.firstName, 'Владислав');
     expect(find.text('Владислав Коваленко'), findsOneWidget);
+  });
+
+  testWidgets('unchanged email saves without the logout dialog', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository()..session = guestSession();
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(body: ProfileScreen(authRepository: auth)),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('profile-personal-data')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('personal-data-email')),
+      '  Vladislav_Kovalenko@gmail.com  ',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('personal-data-email-dialog')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsNothing);
+    expect(auth.currentSession(), isNotNull);
+    expect(AuthRepositoryScope.session.value, isNotNull);
+    expect(find.text('Авторизация'), findsNothing);
+    expect(find.text('Владислав Коваленко'), findsOneWidget);
+  });
+
+  testWidgets('email change cancel keeps the session and form', (tester) async {
+    final auth = FakeAuthRepository()..session = guestSession();
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(body: ProfileScreen(authRepository: auth)),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('profile-personal-data')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('personal-data-email')),
+      'anna.ivanova@mail.com',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('personal-data-email-dialog')),
+      findsOneWidget,
+    );
+    expect(find.text('Изменить email?'), findsOneWidget);
+    expect(
+      find.text(
+        'После смены email будет выполнен выход из аккаунта. Войдите снова по новому адресу.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-email-no')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('personal-data-email-dialog')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey<String>('personal-data-email')),
+          )
+          .controller
+          ?.text,
+      'anna.ivanova@mail.com',
+    );
+    expect(auth.lastUpdatedEmail, isNull);
+    expect(auth.session.email, 'vladislav_kovalenko@gmail.com');
+    expect(auth.currentSession(), isNotNull);
+    expect(AuthRepositoryScope.session.value, isNotNull);
+    expect(find.text('Авторизация'), findsNothing);
+  });
+
+  testWidgets('tapping outside the email dialog does not save', (tester) async {
+    final auth = FakeAuthRepository()..session = guestSession();
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PersonalDataScreen(authRepository: auth),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('personal-data-email')),
+      'anna.ivanova@mail.com',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-save')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('personal-data-email-dialog')),
+      findsOneWidget,
+    );
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('personal-data-email-dialog')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsOneWidget);
+    expect(auth.lastUpdatedEmail, isNull);
+    expect(auth.session.email, 'vladislav_kovalenko@gmail.com');
+    expect(auth.currentSession(), isNotNull);
+    expect(find.text('Авторизация'), findsNothing);
+  });
+
+  testWidgets('email change confirm saves, signs out and opens auth', (
+    tester,
+  ) async {
+    final auth = FakeAuthRepository()..session = guestSession();
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: Scaffold(body: ProfileScreen(authRepository: auth)),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('profile-personal-data')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('personal-data-email')),
+      'anna.ivanova@mail.com',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-email-yes')));
+    await tester.pumpAndSettle();
+
+    expect(auth.lastUpdatedEmail, 'anna.ivanova@mail.com');
+    expect(auth.currentSession(), isNull);
+    expect(AuthRepositoryScope.session.value, isNull);
+    expect(find.text('Авторизация'), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsNothing);
+    expect(find.text('Личные данные'), findsNothing);
+  });
+
+  testWidgets('email change does not sign out if save fails', (tester) async {
+    final auth = FakeAuthRepository()
+      ..session = guestSession()
+      ..failProfile = true;
+    AuthRepositoryScope.instance = auth;
+    AuthRepositoryScope.session.value = auth.session;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: PersonalDataScreen(authRepository: auth),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('personal-data-email')),
+      'anna.ivanova@mail.com',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('personal-data-email-yes')));
+    await tester.pumpAndSettle();
+
+    expect(auth.lastUpdatedEmail, isNull);
+    expect(auth.session.email, 'vladislav_kovalenko@gmail.com');
+    expect(auth.currentSession(), isNotNull);
+    expect(AuthRepositoryScope.session.value, isNotNull);
+    expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('personal-data-error')), findsOneWidget);
+    expect(find.text('Не удалось сохранить профиль'), findsOneWidget);
+    expect(find.text('Авторизация'), findsNothing);
   });
 }

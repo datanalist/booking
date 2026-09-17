@@ -8,7 +8,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../data/auth_repository.dart';
 import '../../data/birthdate.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_confirm_dialog.dart';
+import '../auth/auth_screen.dart';
 import '../auth/photo_access.dart';
+
+const _emailChangeTitle = 'Изменить email?';
+const _emailChangeBody =
+    'После смены email будет выполнен выход из аккаунта. Войдите снова по новому адресу.';
 
 const _titleColor = Color(0xFF1A1B1D);
 const _labelColor = Color(0xFF525353);
@@ -67,6 +73,12 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
       _birth.text.trim().length == 10 &&
       _email.text.trim().isNotEmpty &&
       !_busy;
+
+  bool get _emailChanged {
+    final current = (_session?.email ?? '').trim().toLowerCase();
+    final next = _email.text.trim().toLowerCase();
+    return current != next;
+  }
 
   @override
   void initState() {
@@ -169,6 +181,11 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
       if (proceed != true || !mounted) return;
       limited = true;
     }
+    final emailChanged = _emailChanged;
+    if (emailChanged) {
+      final confirmed = await showEmailChangeConfirmDialog(context);
+      if (confirmed != true || !mounted) return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -183,6 +200,23 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
         limitedBrowse: limited,
       );
       if (!mounted) return;
+      if (emailChanged) {
+        await _auth.signOut();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          PageRouteBuilder<void>(
+            pageBuilder: (context, animation, secondaryAnimation) {
+              return AuthScreen(authRepository: _auth);
+            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 350),
+          ),
+          (route) => false,
+        );
+        return;
+      }
       Navigator.of(context).pop();
     } on AuthException catch (error) {
       if (!mounted) return;
@@ -557,6 +591,18 @@ class _LabeledField extends StatelessWidget {
       ],
     );
   }
+}
+
+Future<bool?> showEmailChangeConfirmDialog(BuildContext context) {
+  return showAppConfirmDialog(
+    context,
+    title: _emailChangeTitle,
+    body: _emailChangeBody,
+    dialogKey: 'personal-data-email-dialog',
+    noKey: 'personal-data-email-no',
+    yesKey: 'personal-data-email-yes',
+    barrierLabel: 'email-change-confirm',
+  );
 }
 
 class _BirthdateFormatter extends TextInputFormatter {

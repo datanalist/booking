@@ -9,6 +9,7 @@ class FakeAuthRepository implements AuthRepository {
   String? lastEmail;
   String? lastPhone;
   String? lastOtp;
+  String? lastUpdatedEmail;
   bool failOtpRequest = false;
   bool failOtpVerify = false;
   bool failProfile = false;
@@ -173,6 +174,7 @@ class FakeAuthRepository implements AuthRepository {
     if (failProfile) {
       throw const AuthException('Не удалось сохранить профиль');
     }
+    lastUpdatedEmail = email.trim();
     session = AuthSession(
       userId: session.userId,
       email: email.trim(),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/auth_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_confirm_dialog.dart';
 import '../auth/auth_screen.dart';
 import 'personal_data_screen.dart';
 
@@ -278,120 +279,13 @@ class _NotificationBadge extends StatelessWidget {
   }
 }
 
-const _logoutBarrier = Color(0xFF525353);
-
 Future<bool?> showLogoutConfirmDialog(BuildContext context) {
-  return showGeneralDialog<bool>(
-    context: context,
-    barrierDismissible: true,
+  return showAppConfirmDialog(
+    context,
+    title: 'Выйти из аккаунта?',
+    dialogKey: 'profile-logout-dialog',
+    noKey: 'profile-logout-no',
+    yesKey: 'profile-logout-yes',
     barrierLabel: 'logout-confirm',
-    barrierColor: _logoutBarrier,
-    pageBuilder: (context, animation, secondaryAnimation) {
-      return const _LogoutConfirmDialog();
-    },
-    transitionDuration: const Duration(milliseconds: 200),
-    transitionBuilder: (context, animation, secondaryAnimation, child) {
-      return FadeTransition(opacity: animation, child: child);
-    },
   );
-}
-
-/// Модалка выхода по макету (фрейм 1:14582).
-class _LogoutConfirmDialog extends StatelessWidget {
-  const _LogoutConfirmDialog();
-
-  static const _titleColor = Color(0xFF1A1B1D);
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 19),
-        child: Material(
-          color: Colors.transparent,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 355),
-            child: DecoratedBox(
-              key: const ValueKey<String>('profile-logout-dialog'),
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Выйти из аккаунта?',
-                      style: TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        height: 1,
-                        letterSpacing: 0.018,
-                        color: _titleColor,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      height: 52,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              key: const ValueKey<String>('profile-logout-no'),
-                              onPressed: () => Navigator.of(context).pop(false),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(52),
-                                foregroundColor: AppColors.orange,
-                                side: const BorderSide(color: AppColors.orange),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontFamily: AppTheme.fontFamily,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                  height: 1.2,
-                                ),
-                              ),
-                              child: const Text('Нет'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton(
-                              key: const ValueKey<String>('profile-logout-yes'),
-                              onPressed: () => Navigator.of(context).pop(true),
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size.fromHeight(52),
-                                backgroundColor: AppColors.orange,
-                                foregroundColor: AppColors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontFamily: AppTheme.fontFamily,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                  height: 1.2,
-                                ),
-                              ),
-                              child: const Text('Да'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
