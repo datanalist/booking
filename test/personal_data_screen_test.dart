@@ -295,8 +295,9 @@ void main() {
           )
           .controller
           ?.text,
-      'anna.ivanova@mail.com',
+      'vladislav_kovalenko@gmail.com',
     );
+    expect(find.text('anna.ivanova@mail.com'), findsNothing);
     expect(auth.lastUpdatedEmail, isNull);
     expect(auth.session.email, 'vladislav_kovalenko@gmail.com');
     expect(auth.currentSession(), isNotNull);
@@ -337,6 +338,16 @@ void main() {
       findsNothing,
     );
     expect(find.byKey(const ValueKey<String>('personal-data-screen')), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(
+            find.byKey(const ValueKey<String>('personal-data-email')),
+          )
+          .controller
+          ?.text,
+      'vladislav_kovalenko@gmail.com',
+    );
+    expect(find.text('anna.ivanova@mail.com'), findsNothing);
     expect(auth.lastUpdatedEmail, isNull);
     expect(auth.session.email, 'vladislav_kovalenko@gmail.com');
     expect(auth.currentSession(), isNotNull);

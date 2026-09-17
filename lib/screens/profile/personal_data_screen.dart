@@ -80,6 +80,13 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
     return current != next;
   }
 
+  void _restoreSessionEmail() {
+    final current =
+        (_auth.currentSession() ?? AuthRepositoryScope.session.value)?.email ??
+        '';
+    setState(() => _email.text = current);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -184,7 +191,11 @@ class _PersonalDataScreenState extends State<PersonalDataScreen> {
     final emailChanged = _emailChanged;
     if (emailChanged) {
       final confirmed = await showEmailChangeConfirmDialog(context);
-      if (confirmed != true || !mounted) return;
+      if (!mounted) return;
+      if (confirmed != true) {
+        _restoreSessionEmail();
+        return;
+      }
     }
     setState(() {
       _busy = true;
