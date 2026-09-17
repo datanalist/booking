@@ -14,8 +14,28 @@ abstract final class AppColors {
   static const emptyHint = Color(0xFF6B6B6B);
 }
 
+/// Clamping physics, no Android [StretchingOverscrollIndicator].
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 abstract final class AppTheme {
   static const fontFamily = 'Noto Sans';
+  static const scrollBehavior = AppScrollBehavior();
 
   static ThemeData get light {
     final base = ThemeData(

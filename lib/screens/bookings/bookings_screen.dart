@@ -8,7 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/listing_image.dart';
 
 /// Вкладка «Бронирования» по клиентским фреймам «Брони» 393×852.
-/// Пустой таб: `1:11894`. Со списком: `1:11948`, архив — `1:12013`.
+/// Пустой таб: `1:11894`. Предстоящие: `1:11949` / `1:11948`, архив — `1:12013`.
 class BookingsScreen extends StatefulWidget {
   const BookingsScreen({super.key, this.repository});
 
@@ -24,6 +24,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
   _BookingsSegment _segment = _BookingsSegment.current;
   var _items = const <Booking>[];
   var _loading = false;
+  var _tabVisible = false;
   Object? _error;
 
   BookingsRepository get _repository =>
@@ -42,17 +43,28 @@ class _BookingsScreenState extends State<BookingsScreen> {
   @override
   void initState() {
     super.initState();
-    AuthRepositoryScope.session.addListener(_onSession);
-    _load();
+    AuthRepositoryScope.session.addListener(_reload);
+    BookingsRepositoryScope.listVersion.addListener(_reload);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = TickerMode.of(context);
+    if (visible && !_tabVisible) {
+      _load();
+    }
+    _tabVisible = visible;
   }
 
   @override
   void dispose() {
-    AuthRepositoryScope.session.removeListener(_onSession);
+    AuthRepositoryScope.session.removeListener(_reload);
+    BookingsRepositoryScope.listVersion.removeListener(_reload);
     super.dispose();
   }
 
-  void _onSession() => _load();
+  void _reload() => _load();
 
   Future<void> _load() async {
     setState(() {
@@ -265,87 +277,97 @@ class _BookingCard extends StatelessWidget {
 
   final Booking booking;
 
+  static const _ink = Color(0xFF1A1B1D);
+  static const _photoOverlay = Color(0x0D103363);
+
   @override
   Widget build(BuildContext context) {
     final chip = _chipFor(booking.status);
-    return SizedBox(
-      height: 92,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: ListingImage(
-              booking.photo,
-              width: 90,
-              height: 90,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 90,
+            height: 90,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Text(
-                  booking.title.isEmpty ? 'Бронирование' : booking.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: AppTheme.fontFamily,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    height: 19 / 16,
-                    color: AppColors.textPrimary,
-                  ),
+                ListingImage(
+                  booking.photo,
+                  width: 90,
+                  height: 90,
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        booking.datesLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontWeight: FontWeight.w400,
-                          fontSize: 13,
-                          height: 18 / 13,
-                          color: AppColors.emptyHint,
-                        ),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: AppColors.emptyHint,
-                          shape: BoxShape.circle,
-                        ),
-                        child: SizedBox(width: 3, height: 3),
-                      ),
-                    ),
-                    Text(
-                      booking.guestsLabel,
-                      style: const TextStyle(
-                        fontFamily: AppTheme.fontFamily,
-                        fontWeight: FontWeight.w400,
-                        fontSize: 13,
-                        height: 18 / 13,
-                        color: AppColors.emptyHint,
-                      ),
-                    ),
-                  ],
-                ),
-                if (chip != null) ...[
-                  const SizedBox(height: 8),
-                  _StatusChip(status: chip),
-                ],
+                const ColoredBox(color: _photoOverlay),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                booking.title.isEmpty ? 'Бронирование' : booking.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  height: 1.2,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      booking.datesLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: AppTheme.fontFamily,
+                        fontWeight: FontWeight.w400,
+                        fontSize: 12,
+                        height: 1.5,
+                        color: _ink,
+                      ),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: _ink,
+                        shape: BoxShape.circle,
+                      ),
+                      child: SizedBox(width: 3, height: 3),
+                    ),
+                  ),
+                  Text(
+                    booking.guestsLabel,
+                    style: const TextStyle(
+                      fontFamily: AppTheme.fontFamily,
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12,
+                      height: 1.5,
+                      color: _ink,
+                    ),
+                  ),
+                ],
+              ),
+              if (chip != null) ...[
+                const SizedBox(height: 8),
+                _StatusChip(status: chip),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -360,18 +382,18 @@ class _StatusChip extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: status.background,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(30),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
         child: Text(
           status.label,
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: AppTheme.fontFamily,
             fontWeight: FontWeight.w400,
-            fontSize: 11,
-            height: 14 / 11,
-            color: status.foreground,
+            fontSize: 10,
+            height: 1.4,
+            color: Color(0xFF1A1B1D),
           ),
         ),
       ),
@@ -383,18 +405,18 @@ enum _BookingStatus {
   awaitingPrepayment,
   confirmed,
   awaitingOwner,
+  cancelRequested,
   cancelled,
 }
 
 _BookingStatus? _chipFor(BookingStatus status) {
   return switch (status) {
     BookingStatus.pendingHost ||
-    BookingStatus.cancelRequested =>
+    BookingStatus.changeRequested =>
       _BookingStatus.awaitingOwner,
     BookingStatus.awaitingPrepayment => _BookingStatus.awaitingPrepayment,
-    BookingStatus.confirmed ||
-    BookingStatus.changeRequested =>
-      _BookingStatus.confirmed,
+    BookingStatus.confirmed => _BookingStatus.confirmed,
+    BookingStatus.cancelRequested => _BookingStatus.cancelRequested,
     BookingStatus.cancelled => _BookingStatus.cancelled,
     BookingStatus.completed => null,
   };
@@ -405,21 +427,17 @@ extension on _BookingStatus {
         _BookingStatus.awaitingPrepayment => 'ожидание предоплаты',
         _BookingStatus.confirmed => 'бронирование подтверждено',
         _BookingStatus.awaitingOwner => 'ожидание подтверждения от владельца',
+        _BookingStatus.cancelRequested => 'запрос на отмену',
         _BookingStatus.cancelled => 'отменено',
       };
 
   Color get background => switch (this) {
         _BookingStatus.awaitingPrepayment =>
-          AppColors.orange.withValues(alpha: 0.12),
-        _BookingStatus.confirmed => const Color(0xFFE7F6EC),
-        _BookingStatus.awaitingOwner => const Color(0xFFFFF4D6),
-        _BookingStatus.cancelled => const Color(0xFFF2F2F2),
-      };
-
-  Color get foreground => switch (this) {
-        _BookingStatus.awaitingPrepayment => AppColors.orange,
-        _BookingStatus.confirmed => const Color(0xFF2F8F4E),
-        _BookingStatus.awaitingOwner => const Color(0xFFB26A00),
-        _BookingStatus.cancelled => AppColors.tabInactive,
+          const Color.fromRGBO(77, 56, 232, 0.23),
+        _BookingStatus.confirmed => const Color.fromRGBO(47, 235, 39, 0.3),
+        _BookingStatus.awaitingOwner => const Color.fromRGBO(91, 197, 242, 0.3),
+        _BookingStatus.cancelRequested =>
+          AppColors.orange.withValues(alpha: 0.23),
+        _BookingStatus.cancelled => const Color.fromRGBO(251, 192, 40, 0.17),
       };
 }

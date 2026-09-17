@@ -96,7 +96,13 @@ class Booking {
   final String title;
   final String photo;
 
-  String get datesLabel => stayDatesLabel(checkIn, checkOut);
+  /// Даты карточки «Брони» (Figma `1:11949`): `14.11.2024 - 19.11.2024`.
+  String get datesLabel {
+    String two(int value) => value.toString().padLeft(2, '0');
+    String format(DateTime date) =>
+        '${two(date.day)}.${two(date.month)}.${date.year}';
+    return '${format(checkIn)} - ${format(checkOut)}';
+  }
 
   String get guestsLabel {
     final count = adults + children;

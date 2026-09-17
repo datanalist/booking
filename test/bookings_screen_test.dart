@@ -12,7 +12,11 @@ import 'fixtures/demo_listings.dart';
 import 'fixtures/fake_bookings.dart';
 
 Widget _app(Widget home) {
-  return MaterialApp(theme: AppTheme.light, home: Scaffold(body: home));
+  return MaterialApp(
+    theme: AppTheme.light,
+    scrollBehavior: AppTheme.scrollBehavior,
+    home: Scaffold(body: home),
+  );
 }
 
 Booking _booking({
@@ -96,4 +100,80 @@ void main() {
     expect(find.text('отменено'), findsOneWidget);
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
   });
+
+  testWidgets('upcoming list does not stretch on overscroll', (tester) async {
+    BookingsRepositoryScope.instance = FakeBookingsRepository([
+      _booking(id: 'b1', status: BookingStatus.pendingHost),
+    ]);
+    await tester.pumpWidget(_app(const BookingsScreen()));
+    await tester.pumpAndSettle();
+
+    final context = tester.element(find.byType(ListView));
+    final behavior = ScrollConfiguration.of(context);
+    expect(behavior.getScrollPhysics(context), isA<ClampingScrollPhysics>());
+    expect(
+      behavior.buildOverscrollIndicator(
+        context,
+        const SizedBox.shrink(),
+        const ScrollableDetails(direction: AxisDirection.down),
+      ),
+      isA<SizedBox>(),
+    );
+  });
+
+  testWidgets(
+    'after create, upcoming card chip follows the record status',
+    (tester) async {
+      final repo = FakeBookingsRepository();
+      BookingsRepositoryScope.instance = repo;
+      await tester.pumpWidget(_app(const BookingsScreen()));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Забронированное жилье\nбудет отображаться здесь'),
+        findsOneWidget,
+      );
+
+      final listing = kDemoListings.first;
+      await repo.create(
+        listing: listing,
+        checkIn: DateTime(2026, 9, 12),
+        checkOut: DateTime(2026, 9, 15),
+        adults: 2,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text(listing.title), findsOneWidget);
+      expect(find.text('12.09.2026 - 15.09.2026'), findsOneWidget);
+      expect(find.text('2 гостя'), findsOneWidget);
+      expect(
+        find.text('ожидание подтверждения от владельца'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Забронированное жилье\nбудет отображаться здесь'),
+        findsNothing,
+      );
+
+      final created = repo.items.single;
+      expect(created.status, BookingStatus.pendingHost);
+      repo.items[0] = _booking(
+        id: created.id,
+        status: BookingStatus.awaitingPrepayment,
+        title: created.title,
+        checkIn: created.checkIn,
+        checkOut: created.checkOut,
+        adults: created.adults,
+      );
+      BookingsRepositoryScope.notifyChanged();
+      await tester.pumpAndSettle();
+
+      expect(find.text(listing.title), findsOneWidget);
+      expect(find.text('ожидание предоплаты'), findsOneWidget);
+      expect(
+        find.text('ожидание подтверждения от владельца'),
+        findsNothing,
+      );
+    },
+  );
 }

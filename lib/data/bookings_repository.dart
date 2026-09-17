@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 
 import '../screens/search/search_listing.dart';
@@ -22,6 +23,11 @@ abstract class BookingsRepository {
 
 class BookingsRepositoryScope {
   static BookingsRepository instance = PocketBaseBookingsRepository();
+  static final listVersion = ValueNotifier<int>(0);
+
+  static void notifyChanged() {
+    listVersion.value++;
+  }
 }
 
 class PocketBaseBookingsRepository implements BookingsRepository {
@@ -120,7 +126,9 @@ class PocketBaseBookingsRepository implements BookingsRepository {
         },
         expand: _expand,
       );
-      return _map(record);
+      final booking = _map(record);
+      BookingsRepositoryScope.notifyChanged();
+      return booking;
     } on ClientException catch (error) {
       throw BookingException(_messageFor(error));
     }

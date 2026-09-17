@@ -58,6 +58,7 @@ class FakeBookingsRepository implements BookingsRepository {
     );
     created.add(booking);
     items.add(booking);
+    BookingsRepositoryScope.notifyChanged();
     return booking;
   }
 }

@@ -24,6 +24,21 @@ void main() {
     expect(money.remainder, 5100);
   });
 
+  test('card dates follow the upcoming Figma format', () {
+    expect(
+      Booking(
+        id: '1',
+        listingId: 'l',
+        guestId: 'g',
+        hostId: 'h',
+        checkIn: DateTime(2024, 11, 14),
+        checkOut: DateTime(2024, 11, 19),
+        status: BookingStatus.pendingHost,
+      ).datesLabel,
+      '14.11.2024 - 19.11.2024',
+    );
+  });
+
   test('guest label uses russian plural', () {
     expect(
       Booking(
