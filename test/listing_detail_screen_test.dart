@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:booking/data/booking_draft.dart';
+import 'package:booking/screens/listing/guests_sheet.dart';
 import 'package:booking/screens/listing/listing_detail.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
 import 'package:booking/screens/listing/listing_icons.dart';
@@ -177,11 +178,26 @@ void main() {
       ),
     );
 
-    expect(tester.getSize(find.byWidget(ListingFigmaIcon.mapPin16)), const Size(16, 16));
-    expect(tester.getSize(find.byWidget(ListingFigmaIcon.home16)), const Size(16, 16));
-    expect(tester.getSize(find.byWidget(ListingFigmaIcon.star18)), const Size(18, 18));
-    expect(tester.getSize(find.byWidget(ListingFigmaIcon.security)), const Size(16, 16));
-    expect(tester.getSize(find.byWidget(ListingFigmaIcon.time)), const Size(16, 16));
+    expect(
+      tester.getSize(find.byWidget(ListingFigmaIcon.mapPin16)),
+      const Size(16, 16),
+    );
+    expect(
+      tester.getSize(find.byWidget(ListingFigmaIcon.home16)),
+      const Size(16, 16),
+    );
+    expect(
+      tester.getSize(find.byWidget(ListingFigmaIcon.star18)),
+      const Size(18, 18),
+    );
+    expect(
+      tester.getSize(find.byWidget(ListingFigmaIcon.security)),
+      const Size(16, 16),
+    );
+    expect(
+      tester.getSize(find.byWidget(ListingFigmaIcon.time)),
+      const Size(16, 16),
+    );
 
     final pin = tester.widget<ListingFigmaIcon>(
       find.byWidget(ListingFigmaIcon.mapPin16),
@@ -301,7 +317,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('listing-detail-old-town')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('listing-detail-old-town')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('booking button opens stay dates instead of writing a booking', (
@@ -369,16 +388,53 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(StayDatesSheet), findsNothing);
+    expect(find.byType(GuestsSheet), findsOneWidget);
+    expect(find.text('Гости'), findsOneWidget);
+    expect(bookings.created, isEmpty);
+
+    await tester.tap(find.byKey(const ValueKey('guests-adults-plus')));
+    await tester.tap(find.byKey(const ValueKey('guests-children-plus')));
+    await tester.tap(find.byKey(const ValueKey('guests-pets-plus')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('guests-save')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GuestsSheet), findsNothing);
     expect(bookings.created, isEmpty);
     final draft = await drafts.load(listingId: 'studio-msk');
     expect(draft, isNotNull);
     expect(draft!.checkIn, DateTime(2026, 9, 12));
     expect(draft.checkOut, DateTime(2026, 9, 15));
+    expect(draft.adults, 2);
+    expect(draft.children, 1);
+    expect(draft.pets, 1);
     expect(find.text('3 ночи'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('listing-book-button')));
     await tester.pumpAndSettle();
+    expect(find.byType(StayDatesSheet), findsOneWidget);
+    expect(find.byType(GuestsSheet), findsNothing);
     expect(find.text('12.09.2026'), findsOneWidget);
     expect(find.text('15.09.2026'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('stay-dates-save')));
+    await tester.pumpAndSettle();
+    expect(find.byType(GuestsSheet), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('guests-adults-value')))
+          .data,
+      '2',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('guests-children-value')))
+          .data,
+      '1',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('guests-pets-value'))).data,
+      '1',
+    );
   });
 }

@@ -3,23 +3,92 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Local stay-date draft for the booking flow. Never written to PocketBase.
+/// Guest counts for the local booking draft. Same bounds as search steppers.
+@immutable
+class StayGuests {
+  const StayGuests({
+    required this.adults,
+    required this.children,
+    required this.pets,
+  });
+
+  static const minAdults = 1;
+  static const minChildren = 0;
+  static const minPets = 0;
+  static const maxCount = 16;
+
+  final int adults;
+  final int children;
+  final int pets;
+
+  factory StayGuests.normalized({
+    int adults = minAdults,
+    int children = minChildren,
+    int pets = minPets,
+    bool petsAllowed = true,
+  }) {
+    return StayGuests(
+      adults: adults.clamp(minAdults, maxCount),
+      children: children.clamp(minChildren, maxCount),
+      pets: petsAllowed ? pets.clamp(minPets, maxCount) : minPets,
+    );
+  }
+}
+
+/// Local stay-date + guests draft for the booking flow. Never written to PocketBase.
 @immutable
 class BookingDraft {
   const BookingDraft({
     required this.listingId,
     required this.checkIn,
     required this.checkOut,
+    this.adults = StayGuests.minAdults,
+    this.children = StayGuests.minChildren,
+    this.pets = StayGuests.minPets,
   });
 
   final String listingId;
   final DateTime checkIn;
   final DateTime checkOut;
+  final int adults;
+  final int children;
+  final int pets;
 
-  Map<String, String> toJson() => {
+  StayGuests get guests =>
+      StayGuests.normalized(adults: adults, children: children, pets: pets);
+
+  BookingDraft copyWith({
+    String? listingId,
+    DateTime? checkIn,
+    DateTime? checkOut,
+    int? adults,
+    int? children,
+    int? pets,
+    bool petsAllowed = true,
+  }) {
+    final next = StayGuests.normalized(
+      adults: adults ?? this.adults,
+      children: children ?? this.children,
+      pets: pets ?? this.pets,
+      petsAllowed: petsAllowed,
+    );
+    return BookingDraft(
+      listingId: listingId ?? this.listingId,
+      checkIn: checkIn ?? this.checkIn,
+      checkOut: checkOut ?? this.checkOut,
+      adults: next.adults,
+      children: next.children,
+      pets: next.pets,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
     'listingId': listingId,
     'checkIn': formatDraftDate(checkIn),
     'checkOut': formatDraftDate(checkOut),
+    'adults': adults,
+    'children': children,
+    'pets': pets,
   };
 
   static BookingDraft? fromJson(Map<String, dynamic>? json) {
@@ -29,11 +98,26 @@ class BookingDraft {
     final checkOut = parseDraftDate(json['checkOut']?.toString());
     if (listingId.isEmpty || checkIn == null || checkOut == null) return null;
     if (!checkOut.isAfter(checkIn)) return null;
+    final guests = StayGuests.normalized(
+      adults: _readCount(json['adults'], StayGuests.minAdults),
+      children: _readCount(json['children'], StayGuests.minChildren),
+      pets: _readCount(json['pets'], StayGuests.minPets),
+    );
     return BookingDraft(
       listingId: listingId,
       checkIn: checkIn,
       checkOut: checkOut,
+      adults: guests.adults,
+      children: guests.children,
+      pets: guests.pets,
     );
+  }
+
+  static int _readCount(Object? raw, int fallback) {
+    if (raw is int) return raw;
+    if (raw is num) return raw.round();
+    if (raw is String) return int.tryParse(raw) ?? fallback;
+    return fallback;
   }
 }
 
@@ -55,7 +139,7 @@ DateTime? parseDraftDate(String? raw) {
   return DateTime(year, month, day);
 }
 
-/// Device-only booking draft (listing + stay dates) beside `pb_auth`.
+/// Device-only booking draft (listing + stay dates + guests) beside `pb_auth`.
 class BookingDraftStore {
   BookingDraftStore({Map<String, String>? store}) : _store = store;
 

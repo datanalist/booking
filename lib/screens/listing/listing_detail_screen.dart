@@ -14,6 +14,7 @@ import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
 import 'host_listings_screen.dart';
 import 'listing_detail.dart';
+import 'guests_sheet.dart';
 import 'listing_icons.dart';
 import 'stay_dates_sheet.dart';
 
@@ -238,6 +239,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             _BookingBar(
               listing: listing,
               draftStore: widget.draftStore,
+              adults: widget.adults,
+              children: widget.children,
+              pets: widget.pets,
             ),
           ],
         ),
@@ -768,11 +772,7 @@ class _Host extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            _Avatar(
-              label: host.name,
-              url: host.avatarUrl,
-              size: 56,
-            ),
+            _Avatar(label: host.name, url: host.avatarUrl, size: 56),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -950,10 +950,16 @@ class _BookingBar extends StatefulWidget {
   const _BookingBar({
     required this.listing,
     this.draftStore,
+    this.adults = StayGuests.minAdults,
+    this.children = StayGuests.minChildren,
+    this.pets = StayGuests.minPets,
   });
 
   final SearchListing listing;
   final BookingDraftStore? draftStore;
+  final int adults;
+  final int children;
+  final int pets;
 
   @override
   State<_BookingBar> createState() => _BookingBarState();
@@ -1037,13 +1043,21 @@ class _BookingBarState extends State<_BookingBar> {
       checkOut: saved?.checkOut ?? listing.checkOut,
     );
     if (!mounted || result == null) return;
-    await _drafts.save(
-      BookingDraft(
-        listingId: listing.id,
-        checkIn: result.checkIn,
-        checkOut: result.checkOut,
-      ),
+    final guests = StayGuests.normalized(
+      adults: saved?.adults ?? widget.adults,
+      children: saved?.children ?? widget.children,
+      pets: saved?.pets ?? widget.pets,
+      petsAllowed: listing.petsAllowed,
     );
+    final draft = BookingDraft(
+      listingId: listing.id,
+      checkIn: result.checkIn,
+      checkOut: result.checkOut,
+      adults: guests.adults,
+      children: guests.children,
+      pets: guests.pets,
+    );
+    await _drafts.save(draft);
     if (!mounted) return;
     setState(() {
       _stay = widget.listing.withStay(
@@ -1051,7 +1065,32 @@ class _BookingBarState extends State<_BookingBar> {
         checkOut: result.checkOut,
       );
     });
+    await _openGuests(draft);
   }
+
+  Future<void> _openGuests(BookingDraft draft) async {
+    final guests = await GuestsSheet.show(
+      context,
+      adults: draft.adults,
+      children: draft.children,
+      pets: draft.pets,
+      petsAllowed: widget.listing.petsAllowed,
+    );
+    if (!mounted || guests == null) return;
+    await _drafts.save(
+      draft.copyWith(
+        adults: guests.adults,
+        children: guests.children,
+        pets: guests.pets,
+        petsAllowed: widget.listing.petsAllowed,
+      ),
+    );
+    if (!mounted) return;
+    _afterGuestsSaved();
+  }
+
+  /// Task 4: open the confirmation / draft card. Do not write PocketBase here.
+  void _afterGuestsSaved() {}
 
   @override
   Widget build(BuildContext context) {
