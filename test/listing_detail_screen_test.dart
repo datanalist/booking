@@ -3,7 +3,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:booking/data/auth_repository.dart';
+import 'package:booking/data/booking.dart';
 import 'package:booking/data/booking_draft.dart';
+import 'package:booking/screens/listing/booking_confirmation_sheet.dart';
 import 'package:booking/screens/listing/guests_sheet.dart';
 import 'package:booking/screens/listing/listing_detail.dart';
 import 'package:booking/screens/listing/listing_detail_screen.dart';
@@ -400,6 +403,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(GuestsSheet), findsNothing);
+    expect(find.byType(BookingConfirmationSheet), findsOneWidget);
+    expect(find.text('Бронирование'), findsOneWidget);
     expect(bookings.created, isEmpty);
     final draft = await drafts.load(listingId: 'studio-msk');
     expect(draft, isNotNull);
@@ -408,7 +413,26 @@ void main() {
     expect(draft.adults, 2);
     expect(draft.children, 1);
     expect(draft.pets, 1);
-    expect(find.text('3 ночи'), findsOneWidget);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('confirmation-dates')))
+          .data,
+      '12.09.2026 - 15.09.2026',
+    );
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('confirmation-guests')))
+          .data,
+      '2 взрослых, 1 ребенок, 1 животное',
+    );
+    expect(find.text('3 ночи'), findsWidgets);
+
+    Navigator.of(
+      tester.element(find.byType(BookingConfirmationSheet)),
+    ).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(BookingConfirmationSheet), findsNothing);
+    expect(await drafts.load(listingId: 'studio-msk'), isNotNull);
 
     await tester.tap(find.byKey(const ValueKey('listing-book-button')));
     await tester.pumpAndSettle();
@@ -436,5 +460,55 @@ void main() {
       tester.widget<Text>(find.byKey(const ValueKey('guests-pets-value'))).data,
       '1',
     );
+  });
+
+  testWidgets('confirmation book from the listing writes and clears the draft', (
+    tester,
+  ) async {
+    AuthRepositoryScope.session.value = const AuthSession(
+      userId: 'guest-1',
+      email: 'guest@test.com',
+    );
+    addTearDown(() => AuthRepositoryScope.session.value = null);
+    final bookings = FakeBookingsRepository();
+    final drafts = BookingDraftStore.memory();
+    Booking? created;
+    final listing = kDemoListings
+        .firstWhere((item) => item.id == 'studio-msk')
+        .withStay(
+          checkIn: DateTime(2026, 9, 12),
+          checkOut: DateTime(2026, 9, 15),
+        );
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: <String>{},
+          initialDetail: ListingDetail.fromListing(listing),
+          onFavorite: (_) {},
+          bookingsRepository: bookings,
+          draftStore: drafts,
+          onBookingCreated: (booking) => created = booking,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('listing-book-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stay-dates-save')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('guests-save')));
+    await tester.pumpAndSettle();
+    expect(find.byType(BookingConfirmationSheet), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('confirmation-book')));
+    await tester.pumpAndSettle();
+
+    expect(bookings.created, hasLength(1));
+    expect(created, bookings.created.single);
+    expect(created!.status, BookingStatus.pendingHost);
+    expect(await drafts.load(), isNull);
+    expect(find.byType(BookingConfirmationSheet), findsNothing);
+    expect(find.text('Выберите даты'), findsOneWidget);
   });
 }

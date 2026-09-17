@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../data/booking.dart';
 import '../../data/booking_draft.dart';
 import '../../data/bookings_repository.dart';
 import '../../data/listings_repository.dart';
@@ -12,6 +13,7 @@ import '../../widgets/favorite_heart_button.dart';
 import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
+import 'booking_confirmation_sheet.dart';
 import 'host_listings_screen.dart';
 import 'listing_detail.dart';
 import 'guests_sheet.dart';
@@ -36,6 +38,7 @@ class ListingDetailScreen extends StatefulWidget {
     this.repository,
     this.bookingsRepository,
     this.draftStore,
+    this.onBookingCreated,
     this.adults = 1,
     this.children = 0,
     this.pets = 0,
@@ -48,6 +51,7 @@ class ListingDetailScreen extends StatefulWidget {
   final ListingsRepository? repository;
   final BookingsRepository? bookingsRepository;
   final BookingDraftStore? draftStore;
+  final ValueChanged<Booking>? onBookingCreated;
   final int adults;
   final int children;
   final int pets;
@@ -61,6 +65,7 @@ class ListingDetailScreen extends StatefulWidget {
     ListingsRepository? repository,
     BookingsRepository? bookingsRepository,
     BookingDraftStore? draftStore,
+    ValueChanged<Booking>? onBookingCreated,
     int adults = 1,
     int children = 0,
     int pets = 0,
@@ -75,6 +80,7 @@ class ListingDetailScreen extends StatefulWidget {
           repository: repository,
           bookingsRepository: bookingsRepository,
           draftStore: draftStore,
+          onBookingCreated: onBookingCreated,
           adults: adults,
           children: children,
           pets: pets,
@@ -130,6 +136,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       repository: _repository,
       bookingsRepository: widget.bookingsRepository,
       draftStore: widget.draftStore,
+      onBookingCreated: widget.onBookingCreated,
       adults: widget.adults,
       children: widget.children,
       pets: widget.pets,
@@ -239,6 +246,8 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             _BookingBar(
               listing: listing,
               draftStore: widget.draftStore,
+              bookingsRepository: widget.bookingsRepository,
+              onBookingCreated: widget.onBookingCreated,
               adults: widget.adults,
               children: widget.children,
               pets: widget.pets,
@@ -950,6 +959,8 @@ class _BookingBar extends StatefulWidget {
   const _BookingBar({
     required this.listing,
     this.draftStore,
+    this.bookingsRepository,
+    this.onBookingCreated,
     this.adults = StayGuests.minAdults,
     this.children = StayGuests.minChildren,
     this.pets = StayGuests.minPets,
@@ -957,6 +968,8 @@ class _BookingBar extends StatefulWidget {
 
   final SearchListing listing;
   final BookingDraftStore? draftStore;
+  final BookingsRepository? bookingsRepository;
+  final ValueChanged<Booking>? onBookingCreated;
   final int adults;
   final int children;
   final int pets;
@@ -1086,11 +1099,32 @@ class _BookingBarState extends State<_BookingBar> {
       ),
     );
     if (!mounted) return;
-    _afterGuestsSaved();
+    await _afterGuestsSaved();
   }
 
-  /// Task 4: open the confirmation / draft card. Do not write PocketBase here.
-  void _afterGuestsSaved() {}
+  Future<void> _afterGuestsSaved() async {
+    final draft = await _drafts.load(listingId: widget.listing.id);
+    if (!mounted || draft == null) return;
+    await BookingConfirmationSheet.show(
+      context,
+      listing: widget.listing.withStay(
+        checkIn: draft.checkIn,
+        checkOut: draft.checkOut,
+      ),
+      draft: draft,
+      draftStore: _drafts,
+      bookingsRepository: widget.bookingsRepository,
+      onBookingCreated: widget.onBookingCreated,
+    );
+    if (!mounted) return;
+    final remaining = await _drafts.load(listingId: widget.listing.id);
+    setState(() {
+      _stay = widget.listing.withStay(
+        checkIn: remaining?.checkIn,
+        checkOut: remaining?.checkOut,
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

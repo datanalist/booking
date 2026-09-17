@@ -79,6 +79,12 @@ class ListingFigmaIcon extends StatelessWidget {
     leaf: Size.square(16),
   );
 
+  static const warningInfo20 = ListingFigmaIcon._(
+    asset: 'images/listing/warning-info-20.svg',
+    box: Size.square(20),
+    leaf: Size.square(20),
+  );
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
