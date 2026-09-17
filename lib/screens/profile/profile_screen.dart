@@ -26,6 +26,28 @@ class ProfileScreen extends StatelessWidget {
     if (confirmed != true || !context.mounted) return;
     await _auth.signOut();
     if (!context.mounted) return;
+    _openLoggedOutAuth(context);
+  }
+
+  Future<void> _onDeleteAccount(BuildContext context) async {
+    final confirmed = await showDeleteAccountConfirmDialog(context);
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await _auth.deleteAccount();
+    } on AuthException catch (error) {
+      if (!context.mounted) return;
+      _toast(context, error.message);
+      return;
+    } catch (_) {
+      if (!context.mounted) return;
+      _toast(context, 'Не удалось удалить аккаунт. Проверьте соединение');
+      return;
+    }
+    if (!context.mounted) return;
+    _openLoggedOutAuth(context);
+  }
+
+  void _openLoggedOutAuth(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
       PageRouteBuilder<void>(
         pageBuilder: (context, animation, secondaryAnimation) {
@@ -38,6 +60,12 @@ class ProfileScreen extends StatelessWidget {
       ),
       (route) => false,
     );
+  }
+
+  static void _toast(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -98,7 +126,10 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 36),
-                _ProfileMenu(onLogout: () => _onLogout(context)),
+                _ProfileMenu(
+                  onLogout: () => _onLogout(context),
+                  onDeleteAccount: () => _onDeleteAccount(context),
+                ),
               ],
             ),
           );
@@ -109,9 +140,13 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _ProfileMenu extends StatelessWidget {
-  const _ProfileMenu({required this.onLogout});
+  const _ProfileMenu({
+    required this.onLogout,
+    required this.onDeleteAccount,
+  });
 
   final VoidCallback onLogout;
+  final VoidCallback onDeleteAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -135,9 +170,11 @@ class _ProfileMenu extends StatelessWidget {
         label: 'Выйти из аккаунта',
         onTap: onLogout,
       ),
-      const _MenuItemData(
+      _MenuItemData(
+        key: const ValueKey<String>('profile-delete-account'),
         icon: Icons.person_off_outlined,
         label: 'Удалить аккаунт',
+        onTap: onDeleteAccount,
       ),
     ];
     return DecoratedBox(
@@ -265,16 +302,52 @@ class _NotificationBadge extends StatelessWidget {
   }
 }
 
-const _logoutBarrier = Color(0xFF525353);
+const _confirmBarrier = Color(0xFF525353);
+const _confirmTitleColor = Color(0xFF1A1B1D);
 
 Future<bool?> showLogoutConfirmDialog(BuildContext context) {
+  return _showProfileConfirmDialog(
+    context,
+    title: 'Выйти из аккаунта?',
+    barrierLabel: 'logout-confirm',
+    dialogKey: const ValueKey<String>('profile-logout-dialog'),
+    noKey: const ValueKey<String>('profile-logout-no'),
+    yesKey: const ValueKey<String>('profile-logout-yes'),
+  );
+}
+
+/// Модалка удаления аккаунта по макету (фрейм 1:14585).
+Future<bool?> showDeleteAccountConfirmDialog(BuildContext context) {
+  return _showProfileConfirmDialog(
+    context,
+    title: 'Удалить аккаунт?',
+    barrierLabel: 'delete-account-confirm',
+    dialogKey: const ValueKey<String>('profile-delete-dialog'),
+    noKey: const ValueKey<String>('profile-delete-no'),
+    yesKey: const ValueKey<String>('profile-delete-yes'),
+  );
+}
+
+Future<bool?> _showProfileConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required String barrierLabel,
+  required Key dialogKey,
+  required Key noKey,
+  required Key yesKey,
+}) {
   return showGeneralDialog<bool>(
     context: context,
     barrierDismissible: true,
-    barrierLabel: 'logout-confirm',
-    barrierColor: _logoutBarrier,
+    barrierLabel: barrierLabel,
+    barrierColor: _confirmBarrier,
     pageBuilder: (context, animation, secondaryAnimation) {
-      return const _LogoutConfirmDialog();
+      return _ProfileConfirmDialog(
+        title: title,
+        dialogKey: dialogKey,
+        noKey: noKey,
+        yesKey: yesKey,
+      );
     },
     transitionDuration: const Duration(milliseconds: 200),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
@@ -283,11 +356,19 @@ Future<bool?> showLogoutConfirmDialog(BuildContext context) {
   );
 }
 
-/// Модалка выхода по макету (фрейм 1:14582).
-class _LogoutConfirmDialog extends StatelessWidget {
-  const _LogoutConfirmDialog();
+/// Общая модалка «Нет» / «Да» (выход 1:14582, удаление 1:14585).
+class _ProfileConfirmDialog extends StatelessWidget {
+  const _ProfileConfirmDialog({
+    required this.title,
+    required this.dialogKey,
+    required this.noKey,
+    required this.yesKey,
+  });
 
-  static const _titleColor = Color(0xFF1A1B1D);
+  final String title;
+  final Key dialogKey;
+  final Key noKey;
+  final Key yesKey;
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +380,7 @@ class _LogoutConfirmDialog extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 355),
             child: DecoratedBox(
-              key: const ValueKey<String>('profile-logout-dialog'),
+              key: dialogKey,
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -310,15 +391,15 @@ class _LogoutConfirmDialog extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Выйти из аккаунта?',
-                      style: TextStyle(
+                    Text(
+                      title,
+                      style: const TextStyle(
                         fontFamily: AppTheme.fontFamily,
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
                         height: 1,
                         letterSpacing: 0.018,
-                        color: _titleColor,
+                        color: _confirmTitleColor,
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -328,7 +409,7 @@ class _LogoutConfirmDialog extends StatelessWidget {
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              key: const ValueKey<String>('profile-logout-no'),
+                              key: noKey,
                               onPressed: () => Navigator.of(context).pop(false),
                               style: OutlinedButton.styleFrom(
                                 minimumSize: const Size.fromHeight(52),
@@ -350,7 +431,7 @@ class _LogoutConfirmDialog extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: FilledButton(
-                              key: const ValueKey<String>('profile-logout-yes'),
+                              key: yesKey,
                               onPressed: () => Navigator.of(context).pop(true),
                               style: FilledButton.styleFrom(
                                 minimumSize: const Size.fromHeight(52),

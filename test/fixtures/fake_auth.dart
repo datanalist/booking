@@ -12,9 +12,11 @@ class FakeAuthRepository implements AuthRepository {
   bool failOtpRequest = false;
   bool failOtpVerify = false;
   bool failProfile = false;
+  bool failDeleteAccount = false;
   bool existingProfile = false;
   bool completeOnPoll = false;
   int pollCount = 0;
+  int deleteAccountCalls = 0;
 
   AuthSession session = const AuthSession(
     userId: 'user00000000001',
@@ -64,6 +66,17 @@ class FakeAuthRepository implements AuthRepository {
     session = const AuthSession(userId: '', email: '');
     AuthRepositoryScope.session.value = null;
     AuthRepositoryScope.authLinkError.value = null;
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    deleteAccountCalls++;
+    if (failDeleteAccount) {
+      throw const AuthException(
+        'Не удалось удалить аккаунт. Проверьте соединение',
+      );
+    }
+    await signOut();
   }
 
   @override
