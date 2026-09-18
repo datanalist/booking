@@ -61,7 +61,7 @@
         "name": "email",
         "onlyDomains": [],
         "presentable": false,
-        "required": true,
+        "required": false,
         "system": true,
         "type": "email"
       },
@@ -140,12 +140,222 @@
         "presentable": false,
         "system": false,
         "type": "autodate"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text2849095986",
+        "max": 0,
+        "min": 0,
+        "name": "first_name",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text3356015194",
+        "max": 0,
+        "min": 0,
+        "name": "last_name",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "date2464439331",
+        "max": "",
+        "min": "",
+        "name": "birthdate",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text1146066909",
+        "max": 0,
+        "min": 0,
+        "name": "phone",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "bool3336871844",
+        "name": "limited_browse",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "bool"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text3709889147",
+        "max": 0,
+        "min": 0,
+        "name": "bio",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "select3057528519",
+        "maxSelect": 3,
+        "name": "roles",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "guest",
+          "host",
+          "staff"
+        ]
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "select1546955631",
+        "maxSelect": 1,
+        "name": "account_status",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "active",
+          "pending",
+          "blocked",
+          "rejected"
+        ]
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text767413584",
+        "max": 0,
+        "min": 0,
+        "name": "staff_tasks",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "bool3493774080",
+        "name": "verified_host",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "bool"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "number3494934901",
+        "max": null,
+        "min": null,
+        "name": "years_hosting",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "number3632866850",
+        "max": null,
+        "min": null,
+        "name": "rating",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "number2374679766",
+        "max": null,
+        "min": null,
+        "name": "reviews_count",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "help": "",
+        "hidden": false,
+        "id": "number2901680126",
+        "max": null,
+        "min": null,
+        "name": "balance",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "autogeneratePattern": "",
+        "help": "",
+        "hidden": false,
+        "id": "text431524601",
+        "max": 0,
+        "min": 0,
+        "name": "fcm_token",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       }
     ],
     "indexes": [
       "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
-      "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+      "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''",
+      "CREATE UNIQUE INDEX `idx_users_phone` ON `users` (`phone`) WHERE `phone` != ''"
     ],
+    "created": "2026-09-12 19:06:05.507Z",
+    "updated": "2026-09-18 01:33:29.991Z",
     "system": false,
     "authRule": "",
     "manageRule": null,
@@ -157,6 +367,7 @@
       }
     },
     "oauth2": {
+      "providers": [],
       "mappedFields": {
         "id": "",
         "name": "name",
@@ -177,9 +388,9 @@
       "rule": ""
     },
     "otp": {
-      "enabled": false,
-      "duration": 180,
-      "length": 8,
+      "enabled": true,
+      "duration": 600,
+      "length": 5,
       "emailTemplate": {
         "subject": "Вход в vallome.booking",
         "body": "<!doctype html><html lang=\"ru\"><body style=\"margin:0;padding:0;background:#ffffff;\"><table role=\"presentation\" width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"background:#ffffff;\"><tr><td align=\"center\" style=\"padding:56px 24px;\"><table role=\"presentation\" width=\"560\" cellspacing=\"0\" cellpadding=\"0\" style=\"max-width:560px;width:100%;\"><tr><td align=\"center\" style=\"font-family:Georgia,'Times New Roman',Times,serif;font-size:34px;font-weight:700;color:#111111;letter-spacing:0.04em;padding-bottom:56px;\">vallome.booking</td></tr><tr><td align=\"center\" style=\"font-family:Arial,Helvetica,sans-serif;font-size:28px;color:#1a1a1a;padding-bottom:36px;line-height:1.3;\">Уведомление о входе</td></tr><tr><td align=\"left\" style=\"font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#4a4a4a;padding-bottom:36px;\">Нажмите кнопку ниже, чтобы продолжить.</td></tr><tr><td align=\"center\" style=\"padding-bottom:48px;\"><a href=\"{APP_URL}/api/vallome/magic-auth?id={OTP_ID}&code={OTP}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-block;background:#6B8AFF;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.2;padding:14px 40px;border-radius:6px;\">Авторизоваться</a></td></tr><tr><td align=\"left\" style=\"font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#4a4a4a;\">Ссылка действительна 10 минут с момента отправки.</td></tr></table></td></tr></table></body></html>"

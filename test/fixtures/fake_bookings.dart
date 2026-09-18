@@ -61,4 +61,33 @@ class FakeBookingsRepository implements BookingsRepository {
     BookingsRepositoryScope.notifyChanged();
     return booking;
   }
+
+  @override
+  Future<Booking> patch({
+    required String id,
+    BookingStatus? status,
+    BookingCancelReason? cancelReason,
+    DateTime? requestedCheckIn,
+    DateTime? requestedCheckOut,
+    int? adults,
+    int? children,
+    int? pets,
+  }) async {
+    final index = items.indexWhere((item) => item.id == id);
+    if (index < 0) {
+      throw const BookingException('Бронирование не найдено');
+    }
+    final next = items[index].copyWith(
+      status: status,
+      cancelReason: cancelReason,
+      requestedCheckIn: requestedCheckIn,
+      requestedCheckOut: requestedCheckOut,
+      adults: adults,
+      children: children,
+      pets: pets,
+    );
+    items[index] = next;
+    BookingsRepositoryScope.notifyChanged();
+    return next;
+  }
 }

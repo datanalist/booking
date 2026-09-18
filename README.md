@@ -29,7 +29,7 @@
 | Вкладка | Состояние |
 | --- | --- |
 | Поиск | Живой каталог из PocketBase, карта Mapbox, фильтры, карточка объявления |
-| Брони | Живые записи коллекции `bookings` (`fetchMine`). «Предстоящие» — карточки по макету Figma `1:11949` (фото, название, даты `ДД.ММ.ГГГГ`, гости, чип статуса из поля `bookings.status`). «Архив» — `completed` / `cancelled` (`1:12013`). Пустой таб — иллюстрация и текст по макету Figma `1:11894`. После create список перечитывается (`BookingsRepositoryScope.listVersion` + повторный fetch, когда вкладка снова видна) |
+| Брони | Живые записи коллекции `bookings` (`fetchMine`). «Предстоящие» — карточки по макету Figma `1:11949` (фото, название, даты `ДД.ММ.ГГГГ`, гости, чип статуса из поля `bookings.status`). Клик открывает карточку брони: ожидание хозяина `1:13403`, предоплата `1:13173`, подтверждено `1:12259`. «Архив» — `completed` / `cancelled` (`1:12013`); клик по отменённой — `1:12491`, по прошедшей без отзыва — `1:12718`, с отзывом — `1:12946`. Пустой таб — иллюстрация и текст по макету Figma `1:11894`. После create/patch список перечитывается (`BookingsRepositoryScope.listVersion` + повторный fetch, когда вкладка снова видна) |
 | Избранное | UI карточек, список пустой (серверное избранное не читается) |
 | Чаты | Макет списка на локальных заглушках |
 | Профиль | Имя и аватар сессии; личные данные, уведомления, выход и удаление аккаунта работают; поддержка пока заглушка |
@@ -42,6 +42,15 @@
 - Список и карта с пинами; фото с файлового API PocketBase (`ListingImage`)
 - Деталка объявления свёрстана по макету Figma `1:10782` (герой, удобства, отзывы, хозяин, другие объявления, sticky **Забронировать**). «Смотреть все» открывает список объявлений хозяина; **Забронировать** открывает шит «Даты проживания» (Figma `1:11757`), после **Сохранить** — шит «Гости» (Figma `1:11776`), после ещё одного **Сохранить** — шит подтверждения «Бронирование» (Figma `1:11497`). Даты и гости до подтверждения живут только на устройстве (`SharedPreferences`, ключ `booking_draft`: listing id + заезд + выезд + adults/children/pets). **Вернуться** на карточке подтверждения сбрасывает весь локальный черновик (`BookingDraftStore.clear()`). **Забронировать** на этой карточке пишет запись в PocketBase `bookings` (`BookingsRepository.create`; createRule требует `status = pending_host`, чип на вкладке «Брони» берётся из статуса вернувшейся/прочитанной записи, не захардкожен на карточке) и затем очищает черновик; без сессии показывается «Войдите, чтобы забронировать жилье», запись не создаётся. Новая бронь сразу попадает в Брони → **Предстоящие** (`pending_host` — upcoming). Сразу после успешного create поверх шита всплывает модалка Figma `1:11832` («Запрос на бронирование отправлен» / «Ожидайте подтверждение… 12 часов» / **Ок**) — центрированная карточка 16px на барьере `#525353`, не snackbar и не bottom sheet. **Ок** закрывает попап и шит подтверждения. Параллельно клиент пишет строку в PocketBase `notifications` (title/body из макета, `user` = сессия, `booking` + `listing` с созданной брони); если create уведомления отклонят правила, попап всё равно показывается. Тот же текст уходит в Профиль → **Уведомления** (Figma `1:11396`). Правила календаря те же, что у поиска (`stayDatePickerBounds` / `completeSearchStayDates`); степперы гостей — как в поиске (взрослые от 1, дети и животные от 0, потолок 16), `pets_allowed` объявления блокирует животных.
 - Сердце избранного — глиф Iconly (`FavoriteHeartButton`); состояние локальное, вкладка «Избранное» с PocketBase не связана
+- Блок **Владелец** общий (`ListingHostSection`) на деталке жилья и на всех карточках брони: фото, имя (`first_name` + `last_name`), рейтинг, чат-заглушка, бейджи. «Верификация пройдена» читает `users.verified_host`, не системный email-`verified`. «N лет сдает жилье» — `users.years_hosting`
+
+**Карточка брони**
+- Адрес (подчёркнутый) → модалка `1:13629` → «Да, смотреть» открывает карту Mapbox с пином
+- **Отменить** → `1:13635`; «Да, отменить» пишет `status = cancelled` и `cancel_reason = guest`. Бронь сразу в Архив с чипом «отменено». Ключ БД `cancel_requested` остаётся, в гостевом UI его нет
+- **Изменить бронирование** → шит `1:11560` (даты и гости). «Отправить» пишет `change_requested` и показывает окно `1:11840`. На списке тот же чип, что у `pending_host`: «ожидание подтверждения от владельца» (в макете Предстоящих отдельного чипа для правок нет)
+- **Пожаловаться** → экран `1:11353`: бронь / жильё / владелец. Ticket в коллекцию `tickets`. «Написать владельцу» — заглушка чата
+- Прошедшая без отзыва: кнопка «Оставить отзыв» пишет `reviews` (`kind = listing`). После отправки сразу шаблон «отзыв оставлен»
+- «Внести предоплату» на карточке `awaiting_prepayment` пока заглушка
 
 **Личные данные**
 - Профиль → **Личные данные** (макет Figma `1:14538`)
@@ -73,13 +82,13 @@
 - **Удалить аккаунт** — такая же модалка «Удалить аккаунт?» (Figma `1:14585`). **Нет** / тап вне окна **не** удаляет запись. **Да** вызывает `DELETE` коллекции `users` через SDK PocketBase: id берётся только из текущей сессии (`authStore.record.id`), без склейки filter-строк. Правило сервера: `id = @request.auth.id`
 - После успешного удаления (или если запись уже 404) локальная сессия очищается, открывается **Авторизация**. Ошибка сети / отказа сервера показывает сообщение, сессия сохраняется
 
-**Ещё не сделано:** настоящий OTP по телефону, оплата предоплаты и ответ хозяина, серверные избранное и чаты.
+**Ещё не сделано:** настоящий OTP по телефону, оплата предоплаты и ответ хозяина, серверные избранное и чаты (чат с хозяином с карточки брони — заглушка).
 
 **Прочее**
 - Тема `AppTheme`, locale `ru_RU`, edge-to-edge, скрыт debug-banner
 - Android overscroll stretch (`StretchingOverscrollIndicator`) отключён глобально: `MaterialApp.scrollBehavior` = `AppScrollBehavior` (`ClampingScrollPhysics`, индикатор не строится)
 - Нативный Android splash — белый фон, подпись GlobalStay; в манифесте `INTERNET` и `windowSoftInputMode=adjustResize` (клавиатура не ломает экран авторизации)
-- Виджет-тесты: сплэш → онбординг → auth/magic-link/регистрация, доступ к фото (лист один раз после гранта, снова после отказа), кроп-круг, поиск, фильтры, деталка, брони, профиль (выход и удаление аккаунта), личные данные и подтверждение смены email (репозиторий подменяется фикстурой)
+- Виджет-тесты: сплэш → онбординг → auth/magic-link/регистрация, доступ к фото (лист один раз после гранта, снова после отказа), кроп-круг, поиск, фильтры, деталка, брони (карточка, адрес/карта, отмена, изменение, жалобы, архив, отзыв), маппинг хозяина (`verified_host`), профиль (выход и удаление аккаунта), личные данные и подтверждение смены email (репозиторий подменяется фикстурой)
 
 ## Бэкенд
 
@@ -89,9 +98,9 @@
 flutter run -d linux --dart-define=POCKETBASE_URL=https://example.com
 ```
 
-Схема коллекций — [`pb_schema.json`](pb_schema.json) и [`docs/pocketbase-schema.md`](docs/pocketbase-schema.md). Сервер (Caddy, TLS) — [`docs/pocketbase-server.md`](docs/pocketbase-server.md).
+Схема коллекций — [`pb_schema.json`](pb_schema.json) и [`docs/pocketbase-schema.md`](docs/pocketbase-schema.md). У `users` бейдж хозяина — поле `verified_host`, его нельзя путать с системным `verified` (подтверждение email). Сервер (Caddy, TLS) — [`docs/pocketbase-server.md`](docs/pocketbase-server.md).
 
-**Запросы к PocketBase.** Клиент не склеивает пользовательские строки в `filter`. Значения подставляются через `pbFilter` (`lib/data/pocketbase_filter.dart`) с плейсхолдерами `{:name}` — тот же синтаксис, что у `PocketBase.filter` в Dart SDK. Имена коллекций только из `PbCollection` (`users`, `listings`, `bookings`, `notifications`), не из ввода. Пример:
+**Запросы к PocketBase.** Клиент не склеивает пользовательские строки в `filter`. Значения подставляются через `pbFilter` (`lib/data/pocketbase_filter.dart`) с плейсхолдерами `{:name}` — тот же синтаксис, что у `PocketBase.filter` в Dart SDK. Имена коллекций только из `PbCollection` (`users`, `listings`, `bookings`, `notifications`, `tickets`, `reviews`), не из ввода. Пример:
 
 ```dart
 final filter = pbFilter(
@@ -109,6 +118,7 @@ await pb.collection(PbCollection.listings).getFullList(filter: filter);
 python3 scripts/seed_listings.py
 python3 scripts/seed_listings.py --reset   # удалить сид-объявления и создать заново
 python3 scripts/enable_email_otp.py        # magic-link (OTP) на email + SMTP, отправитель vallome.booking
+python3 scripts/ensure_users.py            # доменные поля users + бэкафил хозяев (бейдж = verified_host, не системный verified)
 python3 scripts/ensure_bookings.py         # коллекция bookings, правила и индексы
 python3 scripts/ensure_notifications.py    # коллекция notifications (инбокс), createRule = текущий user
 bash scripts/push_emulator_gallery.sh      # фото профиля в галерею эмулятора
@@ -215,8 +225,8 @@ Booking/
 │   ├── main.dart
 │   ├── theme/app_theme.dart
 │   ├── config/                    # PocketBase URL, Mapbox
-│   ├── data/                      # клиент PB, auth, listings, bookings, notifications, pbFilter
-│   ├── widgets/                   # ListingImage, FavoriteHeartButton, confirm dialog
+│   ├── data/                      # клиент PB, auth, listings, bookings, tickets, reviews, notifications, pbFilter
+│   ├── widgets/                   # ListingImage, ListingHostSection, FavoriteHeartButton, confirm dialog
 │   ├── shell/main_shell.dart      # нижняя панель
 │   └── screens/
 │       ├── splash_screen.dart
@@ -224,7 +234,7 @@ Booking/
 │       ├── auth/                  # email magic-link, phone stub, регистрация, фото
 │       ├── search/                # каталог, карта, фильтры, запрос
 │       ├── listing/               # деталка, даты, гости, подтверждение брони, попап 1:11832, объявления хозяина
-│       ├── bookings/              # предстоящие 1:11949 / архив из API; пустой таб Figma 1:11894
+│       ├── bookings/              # список, карточки статусов, адрес/карта, отмена, изменение, жалобы, архив, отзыв
 │       ├── favorites/
 │       ├── chat/
 │       └── profile/               # меню, личные данные, уведомления 1:11396, выход
@@ -232,6 +242,7 @@ Booking/
 ├── scripts/
 │   ├── seed_listings.py
 │   ├── enable_email_otp.py
+│   ├── ensure_users.py
 │   ├── ensure_bookings.py
 │   ├── ensure_notifications.py
 │   └── push_emulator_gallery.sh

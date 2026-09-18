@@ -34,6 +34,22 @@ class ListingHost {
   final String avatarUrl;
 }
 
+/// Имя хозяина: `first_name` + `last_name`, иначе поле `name`.
+String listingHostDisplayName({
+  String firstName = '',
+  String lastName = '',
+  String name = '',
+}) {
+  final parts = [
+    firstName.trim(),
+    lastName.trim(),
+  ].where((part) => part.isNotEmpty);
+  final combined = parts.join(' ');
+  if (combined.isNotEmpty) return combined;
+  final fallback = name.trim();
+  return fallback.isEmpty ? 'Хозяин' : fallback;
+}
+
 class SearchListing {
   const SearchListing({
     required this.id,
@@ -65,6 +81,11 @@ class SearchListing {
     this.reviewsList = const [],
     this.checkIn,
     this.checkOut,
+    this.houseRules = '',
+    this.checkInTime = '',
+    this.checkOutTime = '',
+    this.accessInfo = '',
+    this.cancellationAllowed = false,
   });
 
   final String id;
@@ -96,6 +117,11 @@ class SearchListing {
   final List<ListingReview> reviewsList;
   final DateTime? checkIn;
   final DateTime? checkOut;
+  final String houseRules;
+  final String checkInTime;
+  final String checkOutTime;
+  final String accessInfo;
+  final bool cancellationAllowed;
 
   int get reviewCount => reviewCountFromLabel(reviews);
 
@@ -155,6 +181,11 @@ class SearchListing {
       reviewsList: reviewsList,
       checkIn: nightCount > 0 ? checkIn : null,
       checkOut: nightCount > 0 ? checkOut : null,
+      houseRules: houseRules,
+      checkInTime: checkInTime,
+      checkOutTime: checkOutTime,
+      accessInfo: accessInfo,
+      cancellationAllowed: cancellationAllowed,
     );
   }
 }

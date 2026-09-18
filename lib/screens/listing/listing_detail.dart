@@ -6,6 +6,7 @@ export '../search/search_listing.dart'
     show
         ListingHost,
         ListingReview,
+        listingHostDisplayName,
         reviewCountFromLabel,
         reviewCountLabel,
         yearsHostingLabel;
