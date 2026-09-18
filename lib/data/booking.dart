@@ -14,7 +14,9 @@ enum BookingStatus {
   final String apiKey;
 
   bool get isPast =>
-      this == BookingStatus.completed || this == BookingStatus.cancelled;
+      this == BookingStatus.completed ||
+      this == BookingStatus.cancelled ||
+      this == BookingStatus.cancelRequested;
 
   static BookingStatus fromApi(String value) {
     for (final status in BookingStatus.values) {
@@ -69,6 +71,12 @@ class Booking {
     this.requestedCheckOut,
     this.title = '',
     this.photo = '',
+    this.address = '',
+    this.city = '',
+    this.latitude = 0,
+    this.longitude = 0,
+    this.hostName = '',
+    this.hostAvatar = '',
   });
 
   final String id;
@@ -95,6 +103,83 @@ class Booking {
   final DateTime? requestedCheckOut;
   final String title;
   final String photo;
+  final String address;
+  final String city;
+  final double latitude;
+  final double longitude;
+  final String hostName;
+  final String hostAvatar;
+
+  String get addressLabel {
+    if (address.isNotEmpty) return address;
+    return city;
+  }
+
+  Booking copyWith({
+    String? id,
+    String? listingId,
+    String? guestId,
+    String? hostId,
+    DateTime? checkIn,
+    DateTime? checkOut,
+    BookingStatus? status,
+    int? adults,
+    int? children,
+    int? pets,
+    String? guestNote,
+    int? total,
+    int? prepay,
+    int? remainder,
+    int? commission,
+    int? hostAmount,
+    DateTime? prepaidAt,
+    BookingCancelReason? cancelReason,
+    DateTime? hostRespondUntil,
+    DateTime? prepayUntil,
+    DateTime? requestedCheckIn,
+    DateTime? requestedCheckOut,
+    String? title,
+    String? photo,
+    String? address,
+    String? city,
+    double? latitude,
+    double? longitude,
+    String? hostName,
+    String? hostAvatar,
+  }) {
+    return Booking(
+      id: id ?? this.id,
+      listingId: listingId ?? this.listingId,
+      guestId: guestId ?? this.guestId,
+      hostId: hostId ?? this.hostId,
+      checkIn: checkIn ?? this.checkIn,
+      checkOut: checkOut ?? this.checkOut,
+      status: status ?? this.status,
+      adults: adults ?? this.adults,
+      children: children ?? this.children,
+      pets: pets ?? this.pets,
+      guestNote: guestNote ?? this.guestNote,
+      total: total ?? this.total,
+      prepay: prepay ?? this.prepay,
+      remainder: remainder ?? this.remainder,
+      commission: commission ?? this.commission,
+      hostAmount: hostAmount ?? this.hostAmount,
+      prepaidAt: prepaidAt ?? this.prepaidAt,
+      cancelReason: cancelReason ?? this.cancelReason,
+      hostRespondUntil: hostRespondUntil ?? this.hostRespondUntil,
+      prepayUntil: prepayUntil ?? this.prepayUntil,
+      requestedCheckIn: requestedCheckIn ?? this.requestedCheckIn,
+      requestedCheckOut: requestedCheckOut ?? this.requestedCheckOut,
+      title: title ?? this.title,
+      photo: photo ?? this.photo,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      hostName: hostName ?? this.hostName,
+      hostAvatar: hostAvatar ?? this.hostAvatar,
+    );
+  }
 
   /// Даты карточки «Брони» (Figma `1:11949`): `14.11.2024 - 19.11.2024`.
   String get datesLabel {

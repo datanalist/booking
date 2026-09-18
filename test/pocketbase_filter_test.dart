@@ -12,6 +12,8 @@ void main() {
         PbCollection.requireKnown(PbCollection.notifications),
         'notifications',
       );
+      expect(PbCollection.requireKnown(PbCollection.tickets), 'tickets');
+      expect(PbCollection.requireKnown(PbCollection.reviews), 'reviews');
     });
 
     test('rejects unsanitized collection names', () {

@@ -13,6 +13,7 @@ import 'package:booking/screens/listing/listing_detail_screen.dart';
 import 'package:booking/screens/listing/listing_icons.dart';
 import 'package:booking/screens/listing/stay_dates_sheet.dart';
 import 'package:booking/theme/app_theme.dart';
+import 'package:booking/widgets/listing_host_section.dart';
 
 import 'fixtures/demo_listings.dart';
 import 'fixtures/fake_bookings.dart';
@@ -59,6 +60,36 @@ void main() {
     ]);
   });
 
+  test('host display name joins first and last with a space', () {
+    expect(
+      listingHostDisplayName(firstName: 'Ирина', lastName: 'Иванова'),
+      'Ирина Иванова',
+    );
+    expect(
+      listingHostDisplayName(name: 'Анна Иваненко'),
+      'Анна Иваненко',
+    );
+    expect(listingHostDisplayName(), 'Хозяин');
+  });
+
+  testWidgets('ListingHostSection shows kAnna verification and years badges', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        const Scaffold(
+          body: ListingHostSection(host: kAnna),
+        ),
+      ),
+    );
+
+    expect(find.text('Анна Иваненко'), findsOneWidget);
+    expect(kAnna.verified, isTrue);
+    expect(kAnna.years, 4);
+    expect(find.text('Верификация пройдена'), findsOneWidget);
+    expect(find.text('4 года сдает жилье'), findsOneWidget);
+  });
+
   test('review labels use russian plurals', () {
     expect(reviewCountFromLabel('(13)'), 13);
     expect(reviewCountLabel(1), '(1 отзыв)');
@@ -101,6 +132,7 @@ void main() {
     expect(find.text('Анна Иваненко'), findsOneWidget);
     expect(find.text('Верификация пройдена'), findsOneWidget);
     expect(find.text('4 года сдает жилье'), findsOneWidget);
+    expect(find.byKey(const ValueKey('listing-host-chat')), findsOneWidget);
     expect(find.text('Другие объявления владельца'), findsOneWidget);
     expect(find.text('Частный дом в 10 км от Москвы'), findsOneWidget);
     expect(find.text('Забронировать'), findsOneWidget);

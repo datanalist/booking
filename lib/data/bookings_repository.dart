@@ -19,6 +19,17 @@ abstract class BookingsRepository {
     int pets = 0,
     String guestNote = '',
   });
+
+  Future<Booking> patch({
+    required String id,
+    BookingStatus? status,
+    BookingCancelReason? cancelReason,
+    DateTime? requestedCheckIn,
+    DateTime? requestedCheckOut,
+    int? adults,
+    int? children,
+    int? pets,
+  });
 }
 
 class BookingsRepositoryScope {
@@ -34,7 +45,7 @@ class PocketBaseBookingsRepository implements BookingsRepository {
   PocketBaseBookingsRepository({PocketBase? client}) : _client = client;
 
   static const collection = PbCollection.bookings;
-  static const _expand = 'listing';
+  static const _expand = 'listing,host';
   static const occupyingStatuses = [
     'pending_host',
     'awaiting_prepayment',
@@ -134,6 +145,43 @@ class PocketBaseBookingsRepository implements BookingsRepository {
     }
   }
 
+  @override
+  Future<Booking> patch({
+    required String id,
+    BookingStatus? status,
+    BookingCancelReason? cancelReason,
+    DateTime? requestedCheckIn,
+    DateTime? requestedCheckOut,
+    int? adults,
+    int? children,
+    int? pets,
+  }) async {
+    final body = <String, dynamic>{};
+    if (status != null) body['status'] = status.apiKey;
+    if (cancelReason != null) body['cancel_reason'] = cancelReason.apiKey;
+    if (requestedCheckIn != null) {
+      body['requested_check_in'] = _dateValue(requestedCheckIn);
+    }
+    if (requestedCheckOut != null) {
+      body['requested_check_out'] = _dateValue(requestedCheckOut);
+    }
+    if (adults != null) body['adults'] = adults < 1 ? 1 : adults;
+    if (children != null) body['children'] = children < 0 ? 0 : children;
+    if (pets != null) body['pets'] = pets < 0 ? 0 : pets;
+    try {
+      final record = await _pb.collection(collection).update(
+        id,
+        body: body,
+        expand: _expand,
+      );
+      final booking = _map(record);
+      BookingsRepositoryScope.notifyChanged();
+      return booking;
+    } on ClientException catch (error) {
+      throw BookingException(_messageFor(error));
+    }
+  }
+
   Future<bool> _hasOverlap(
     String listingId,
     DateTime checkIn,
@@ -167,11 +215,14 @@ class PocketBaseBookingsRepository implements BookingsRepository {
 
   Booking _map(RecordModel record) {
     final listing = _expanded(record, 'listing');
+    final host = _expanded(record, 'host');
     final photos = listing == null
         ? const <String>[]
         : _fileUrls(listing, 'photos');
+    final geo = listing == null ? (0.0, 0.0) : _geo(listing);
     final checkIn = _date(record, 'check_in') ?? DateTime.fromMillisecondsSinceEpoch(0);
     final checkOut = _date(record, 'check_out') ?? checkIn;
+    final hostAvatarName = host?.get<String>('avatar', '') ?? '';
     return Booking(
       id: record.id,
       listingId: _relationId(record, 'listing'),
@@ -199,7 +250,37 @@ class PocketBaseBookingsRepository implements BookingsRepository {
       requestedCheckOut: _date(record, 'requested_check_out'),
       title: listing?.get<String>('title', '') ?? '',
       photo: photos.isEmpty ? '' : photos.first,
+      address: listing?.get<String>('address', '') ?? '',
+      city: listing?.get<String>('city', '') ?? '',
+      latitude: geo.$1,
+      longitude: geo.$2,
+      hostName: _hostName(host),
+      hostAvatar: host == null || hostAvatarName.isEmpty
+          ? ''
+          : _pb.files.getURL(host, hostAvatarName).toString(),
     );
+  }
+
+  String _hostName(RecordModel? host) {
+    if (host == null) return '';
+    return listingHostDisplayName(
+      firstName: host.get<String>('first_name', ''),
+      lastName: host.get<String>('last_name', ''),
+      name: host.get<String>('name', ''),
+    );
+  }
+
+  (double, double) _geo(RecordModel record) {
+    final raw = record.data['geo'];
+    if (raw is Map) {
+      final lat = raw['lat'] ?? raw['latitude'];
+      final lon = raw['lon'] ?? raw['lng'] ?? raw['longitude'];
+      return (
+        lat is num ? lat.toDouble() : double.tryParse('$lat') ?? 0,
+        lon is num ? lon.toDouble() : double.tryParse('$lon') ?? 0,
+      );
+    }
+    return (0, 0);
   }
 
   RecordModel? _expanded(RecordModel record, String field) {

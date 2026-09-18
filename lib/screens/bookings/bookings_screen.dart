@@ -6,6 +6,8 @@ import '../../data/booking.dart';
 import '../../data/bookings_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/listing_image.dart';
+import 'booking_card_open.dart';
+import 'booking_status_style.dart';
 
 /// Вкладка «Бронирования» по клиентским фреймам «Брони» 393×852.
 /// Пустой таб: `1:11894`. Предстоящие: `1:11949` / `1:11948`, архив — `1:12013`.
@@ -133,7 +135,13 @@ class _BookingsScreenState extends State<BookingsScreen> {
       itemCount: items.length,
       separatorBuilder: (_, _) => const SizedBox(height: 24),
       itemBuilder: (context, index) {
-        return _BookingCard(booking: items[index]);
+        final booking = items[index];
+        return GestureDetector(
+          key: ValueKey('booking-card-${booking.id}'),
+          onTap: () => openBookingCard(context, booking: booking),
+          behavior: HitTestBehavior.opaque,
+          child: _BookingCard(booking: booking),
+        );
       },
     );
   }
@@ -282,7 +290,7 @@ class _BookingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chip = _chipFor(booking.status);
+    final chip = bookingStatusChipFor(booking.status);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -362,7 +370,7 @@ class _BookingCard extends StatelessWidget {
               ),
               if (chip != null) ...[
                 const SizedBox(height: 8),
-                _StatusChip(status: chip),
+                BookingStatusChipView(status: chip),
               ],
             ],
           ),
@@ -372,72 +380,3 @@ class _BookingCard extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final _BookingStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: status.background,
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(6, 3, 6, 3),
-        child: Text(
-          status.label,
-          style: const TextStyle(
-            fontFamily: AppTheme.fontFamily,
-            fontWeight: FontWeight.w400,
-            fontSize: 10,
-            height: 1.4,
-            color: Color(0xFF1A1B1D),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-enum _BookingStatus {
-  awaitingPrepayment,
-  confirmed,
-  awaitingOwner,
-  cancelRequested,
-  cancelled,
-}
-
-_BookingStatus? _chipFor(BookingStatus status) {
-  return switch (status) {
-    BookingStatus.pendingHost ||
-    BookingStatus.changeRequested =>
-      _BookingStatus.awaitingOwner,
-    BookingStatus.awaitingPrepayment => _BookingStatus.awaitingPrepayment,
-    BookingStatus.confirmed => _BookingStatus.confirmed,
-    BookingStatus.cancelRequested => _BookingStatus.cancelRequested,
-    BookingStatus.cancelled => _BookingStatus.cancelled,
-    BookingStatus.completed => null,
-  };
-}
-
-extension on _BookingStatus {
-  String get label => switch (this) {
-        _BookingStatus.awaitingPrepayment => 'ожидание предоплаты',
-        _BookingStatus.confirmed => 'бронирование подтверждено',
-        _BookingStatus.awaitingOwner => 'ожидание подтверждения от владельца',
-        _BookingStatus.cancelRequested => 'запрос на отмену',
-        _BookingStatus.cancelled => 'отменено',
-      };
-
-  Color get background => switch (this) {
-        _BookingStatus.awaitingPrepayment =>
-          const Color.fromRGBO(77, 56, 232, 0.23),
-        _BookingStatus.confirmed => const Color.fromRGBO(47, 235, 39, 0.3),
-        _BookingStatus.awaitingOwner => const Color.fromRGBO(91, 197, 242, 0.3),
-        _BookingStatus.cancelRequested =>
-          AppColors.orange.withValues(alpha: 0.23),
-        _BookingStatus.cancelled => const Color.fromRGBO(251, 192, 40, 0.17),
-      };
-}

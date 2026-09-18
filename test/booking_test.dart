@@ -4,13 +4,23 @@ import 'package:booking/data/booking.dart';
 import 'package:booking/screens/search/search_listing.dart';
 
 void main() {
-  test('past statuses are completed and cancelled', () {
+  test('past statuses are completed, cancelled and cancel_requested', () {
     expect(BookingStatus.completed.isPast, isTrue);
     expect(BookingStatus.cancelled.isPast, isTrue);
+    expect(BookingStatus.cancelRequested.isPast, isTrue);
     expect(BookingStatus.pendingHost.isPast, isFalse);
     expect(BookingStatus.confirmed.isPast, isFalse);
     expect(BookingStatus.fromApi('awaiting_prepayment'),
         BookingStatus.awaitingPrepayment);
+    expect(BookingStatus.fromApi('pending_host'), BookingStatus.pendingHost);
+    expect(
+      BookingStatus.fromApi('change_requested'),
+      BookingStatus.changeRequested,
+    );
+    expect(
+      BookingStatus.fromApi('pending_host'),
+      isNot(BookingStatus.fromApi('change_requested')),
+    );
   });
 
   test('booking money splits 15 percent commission as prepay', () {

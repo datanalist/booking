@@ -47,6 +47,11 @@ SearchListing _stay({
   required Set<String> features,
   List<String> photos = const [],
   List<ListingReview> reviewsList = const [],
+  String houseRules = '',
+  String checkInTime = '',
+  String checkOutTime = '',
+  String accessInfo = '',
+  bool cancellationAllowed = false,
 }) {
   return SearchListing(
     id: id,
@@ -76,6 +81,11 @@ SearchListing _stay({
     features: features,
     amenities: features.where((item) => item != 'Парковка' && item != 'Бассейн' && item != 'Сауна' && item != 'Камин' && item != 'Завтраки' && item != 'Спортзал' && item != 'Самостоятельное заселение').toList(),
     reviewsList: reviewsList,
+    houseRules: houseRules,
+    checkInTime: checkInTime,
+    checkOutTime: checkOutTime,
+    accessInfo: accessInfo,
+    cancellationAllowed: cancellationAllowed,
   ).withStay();
 }
 
@@ -129,6 +139,13 @@ final kDemoListings = <SearchListing>[
             'В целом всё хорошо! Но были нюансы из-за которых 5 звезд ставить не хочется.',
       ),
     ],
+    houseRules:
+        'Максимум 4 гостя\nНе включать громко музыку или телевизор после 22:00\nНе курить\nНельзя с животными',
+    checkInTime: '14:00',
+    checkOutTime: '12:00',
+    accessInfo:
+        'Введите код домофона 3486\nПоднимитесь на 4 этаж\nВведите код на двери 846395',
+    cancellationAllowed: false,
   ),
   _stay(
     id: 'old-town',
@@ -225,11 +242,13 @@ class FakeListingsRepository implements ListingsRepository {
 
   @override
   Future<ListingDetail> fetchDetail(SearchListing listing) async {
+    final matches = items.where((item) => item.id == listing.id);
+    final resolved = matches.isEmpty ? listing : matches.first;
     return ListingDetail.fromListing(
-      listing,
+      resolved,
       hostListings: [
         for (final item in items)
-          if (item.id != listing.id && item.hostId == listing.hostId) item,
+          if (item.id != resolved.id && item.hostId == resolved.hostId) item,
       ],
     );
   }

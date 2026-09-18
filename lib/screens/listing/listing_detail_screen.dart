@@ -11,7 +11,9 @@ import '../../data/listings_repository.dart';
 import '../../data/notifications_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
+import '../../widgets/listing_host_section.dart';
 import '../../widgets/listing_image.dart';
+import '../bookings/booking_complaint_booking_dialog.dart';
 import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
 import 'booking_confirmation_sheet.dart';
@@ -25,7 +27,6 @@ const _meta = Color(0xFF525353);
 const _divider = Color(0xFFFFE3B7);
 const _reviewFill = Color(0x0FFBC028);
 const _reviewStroke = Color(0x2BFBC028);
-const _badgeGreen = Color.fromRGBO(73, 204, 95, 0.97);
 const _heroOverlay = Color.fromRGBO(16, 51, 99, 0.05);
 const _dotInactive = Color.fromRGBO(251, 192, 40, 0.17);
 
@@ -223,7 +224,13 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                           const SizedBox(height: 20),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: _Host(host: detail.host),
+                            child: ListingHostSection(
+                              host: detail.host,
+                              onChat: () => openHostChatStub(
+                                context,
+                                hostName: detail.host.name,
+                              ),
+                            ),
                           ),
                           if (detail.hostListings.isNotEmpty) ...[
                             const SizedBox(height: 20),
@@ -765,135 +772,6 @@ class _ReviewCard extends StatelessWidget {
   }
 }
 
-class _Host extends StatelessWidget {
-  const _Host({required this.host});
-
-  final ListingHost host;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Владелец',
-          style: TextStyle(
-            fontFamily: AppTheme.fontFamily,
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            height: 1.40,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            _Avatar(label: host.name, url: host.avatarUrl, size: 56),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    host.name,
-                    style: const TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontWeight: FontWeight.w400,
-                      fontSize: 14,
-                      height: 1.40,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        host.rating,
-                        style: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontWeight: FontWeight.w400,
-                          fontSize: 12,
-                          height: 1.50,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        reviewCountLabel(host.reviewCount),
-                        style: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontWeight: FontWeight.w400,
-                          fontSize: 12,
-                          height: 1.50,
-                          color: _meta,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      const Flexible(child: _HostStars()),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (host.verified)
-              const _HostBadge(
-                icon: ListingFigmaIcon.security,
-                label: 'Верификация пройдена',
-              ),
-            if (host.years > 0)
-              _HostBadge(
-                icon: ListingFigmaIcon.time,
-                label: yearsHostingLabel(host.years),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _HostBadge extends StatelessWidget {
-  const _HostBadge({required this.icon, required this.label});
-
-  final Widget icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: ShapeDecoration(
-        color: _badgeGreen,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontWeight: FontWeight.w400,
-              fontSize: 12,
-              height: 1.50,
-              color: AppColors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _HostListings extends StatelessWidget {
   const _HostListings({
     required this.listings,
@@ -1269,28 +1147,6 @@ class _ReviewStars extends StatelessWidget {
               ? ListingFigmaIcon.reviewStarOn
               : ListingFigmaIcon.reviewStarOff,
         ],
-      ],
-    );
-  }
-}
-
-class _HostStars extends StatelessWidget {
-  const _HostStars();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ListingFigmaIcon.star12,
-        SizedBox(width: 2),
-        ListingFigmaIcon.star12,
-        SizedBox(width: 2),
-        ListingFigmaIcon.star12,
-        SizedBox(width: 2),
-        ListingFigmaIcon.star12,
-        SizedBox(width: 2),
-        ListingFigmaIcon.star12,
       ],
     );
   }

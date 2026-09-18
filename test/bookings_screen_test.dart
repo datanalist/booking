@@ -85,6 +85,11 @@ void main() {
         status: BookingStatus.cancelled,
         title: 'Лофт у Казанского кремля',
       ),
+      _booking(
+        id: 'b3',
+        status: BookingStatus.cancelRequested,
+        title: 'Дом у озера',
+      ),
     ]);
 
     await tester.pumpWidget(_app(const BookingsScreen()));
@@ -93,13 +98,41 @@ void main() {
     expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
     expect(find.text('ожидание подтверждения от владельца'), findsOneWidget);
     expect(find.text('Лофт у Казанского кремля'), findsNothing);
+    expect(find.text('Дом у озера'), findsNothing);
+    expect(find.text('запрос на отмену'), findsNothing);
 
     await tester.tap(find.text('Архив'));
     await tester.pumpAndSettle();
     expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
-    expect(find.text('отменено'), findsOneWidget);
+    expect(find.text('Дом у озера'), findsOneWidget);
+    expect(find.text('отменено'), findsNWidgets(2));
+    expect(find.text('запрос на отмену'), findsNothing);
     expect(find.text('Уютная студия в центре Москвы'), findsNothing);
   });
+
+  testWidgets(
+    'change_requested upcoming chip matches pending_host',
+    (tester) async {
+      BookingsRepositoryScope.instance = FakeBookingsRepository([
+        _booking(id: 'b1', status: BookingStatus.pendingHost),
+        _booking(
+          id: 'b2',
+          status: BookingStatus.changeRequested,
+          title: 'Отель Венеция',
+        ),
+      ]);
+
+      await tester.pumpWidget(_app(const BookingsScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
+      expect(find.text('Отель Венеция'), findsOneWidget);
+      expect(
+        find.text('ожидание подтверждения от владельца'),
+        findsNWidgets(2),
+      );
+    },
+  );
 
   testWidgets('upcoming list does not stretch on overscroll', (tester) async {
     BookingsRepositoryScope.instance = FakeBookingsRepository([
