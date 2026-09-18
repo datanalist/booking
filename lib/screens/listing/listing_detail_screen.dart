@@ -19,6 +19,7 @@ import '../search/search_query_sheet.dart';
 import 'booking_confirmation_sheet.dart';
 import 'host_listings_screen.dart';
 import 'listing_detail.dart';
+import 'listing_reviews_screen.dart';
 import 'guests_sheet.dart';
 import 'listing_icons.dart';
 import 'stay_dates_sheet.dart';
@@ -642,7 +643,15 @@ class _Reviews extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              const _SeeAll(),
+              _SeeAll(
+                key: const ValueKey('listing-reviews-see-all'),
+                onTap: () => ListingReviewsScreen.open(
+                  context,
+                  rating: listing.rating,
+                  reviewCount: count,
+                  reviews: detail.reviews,
+                ),
+              ),
             ],
           ),
         ),
@@ -720,7 +729,7 @@ class _ReviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _Avatar(label: review.author, size: 30),
+              _Avatar(label: review.author, size: 30, url: review.avatarUrl),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(

@@ -27,21 +27,11 @@ void main() {
       9000,
     );
     expect(
-      quoteStay(
-        pricePerNight: 3000,
-        price14: 2800,
-        price28: 2500,
-        nights: 14,
-      ),
+      quoteStay(pricePerNight: 3000, price14: 2800, price28: 2500, nights: 14),
       const StayQuote(nights: 14, unitPrice: 2800, total: 39200),
     );
     expect(
-      quoteStay(
-        pricePerNight: 3000,
-        price14: 2800,
-        price28: 2500,
-        nights: 28,
-      ),
+      quoteStay(pricePerNight: 3000, price14: 2800, price28: 2500, nights: 28),
       const StayQuote(nights: 28, unitPrice: 2500, total: 70000),
     );
   });
@@ -64,11 +54,22 @@ void main() {
 
   test('stayNightsBetween counts calendar days', () {
     expect(
-      stayNightsBetween(
-        DateTime(2026, 9, 16, 23),
-        DateTime(2026, 9, 20, 1),
-      ),
+      stayNightsBetween(DateTime(2026, 9, 16, 23), DateTime(2026, 9, 20, 1)),
       4,
     );
+  });
+
+  test('reviewPostedAgo uses russian relative labels', () {
+    final now = DateTime(2026, 9, 18, 12);
+    expect(reviewPostedAgo(now, now: now), 'только что');
+    expect(
+      reviewPostedAgo(now.subtract(const Duration(days: 3)), now: now),
+      '3 дня назад',
+    );
+    expect(
+      reviewPostedAgo(now.subtract(const Duration(days: 7)), now: now),
+      'неделю назад',
+    );
+    expect(parseReviewCreatedAt('2026-09-15 12:00:00.000Z'), isNotNull);
   });
 }

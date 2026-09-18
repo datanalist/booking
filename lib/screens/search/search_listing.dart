@@ -6,12 +6,14 @@ class ListingReview {
     required this.postedAgo,
     required this.stars,
     required this.text,
+    this.avatarUrl = '',
   });
 
   final String author;
   final String postedAgo;
   final int stars;
   final String text;
+  final String avatarUrl;
 }
 
 class ListingHost {
@@ -39,6 +41,7 @@ String listingHostDisplayName({
   String firstName = '',
   String lastName = '',
   String name = '',
+  String emptyLabel = 'Хозяин',
 }) {
   final parts = [
     firstName.trim(),
@@ -47,7 +50,7 @@ String listingHostDisplayName({
   final combined = parts.join(' ');
   if (combined.isNotEmpty) return combined;
   final fallback = name.trim();
-  return fallback.isEmpty ? 'Хозяин' : fallback;
+  return fallback.isEmpty ? emptyLabel : fallback;
 }
 
 class SearchListing {
@@ -143,7 +146,13 @@ class SearchListing {
     ).unitPrice;
   }
 
-  SearchListing withStay({DateTime? checkIn, DateTime? checkOut}) {
+  SearchListing withStay({
+    DateTime? checkIn,
+    DateTime? checkOut,
+    String? rating,
+    String? reviews,
+    List<ListingReview>? reviewsList,
+  }) {
     final nightCount = stayNightsBetween(checkIn, checkOut);
     final quote = quoteStay(
       pricePerNight: pricePerNight,
@@ -162,8 +171,8 @@ class SearchListing {
       nights: nightCount > 0 ? nightsLabel(nightCount) : '',
       total: formatRub(quote.total),
       perNight: '${formatRub(quote.unitPrice)} / ночь',
-      rating: rating,
-      reviews: reviews,
+      rating: rating ?? this.rating,
+      reviews: reviews ?? this.reviews,
       photo: photo,
       photos: photos,
       imageIndex: imageIndex,
@@ -178,7 +187,7 @@ class SearchListing {
       host: host,
       features: features,
       amenities: amenities,
-      reviewsList: reviewsList,
+      reviewsList: reviewsList ?? this.reviewsList,
       checkIn: nightCount > 0 ? checkIn : null,
       checkOut: nightCount > 0 ? checkOut : null,
       houseRules: houseRules,
@@ -262,7 +271,10 @@ String stayDatesLabel(DateTime checkIn, DateTime checkOut) {
 }
 
 String _monthGenitive(DateTime date) {
-  return DateFormat('d MMMM', 'ru').format(date).replaceFirst(RegExp(r'^\d+\s*'), '');
+  return DateFormat(
+    'd MMMM',
+    'ru',
+  ).format(date).replaceFirst(RegExp(r'^\d+\s*'), '');
 }
 
 String nightsLabel(int count) {
@@ -277,6 +289,49 @@ int reviewCountFromLabel(String reviews) {
 
 String reviewCountLabel(int count) {
   return '($count ${_plural(count, one: 'отзыв', few: 'отзыва', many: 'отзывов')})';
+}
+
+/// Относительная дата отзыва для карточек: «3 дня назад», «неделю назад».
+String reviewPostedAgo(DateTime created, {DateTime? now}) {
+  final then = created.toLocal();
+  final current = (now ?? DateTime.now()).toLocal();
+  var diff = current.difference(then);
+  if (diff.isNegative) diff = Duration.zero;
+  if (diff.inSeconds < 60) return 'только что';
+  if (diff.inMinutes < 60) {
+    final n = diff.inMinutes;
+    return '$n ${_plural(n, one: 'минуту', few: 'минуты', many: 'минут')} назад';
+  }
+  if (diff.inHours < 24) {
+    final n = diff.inHours;
+    if (n == 1) return 'час назад';
+    return '$n ${_plural(n, one: 'час', few: 'часа', many: 'часов')} назад';
+  }
+  if (diff.inDays < 7) {
+    final n = diff.inDays;
+    if (n == 1) return 'день назад';
+    return '$n ${_plural(n, one: 'день', few: 'дня', many: 'дней')} назад';
+  }
+  if (diff.inDays < 30) {
+    final n = (diff.inDays / 7).floor();
+    if (n <= 1) return 'неделю назад';
+    return '$n ${_plural(n, one: 'неделю', few: 'недели', many: 'недель')} назад';
+  }
+  if (diff.inDays < 365) {
+    final n = (diff.inDays / 30).floor();
+    if (n <= 1) return 'месяц назад';
+    return '$n ${_plural(n, one: 'месяц', few: 'месяца', many: 'месяцев')} назад';
+  }
+  final n = (diff.inDays / 365).floor();
+  if (n <= 1) return 'год назад';
+  return '$n ${_plural(n, one: 'год', few: 'года', many: 'лет')} назад';
+}
+
+DateTime? parseReviewCreatedAt(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  return DateTime.tryParse(trimmed) ??
+      DateTime.tryParse(trimmed.replaceFirst(' ', 'T'));
 }
 
 String yearsHostingLabel(int years) {

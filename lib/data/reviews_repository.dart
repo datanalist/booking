@@ -1,5 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
 
+import '../screens/search/search_listing.dart';
 import 'auth_repository.dart';
 import 'booking.dart';
 import 'pocketbase_client.dart';
@@ -57,6 +58,12 @@ abstract class ReviewsRepository {
 
   Future<bool> hasGuestListingReview(String bookingId);
 
+  Future<List<ListingReview>> fetchForListing(String listingId);
+
+  Future<Map<String, List<ListingReview>>> fetchForListings(
+    Iterable<String> listingIds,
+  );
+
   Future<StayReview> create({
     required Booking booking,
     required int rating,
@@ -69,7 +76,7 @@ class ReviewsRepositoryScope {
 }
 
 class PocketBaseReviewsRepository implements ReviewsRepository {
-  PocketBaseReviewsRepository({this._client});
+  PocketBaseReviewsRepository({PocketBase? client}) : _client = client;
 
   static const collection = PbCollection.reviews;
 
@@ -85,14 +92,15 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
   @override
   Future<StayReview?> fetchForBooking(String bookingId) async {
     if (bookingId.isEmpty) return null;
-    final result = await _pb.collection(collection).getList(
-      page: 1,
-      perPage: 1,
-      filter: pbFilter(
-        'booking = {:bookingId} && kind = "listing"',
-        {'bookingId': bookingId},
-      ),
-    );
+    final result = await _pb
+        .collection(collection)
+        .getList(
+          page: 1,
+          perPage: 1,
+          filter: pbFilter('booking = {:bookingId} && kind = "listing"', {
+            'bookingId': bookingId,
+          }),
+        );
     if (result.items.isEmpty) return null;
     return _map(result.items.first);
   }
@@ -100,6 +108,57 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
   @override
   Future<bool> hasGuestListingReview(String bookingId) async {
     return await fetchForBooking(bookingId) != null;
+  }
+
+  @override
+  Future<List<ListingReview>> fetchForListing(String listingId) async {
+    if (listingId.isEmpty) return const [];
+    final records = await _pb
+        .collection(collection)
+        .getFullList(
+          filter: pbFilter('listing = {:listingId} && kind = "listing"', {
+            'listingId': listingId,
+          }),
+          expand: 'author',
+          sort: '-created',
+        );
+    return [
+      for (final record in records) listingReviewFromRecord(record, pb: _pb),
+    ];
+  }
+
+  @override
+  Future<Map<String, List<ListingReview>>> fetchForListings(
+    Iterable<String> listingIds,
+  ) async {
+    final ids = [
+      for (final id in {...listingIds})
+        if (id.isNotEmpty) id,
+    ];
+    if (ids.isEmpty) return {};
+    const chunkSize = 40;
+    final byListing = <String, List<ListingReview>>{};
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final end = i + chunkSize > ids.length ? ids.length : i + chunkSize;
+      final chunk = ids.sublist(i, end);
+      final records = await _pb
+          .collection(collection)
+          .getFullList(
+            filter: pbFilter('listing ?~ {:listingIds} && kind = "listing"', {
+              'listingIds': chunk.join('|'),
+            }),
+            expand: 'author',
+            sort: '-created',
+          );
+      for (final record in records) {
+        final listingId = record.get<String>('listing', '');
+        if (listingId.isEmpty) continue;
+        byListing
+            .putIfAbsent(listingId, () => [])
+            .add(listingReviewFromRecord(record, pb: _pb));
+      }
+    }
+    return byListing;
   }
 
   @override
@@ -136,10 +195,6 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
   }
 
   StayReview _map(RecordModel record) {
-    final rawRating = record.data['rating'];
-    final rating = rawRating is num
-        ? rawRating.round()
-        : int.tryParse('$rawRating') ?? 0;
     return StayReview(
       id: record.id,
       bookingId: record.get<String>('booking', ''),
@@ -147,7 +202,7 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
       listingId: record.get<String>('listing', ''),
       subjectId: record.get<String>('subject', ''),
       kind: ReviewKind.fromApi(record.get<String>('kind', '')),
-      rating: rating.clamp(1, 5),
+      rating: reviewRatingFromRecord(record),
       comment: record.get<String>('comment', ''),
     );
   }
@@ -158,4 +213,65 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
     if (message is String && message.isNotEmpty) return message;
     return 'Не удалось сохранить отзыв';
   }
+}
+
+int reviewRatingFromRecord(RecordModel record) {
+  final raw = record.data['rating'];
+  final rating = raw is num ? raw.round() : int.tryParse('$raw') ?? 0;
+  return rating.clamp(1, 5);
+}
+
+/// Карточка отзыва объявления: имя автора, относительная дата, оценка, текст.
+ListingReview listingReviewFromRecord(
+  RecordModel record, {
+  DateTime? now,
+  PocketBase? pb,
+}) {
+  final author = expandedReviewAuthor(record);
+  var avatarUrl = '';
+  if (author != null && pb != null) {
+    final name = author.get<String>('avatar', '');
+    if (name.isNotEmpty) {
+      avatarUrl = pb.files.getURL(author, name).toString();
+    }
+  }
+  return ListingReview(
+    author: listingHostDisplayName(
+      firstName: author?.get<String>('first_name', '') ?? '',
+      lastName: author?.get<String>('last_name', '') ?? '',
+      name: author?.get<String>('name', '') ?? '',
+      emptyLabel: 'Гость',
+    ),
+    postedAgo: reviewPostedAgo(
+      parseReviewCreatedAt(record.get<String>('created', '')) ??
+          (now ?? DateTime.now()),
+      now: now,
+    ),
+    stars: reviewRatingFromRecord(record),
+    text: record.get<String>('comment', ''),
+    avatarUrl: avatarUrl,
+  );
+}
+
+RecordModel? expandedReviewAuthor(RecordModel review) {
+  final raw = review.data['expand'];
+  if (raw is Map) {
+    final parsed = _recordFromExpandValue(raw['author']);
+    if (parsed != null) return parsed;
+  }
+  final fromSdk = review.expand['author'];
+  if (fromSdk != null && fromSdk.isNotEmpty) return fromSdk.first;
+  return null;
+}
+
+RecordModel? _recordFromExpandValue(dynamic value) {
+  if (value is RecordModel) return value;
+  if (value is Map<String, dynamic>) return RecordModel.fromJson(value);
+  if (value is Map) {
+    return RecordModel.fromJson(Map<String, dynamic>.from(value));
+  }
+  if (value is List && value.isNotEmpty) {
+    return _recordFromExpandValue(value.first);
+  }
+  return null;
 }

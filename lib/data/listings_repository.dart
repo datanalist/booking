@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 
 import '../screens/listing/listing_detail.dart';
 import '../screens/search/search_listing.dart';
 import 'pocketbase_client.dart';
 import 'pocketbase_filter.dart';
+import 'reviews_repository.dart';
 
 abstract class ListingsRepository {
   Future<List<SearchListing>> fetchPublished();
@@ -16,66 +18,118 @@ class ListingsRepositoryScope {
 }
 
 class PocketBaseListingsRepository implements ListingsRepository {
-  PocketBaseListingsRepository({this._client});
+  PocketBaseListingsRepository({this._client, ReviewsRepository? reviews})
+    : _reviewsOverride = reviews;
 
   final PocketBase? _client;
+  final ReviewsRepository? _reviewsOverride;
   PocketBase get _pb => _client ?? pocketBase;
+
+  ReviewsRepository get _reviews =>
+      _reviewsOverride ?? PocketBaseReviewsRepository(client: _pb);
 
   static const _expand = 'host';
   static const _published = 'status = "published"';
 
   @override
   Future<List<SearchListing>> fetchPublished() async {
-    final records = await _pb.collection(PbCollection.listings).getFullList(
-      filter: _published,
-      expand: _expand,
-      sort: '-created',
-    );
-    return [for (final record in records) _mapListing(record)];
+    final records = await _pb
+        .collection(PbCollection.listings)
+        .getFullList(filter: _published, expand: _expand, sort: '-created');
+    return _mapRecords(records);
   }
 
   @override
   Future<ListingDetail> fetchDetail(SearchListing listing) async {
-    RecordModel record;
+    RecordModel? record;
     try {
-      record = await _pb.collection(PbCollection.listings).getOne(
-        listing.id,
-        expand: _expand,
-      );
+      record = await _pb
+          .collection(PbCollection.listings)
+          .getOne(listing.id, expand: _expand);
     } catch (_) {
-      return ListingDetail.fromListing(
-        listing,
-        hostListings: await _hostListings(listing.hostId, listing.id),
-      );
+      record = null;
     }
 
-    final mapped = _mapListing(record);
+    final hostId = record == null ? listing.hostId : _hostId(record);
+    final listingId = record?.id ?? listing.id;
+    final hostRecords = await _hostListingRecords(hostId, listingId);
+    final live = await _liveReviewsByIds([
+      listingId,
+      for (final item in hostRecords) item.id,
+    ]);
+    final mapped = record == null
+        ? overlayListingReviews(listing, live?[listingId])
+        : _mapListing(record, liveReviews: live?[listingId]);
     return ListingDetail.fromListing(
       mapped,
-      hostListings: await _hostListings(mapped.hostId, mapped.id),
+      reviews: live?[listingId] ?? mapped.reviewsList,
+      hostListings: [
+        for (final item in hostRecords)
+          _mapListing(item, liveReviews: live?[item.id]),
+      ],
     );
   }
 
-  Future<List<SearchListing>> _hostListings(String hostId, String exceptId) async {
+  Future<List<RecordModel>> _hostListingRecords(
+    String hostId,
+    String exceptId,
+  ) async {
     if (hostId.isEmpty) return const [];
-    final records = await _pb.collection(PbCollection.listings).getFullList(
-      filter: pbFilter(
-        '$_published && host = {:hostId} && id != {:exceptId}',
-        {'hostId': hostId, 'exceptId': exceptId},
-      ),
-      expand: _expand,
-      sort: '-created',
-    );
-    return [for (final record in records) _mapListing(record)];
+    return _pb
+        .collection(PbCollection.listings)
+        .getFullList(
+          filter: pbFilter(
+            '$_published && host = {:hostId} && id != {:exceptId}',
+            {'hostId': hostId, 'exceptId': exceptId},
+          ),
+          expand: _expand,
+          sort: '-created',
+        );
   }
 
-  SearchListing _mapListing(RecordModel record) {
+  Future<List<SearchListing>> _mapRecords(List<RecordModel> records) async {
+    final live = await _liveReviewsByIds([
+      for (final record in records) record.id,
+    ]);
+    return [
+      for (final record in records)
+        _mapListing(record, liveReviews: live?[record.id]),
+    ];
+  }
+
+  Future<Map<String, List<ListingReview>>?> _liveReviewsByIds(
+    Iterable<String> listingIds,
+  ) async {
+    try {
+      return await _reviews.fetchForListings(listingIds);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @visibleForTesting
+  SearchListing mapListingRecord(
+    RecordModel record, {
+    List<ListingReview>? liveReviews,
+  }) {
+    return _mapListing(record, liveReviews: liveReviews);
+  }
+
+  SearchListing _mapListing(
+    RecordModel record, {
+    List<ListingReview>? liveReviews,
+  }) {
     final photos = _fileUrls(record, 'photos');
     final amenities = _stringList(record, 'amenities');
     final extras = _stringList(record, 'extras');
     final features = {...amenities, ...extras};
-    final ratingValue = _number(record, 'rating');
-    final reviewsCount = _number(record, 'reviews_count').round();
+    final totals = listingReviewTotals(
+      denormRating: _number(record, 'rating'),
+      denormCount: _number(record, 'reviews_count').round(),
+      liveReviews: liveReviews,
+    );
+    final ratingValue = totals.rating;
+    final reviewsCount = totals.count;
     final priceNight = _number(record, 'price_night').round();
     final host = _mapHost(
       record,
@@ -97,6 +151,7 @@ class PocketBaseListingsRepository implements ListingsRepository {
       perNight: '${formatRub(priceNight)} / ночь',
       rating: ratingValue > 0 ? ratingValue.toStringAsFixed(1) : '—',
       reviews: reviewCountLabel(reviewsCount),
+      reviewsList: totals.items,
       photo: photos.isEmpty ? '' : photos.first,
       photos: photos,
       imageIndex: 0,
@@ -277,4 +332,46 @@ String stripHtml(String html) {
       .replaceAll(RegExp(r'[ \t]+\n'), '\n')
       .replaceAll(RegExp(r'\n{3,}'), '\n\n')
       .trim();
+}
+
+/// Live `reviews` overlay for a listing card.
+///
+/// Null/empty [liveReviews] keeps denorm `listings.rating` / `reviews_count`.
+({double rating, int count, List<ListingReview> items}) listingReviewTotals({
+  required double denormRating,
+  required int denormCount,
+  List<ListingReview>? liveReviews,
+}) {
+  if (liveReviews == null || liveReviews.isEmpty) {
+    return (rating: denormRating, count: denormCount, items: const []);
+  }
+  var sum = 0;
+  for (final item in liveReviews) {
+    sum += item.stars;
+  }
+  return (
+    rating: sum / liveReviews.length,
+    count: liveReviews.length,
+    items: liveReviews,
+  );
+}
+
+/// Applies live listing reviews onto an already mapped card (booking fallback).
+SearchListing overlayListingReviews(
+  SearchListing listing,
+  List<ListingReview>? liveReviews,
+) {
+  final totals = listingReviewTotals(
+    denormRating: double.tryParse(listing.rating) ?? 0,
+    denormCount: listing.reviewCount,
+    liveReviews: liveReviews,
+  );
+  if (liveReviews == null || liveReviews.isEmpty) return listing;
+  return listing.withStay(
+    checkIn: listing.checkIn,
+    checkOut: listing.checkOut,
+    rating: totals.rating > 0 ? totals.rating.toStringAsFixed(1) : '—',
+    reviews: reviewCountLabel(totals.count),
+    reviewsList: totals.items,
+  );
 }

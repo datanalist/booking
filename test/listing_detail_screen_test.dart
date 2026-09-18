@@ -359,6 +359,78 @@ void main() {
     );
   });
 
+  testWidgets('reviews see-all opens the full reviews screen', (tester) async {
+    final favorites = <String>{};
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail.fromListing(
+      listing,
+      hostListings: [
+        for (final item in kDemoListings)
+          if (item.id != listing.id && item.hostId == listing.hostId) item,
+      ],
+    );
+
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: favorites,
+          initialDetail: detail,
+          onFavorite: (id) {
+            if (!favorites.remove(id)) favorites.add(id);
+          },
+        ),
+      ),
+    );
+
+    final seeAll = find.byKey(const ValueKey('listing-reviews-see-all'));
+    await tester.scrollUntilVisible(
+      seeAll,
+      300,
+      scrollable: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable &&
+            (widget.axisDirection == AxisDirection.down ||
+                widget.axisDirection == AxisDirection.up),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(seeAll);
+    await tester.pumpAndSettle();
+
+    final reviewsScreen = find.byKey(const ValueKey('listing-reviews'));
+    expect(reviewsScreen, findsOneWidget);
+    expect(
+      find.descendant(
+        of: reviewsScreen,
+        matching: find.text('Антон Киривлянов'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: reviewsScreen,
+        matching: find.text('Ирина Куленкова'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('host-listings')), findsNothing);
+
+    await tester.tap(
+      find.descendant(
+        of: reviewsScreen,
+        matching: find.byTooltip('Назад'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('listing-reviews')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('listing-detail-studio-msk')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('booking button opens stay dates instead of writing a booking', (
     tester,
   ) async {

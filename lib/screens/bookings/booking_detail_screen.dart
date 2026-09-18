@@ -12,6 +12,7 @@ import '../../widgets/listing_image.dart';
 import 'booking_complaint_booking_dialog.dart';
 import '../listing/listing_detail.dart';
 import '../listing/listing_icons.dart';
+import '../listing/listing_reviews_screen.dart';
 import '../search/search_listing.dart';
 import 'booking_address_dialog.dart';
 import 'booking_cancel_dialog.dart';
@@ -273,10 +274,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           const SizedBox(height: 24),
                           const _Hairline(),
                           const SizedBox(height: 24),
-                          _CancelTerms(
-                            booking: _booking,
-                            listing: listing,
-                          ),
+                          _CancelTerms(booking: _booking, listing: listing),
                           const SizedBox(height: 24),
                           const _Hairline(),
                           const SizedBox(height: 24),
@@ -315,7 +313,7 @@ SearchListing _listingFromBooking(Booking booking) {
     total: formatRub(booking.total),
     perNight: '',
     rating: '—',
-    reviews: reviewCountLabel(0),
+    reviews: '',
     photo: booking.photo,
     photos: booking.photo.isEmpty ? const [] : [booking.photo],
     imageIndex: 0,
@@ -858,16 +856,25 @@ class _Reviews extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
-              'Смотреть все',
-              style: TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                height: 1.30,
-                color: AppColors.orange,
-                decoration: TextDecoration.underline,
-                decorationColor: AppColors.orange,
+            GestureDetector(
+              onTap: () => ListingReviewsScreen.open(
+                context,
+                rating: listing.rating,
+                reviewCount: count,
+                reviews: detail.reviews,
+              ),
+              behavior: HitTestBehavior.opaque,
+              child: const Text(
+                'Смотреть все',
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  height: 1.30,
+                  color: AppColors.orange,
+                  decoration: TextDecoration.underline,
+                  decorationColor: AppColors.orange,
+                ),
               ),
             ),
           ],
@@ -914,7 +921,7 @@ class _ReviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _Avatar(label: review.author, size: 30),
+              _Avatar(label: review.author, size: 30, url: review.avatarUrl),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -996,10 +1003,7 @@ class _Cost extends StatelessWidget {
           padding: EdgeInsets.symmetric(vertical: 8),
           child: Divider(height: 1, thickness: 0.5, color: _divider),
         ),
-        _PriceRow(
-          label: 'Предоплата онлайн',
-          value: formatRub(booking.prepay),
-        ),
+        _PriceRow(label: 'Предоплата онлайн', value: formatRub(booking.prepay)),
         const SizedBox(height: 8),
         _PriceRow(
           label: 'Оплатить при заселении ${_shortDate(booking.checkIn)}',

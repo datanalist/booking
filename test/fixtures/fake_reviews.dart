@@ -1,6 +1,7 @@
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/booking.dart';
 import 'package:booking/data/reviews_repository.dart';
+import 'package:booking/screens/search/search_listing.dart';
 
 StayReview fakeGuestListingReview({
   String id = 'review-1',
@@ -20,6 +21,19 @@ StayReview fakeGuestListingReview({
     kind: ReviewKind.listing,
     rating: rating,
     comment: comment,
+  );
+}
+
+ListingReview listingReviewFromStay(
+  StayReview review, {
+  String author = 'Гость',
+  String postedAgo = 'день назад',
+}) {
+  return ListingReview(
+    author: author,
+    postedAgo: postedAgo,
+    stars: review.rating,
+    text: review.comment,
   );
 }
 
@@ -44,6 +58,32 @@ class FakeReviewsRepository implements ReviewsRepository {
   @override
   Future<bool> hasGuestListingReview(String bookingId) async {
     return await fetchForBooking(bookingId) != null;
+  }
+
+  @override
+  Future<List<ListingReview>> fetchForListing(String listingId) async {
+    return [
+      for (final item in items)
+        if (item.listingId == listingId && item.kind == ReviewKind.listing)
+          listingReviewFromStay(item),
+    ];
+  }
+
+  @override
+  Future<Map<String, List<ListingReview>>> fetchForListings(
+    Iterable<String> listingIds,
+  ) async {
+    final ids = listingIds.toSet();
+    final result = <String, List<ListingReview>>{};
+    for (final item in items) {
+      if (!ids.contains(item.listingId) || item.kind != ReviewKind.listing) {
+        continue;
+      }
+      result
+          .putIfAbsent(item.listingId, () => [])
+          .add(listingReviewFromStay(item));
+    }
+    return result;
   }
 
   @override

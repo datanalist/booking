@@ -37,7 +37,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 # Collection names are literals. Never take them from env/CLI without this check.
-_PB_COLLECTIONS = frozenset({"users", "listings", "bookings", "notifications", "_superusers"})
+_PB_COLLECTIONS = frozenset(
+    {"users", "listings", "bookings", "notifications", "reviews", "_superusers"}
+)
 _PB_PLACEHOLDER = re.compile(r"\{:([A-Za-z_][A-Za-z0-9_]*)\}")
 _PB_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -519,8 +521,6 @@ def listing_fields(item: dict, host_id: str) -> dict[str, str]:
         "price_14": str(item["price_14"]),
         "price_28": str(item["price_28"]),
         "status": item["status"],
-        "rating": str(item["rating"]),
-        "reviews_count": str(item["reviews_count"]),
     }
 
 
@@ -701,8 +701,6 @@ def seed_listings(pb: PocketBase, user_ids: dict[str, str], reset: bool) -> None
                 "price_14": item["price_14"],
                 "price_28": item["price_28"],
                 "status": item["status"],
-                "rating": item["rating"],
-                "reviews_count": item["reviews_count"],
             }.items()})
             print(f"listing updated {item['title']} -> {record['id']}")
             continue
