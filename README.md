@@ -175,6 +175,8 @@ flutter run -d linux
 
 AVD `pixel` (Android 16 / Play Store). После загрузки обычно виден как `emulator-5554`.
 
+Два аккаунта одновременно — два AVD (`pixel` и клон `pixel2`), разные порты и `flutter run -d emulator-5554` / `emulator-5556`. Один и тот же AVD второй раз не стартует; два `flutter run -d linux` делят сессию. Шаги, magic-link и остановка — в [`docs/doc.md`](docs/doc.md) (раздел «Несколько эмуляторов»).
+
 Чтобы печатать с клавиатуры компьютера, в `~/.android/avd/pixel.avd/config.ini` должно быть `hw.keyboard=yes`. Если меняли значение — холодная загрузка (`emulator -avd pixel -no-snapshot-load`), иначе снимок поднимет старый `hw.keyboard=no`. Кликните окно эмулятора, затем поле «Город или адрес».
 
 ```bash
