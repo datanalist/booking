@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/booking.dart';
+import 'package:booking/data/chats_repository.dart';
 import 'package:booking/data/tickets_repository.dart';
 import 'package:booking/screens/bookings/booking_complaint_screen.dart';
 import 'package:booking/screens/search/search_listing.dart';
 import 'package:booking/theme/app_theme.dart';
 
 import 'fixtures/demo_listings.dart';
+import 'fixtures/fake_chats.dart';
 import 'fixtures/fake_tickets.dart';
 
 Widget _app(Widget home) {
@@ -47,9 +50,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late TicketsRepository previousTickets;
+  late ChatsRepository previousChats;
+
+  setUpAll(() async {
+    await initializeDateFormatting('ru');
+  });
 
   setUp(() {
     previousTickets = TicketsRepositoryScope.instance;
+    previousChats = ChatsRepositoryScope.instance;
+    ChatsRepositoryScope.instance = FakeChatsRepository();
     AuthRepositoryScope.session.value = const AuthSession(
       userId: 'guest-1',
       email: 'guest@test.com',
@@ -58,6 +68,7 @@ void main() {
 
   tearDown(() {
     TicketsRepositoryScope.instance = previousTickets;
+    ChatsRepositoryScope.instance = previousChats;
     AuthRepositoryScope.session.value = null;
   });
 
@@ -127,9 +138,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('complaint-booking-chat')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('complaint-host-chat')), findsOneWidget);
-    expect(find.text('Чат с владельцем'), findsOneWidget);
-    expect(find.textContaining('Анна Иваненко'), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-thread-back')), findsOneWidget);
+    expect(find.text('Анна Иваненко'), findsWidgets);
+    expect(find.byKey(const ValueKey('chat-input')), findsOneWidget);
   });
 
   testWidgets('booking support writes a booking ticket and shows sent dialog', (

@@ -134,6 +134,52 @@ void main() {
     },
   );
 
+  testWidgets(
+    'after change request card shows new dates and guests not old ones',
+    (tester) async {
+      final repo = FakeBookingsRepository([
+        _booking(
+          id: 'b1',
+          status: BookingStatus.confirmed,
+          checkIn: DateTime(2024, 11, 14),
+          checkOut: DateTime(2024, 11, 19),
+          adults: 2,
+        ),
+      ]);
+      BookingsRepositoryScope.instance = repo;
+
+      await tester.pumpWidget(_app(const BookingsScreen()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('14.11.2024 - 19.11.2024'), findsOneWidget);
+      expect(find.text('2 гостя'), findsOneWidget);
+
+      await repo.patch(
+        id: 'b1',
+        status: BookingStatus.changeRequested,
+        requestedCheckIn: DateTime(2024, 12, 1),
+        requestedCheckOut: DateTime(2024, 12, 5),
+        adults: 3,
+        children: 1,
+        total: 12000,
+        prepay: 1800,
+        remainder: 10200,
+        commission: 1800,
+        hostAmount: 10200,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('14.11.2024 - 19.11.2024'), findsNothing);
+      expect(find.text('01.12.2024 - 05.12.2024'), findsOneWidget);
+      expect(find.text('2 гостя'), findsNothing);
+      expect(find.text('4 гостя'), findsOneWidget);
+      expect(
+        find.text('ожидание подтверждения от владельца'),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('upcoming list does not stretch on overscroll', (tester) async {
     BookingsRepositoryScope.instance = FakeBookingsRepository([
       _booking(id: 'b1', status: BookingStatus.pendingHost),

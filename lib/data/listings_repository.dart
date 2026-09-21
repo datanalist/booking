@@ -170,7 +170,7 @@ class PocketBaseListingsRepository implements ListingsRepository {
     }
   }
 
-  @visibleForTesting
+  /// Карточка из записи `listings`, в том числе из `favorites.expand`.
   SearchListing mapListingRecord(
     RecordModel record, {
     List<ListingReview>? liveReviews,

@@ -27,6 +27,11 @@ class _RecordingBookingsRepository extends FakeBookingsRepository {
     int? adults,
     int? children,
     int? pets,
+    int? total,
+    int? prepay,
+    int? remainder,
+    int? commission,
+    int? hostAmount,
   }) async {
     patchCalls++;
     return super.patch(
@@ -38,6 +43,11 @@ class _RecordingBookingsRepository extends FakeBookingsRepository {
       adults: adults,
       children: children,
       pets: pets,
+      total: total,
+      prepay: prepay,
+      remainder: remainder,
+      commission: commission,
+      hostAmount: hostAmount,
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/booking.dart';
 import '../../data/bookings_repository.dart';
+import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/listing_image.dart';
 import '../listing/booking_confirmation_sheet.dart';
@@ -58,30 +59,90 @@ class _BookingChangeSheetState extends State<BookingChangeSheet> {
   late int _adults;
   late int _children;
   late int _pets;
+  SearchListing? _listing;
   var _busy = false;
 
   BookingsRepository get _bookings =>
       widget.repository ?? BookingsRepositoryScope.instance;
 
+  ListingsRepository get _listings => ListingsRepositoryScope.instance;
+
   @override
   void initState() {
     super.initState();
     final booking = widget.booking;
-    _checkIn = booking.checkIn;
-    _checkOut = booking.checkOut;
+    _checkIn = booking.stayCheckIn;
+    _checkOut = booking.stayCheckOut;
     _adults = booking.adults;
     _children = booking.children;
     _pets = booking.pets;
+    _loadListing();
+  }
+
+  Future<void> _loadListing() async {
+    try {
+      final detail = await _listings.fetchDetail(
+        SearchListing(
+          id: widget.booking.listingId,
+          title: widget.booking.title,
+          city: widget.booking.city,
+          type: '',
+          address: widget.booking.address,
+          description: '',
+          dates: '',
+          nights: '',
+          total: '',
+          perNight: '',
+          rating: '—',
+          reviews: '',
+          photo: widget.booking.photo,
+          photos: widget.booking.photo.isEmpty
+              ? const []
+              : [widget.booking.photo],
+          imageIndex: 0,
+          latitude: widget.booking.latitude,
+          longitude: widget.booking.longitude,
+          pricePerNight: 0,
+          hostId: widget.booking.hostId,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _listing = detail.listing);
+    } catch (_) {
+      // Стоимость останется от текущей брони, если прайс не подтянулся.
+    }
   }
 
   bool get _datesChanged =>
-      !_sameDay(_checkIn, widget.booking.checkIn) ||
-      !_sameDay(_checkOut, widget.booking.checkOut);
+      !_sameDay(_checkIn, widget.booking.stayCheckIn) ||
+      !_sameDay(_checkOut, widget.booking.stayCheckOut);
 
   bool get _guestsChanged =>
       _adults != widget.booking.adults ||
       _children != widget.booking.children ||
       _pets != widget.booking.pets;
+
+  BookingMoney get _money {
+    final listing = _listing;
+    final nights = stayNightsBetween(_checkIn, _checkOut);
+    if (listing != null && listing.pricePerNight > 0 && nights > 0) {
+      return BookingMoney.fromStay(
+        quoteStay(
+          pricePerNight: listing.pricePerNight,
+          price14: listing.price14,
+          price28: listing.price28,
+          nights: nights,
+        ),
+      );
+    }
+    return BookingMoney(
+      total: widget.booking.total,
+      prepay: widget.booking.prepay,
+      remainder: widget.booking.remainder,
+      commission: widget.booking.commission,
+      hostAmount: widget.booking.hostAmount,
+    );
+  }
 
   Future<void> _editDates() async {
     if (_busy) return;
@@ -119,6 +180,7 @@ class _BookingChangeSheetState extends State<BookingChangeSheet> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      final money = _money;
       final updated = await _bookings.patch(
         id: widget.booking.id,
         status: BookingStatus.changeRequested,
@@ -127,6 +189,11 @@ class _BookingChangeSheetState extends State<BookingChangeSheet> {
         adults: _guestsChanged ? _adults : null,
         children: _guestsChanged ? _children : null,
         pets: _guestsChanged ? _pets : null,
+        total: _datesChanged ? money.total : null,
+        prepay: _datesChanged ? money.prepay : null,
+        remainder: _datesChanged ? money.remainder : null,
+        commission: _datesChanged ? money.commission : null,
+        hostAmount: _datesChanged ? money.hostAmount : null,
       );
       if (!mounted) return;
       await showBookingChangeSentDialog(context);
@@ -154,7 +221,7 @@ class _BookingChangeSheetState extends State<BookingChangeSheet> {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final maxHeight = MediaQuery.sizeOf(context).height - 36;
     final nights = stayNightsBetween(_checkIn, _checkOut);
-    final money = widget.booking;
+    final money = _money;
 
     return SizedBox(
       key: const ValueKey<String>('booking-change-sheet'),

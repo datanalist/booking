@@ -124,6 +124,12 @@ class Booking {
     return city;
   }
 
+  /// Даты, которые видит гость: после «Изменить бронирование» —
+  /// запрошенные `requested_*`, иначе подтверждённые `check_in`/`check_out`.
+  DateTime get stayCheckIn => requestedCheckIn ?? checkIn;
+
+  DateTime get stayCheckOut => requestedCheckOut ?? checkOut;
+
   Booking copyWith({
     String? id,
     String? listingId,
@@ -195,7 +201,7 @@ class Booking {
     String two(int value) => value.toString().padLeft(2, '0');
     String format(DateTime date) =>
         '${two(date.day)}.${two(date.month)}.${date.year}';
-    return '${format(checkIn)} - ${format(checkOut)}';
+    return '${format(stayCheckIn)} - ${format(stayCheckOut)}';
   }
 
   String get guestsLabel {

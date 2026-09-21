@@ -29,6 +29,11 @@ abstract class BookingsRepository {
     int? adults,
     int? children,
     int? pets,
+    int? total,
+    int? prepay,
+    int? remainder,
+    int? commission,
+    int? hostAmount,
   });
 }
 
@@ -149,6 +154,11 @@ class PocketBaseBookingsRepository implements BookingsRepository {
     int? adults,
     int? children,
     int? pets,
+    int? total,
+    int? prepay,
+    int? remainder,
+    int? commission,
+    int? hostAmount,
   }) async {
     final body = <String, dynamic>{};
     if (status != null) body['status'] = status.apiKey;
@@ -162,18 +172,140 @@ class PocketBaseBookingsRepository implements BookingsRepository {
     if (adults != null) body['adults'] = adults < 1 ? 1 : adults;
     if (children != null) body['children'] = children < 0 ? 0 : children;
     if (pets != null) body['pets'] = pets < 0 ? 0 : pets;
+
+    BookingMoney? money;
+    if (total != null &&
+        prepay != null &&
+        remainder != null &&
+        commission != null &&
+        hostAmount != null) {
+      money = BookingMoney(
+        total: total,
+        prepay: prepay,
+        remainder: remainder,
+        commission: commission,
+        hostAmount: hostAmount,
+      );
+    } else if (requestedCheckIn != null || requestedCheckOut != null) {
+      money = await _moneyForRequestedDates(
+        id: id,
+        requestedCheckIn: requestedCheckIn,
+        requestedCheckOut: requestedCheckOut,
+      );
+    }
+    if (money != null) {
+      body['total'] = money.total;
+      body['prepay'] = money.prepay;
+      body['remainder'] = money.remainder;
+      body['commission'] = money.commission;
+      body['host_amount'] = money.hostAmount;
+    }
+
     try {
       final record = await _pb.collection(collection).update(
         id,
         body: body,
         expand: _expand,
       );
-      final booking = _map(record);
+      var booking = _map(record);
+      // Если API не принял money/`requested_*`, всё равно отдаём гостю
+      // то, что он отправил — карточка и деталка не должны молчать со старыми датами.
+      booking = _withLocalChangeOverlay(
+        booking,
+        requestedCheckIn: requestedCheckIn,
+        requestedCheckOut: requestedCheckOut,
+        adults: adults,
+        children: children,
+        pets: pets,
+        money: money,
+      );
       BookingsRepositoryScope.notifyChanged();
       return booking;
     } on ClientException catch (error) {
-      throw BookingException(_messageFor(error));
+      // Деньги могли быть отклонены правилами — повторяем без них.
+      if (money == null) throw BookingException(_messageFor(error));
+      try {
+        final retryBody = Map<String, dynamic>.from(body)
+          ..remove('total')
+          ..remove('prepay')
+          ..remove('remainder')
+          ..remove('commission')
+          ..remove('host_amount');
+        final record = await _pb.collection(collection).update(
+          id,
+          body: retryBody,
+          expand: _expand,
+        );
+        final booking = _withLocalChangeOverlay(
+          _map(record),
+          requestedCheckIn: requestedCheckIn,
+          requestedCheckOut: requestedCheckOut,
+          adults: adults,
+          children: children,
+          pets: pets,
+          money: money,
+        );
+        BookingsRepositoryScope.notifyChanged();
+        return booking;
+      } on ClientException catch (retryError) {
+        throw BookingException(_messageFor(retryError));
+      }
     }
+  }
+
+  Future<BookingMoney?> _moneyForRequestedDates({
+    required String id,
+    DateTime? requestedCheckIn,
+    DateTime? requestedCheckOut,
+  }) async {
+    try {
+      final current = await _pb.collection(collection).getOne(
+        id,
+        expand: _expand,
+      );
+      final listing = _expanded(current, 'listing');
+      if (listing == null) return null;
+      final checkIn =
+          requestedCheckIn ?? _date(current, 'check_in') ?? requestedCheckOut;
+      final checkOut =
+          requestedCheckOut ?? _date(current, 'check_out') ?? requestedCheckIn;
+      if (checkIn == null || checkOut == null) return null;
+      final nights = stayNightsBetween(checkIn, checkOut);
+      if (nights <= 0) return null;
+      return BookingMoney.fromStay(
+        quoteStay(
+          pricePerNight: _number(listing, 'price_night').round(),
+          price14: _number(listing, 'price_14').round(),
+          price28: _number(listing, 'price_28').round(),
+          nights: nights,
+        ),
+      );
+    } on ClientException {
+      return null;
+    }
+  }
+
+  Booking _withLocalChangeOverlay(
+    Booking booking, {
+    DateTime? requestedCheckIn,
+    DateTime? requestedCheckOut,
+    int? adults,
+    int? children,
+    int? pets,
+    BookingMoney? money,
+  }) {
+    return booking.copyWith(
+      requestedCheckIn: requestedCheckIn ?? booking.requestedCheckIn,
+      requestedCheckOut: requestedCheckOut ?? booking.requestedCheckOut,
+      adults: adults,
+      children: children,
+      pets: pets,
+      total: money?.total,
+      prepay: money?.prepay,
+      remainder: money?.remainder,
+      commission: money?.commission,
+      hostAmount: money?.hostAmount,
+    );
   }
 
   Future<bool> _hasOverlap(

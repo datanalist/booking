@@ -76,6 +76,7 @@ flutter:
     - "images/ mapFrame.svg"
     - images/search/
     - images/bookings/
+    - images/favorites/
     - images/onbordins.v1/
     - images/chat/
     - images/profile/

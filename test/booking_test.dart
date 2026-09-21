@@ -61,6 +61,26 @@ void main() {
     );
   });
 
+  test('datesLabel prefers requested dates after change request', () {
+    final booking = Booking(
+      id: '1',
+      listingId: 'l',
+      guestId: 'g',
+      hostId: 'h',
+      checkIn: DateTime(2024, 11, 14),
+      checkOut: DateTime(2024, 11, 19),
+      status: BookingStatus.changeRequested,
+      adults: 2,
+      children: 1,
+      requestedCheckIn: DateTime(2024, 12, 1),
+      requestedCheckOut: DateTime(2024, 12, 5),
+    );
+    expect(booking.datesLabel, '01.12.2024 - 05.12.2024');
+    expect(booking.stayCheckIn, DateTime(2024, 12, 1));
+    expect(booking.stayCheckOut, DateTime(2024, 12, 5));
+    expect(booking.guestsLabel, '3 гостя');
+  });
+
   test('guest label uses russian plural', () {
     expect(
       Booking(

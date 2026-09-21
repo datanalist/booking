@@ -212,8 +212,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                           ],
                           const SizedBox(height: 12),
                           _StayDates(
-                            checkIn: _booking.checkIn,
-                            checkOut: _booking.checkOut,
+                            checkIn: _booking.stayCheckIn,
+                            checkOut: _booking.stayCheckOut,
                             checkInTime: listing.checkInTime,
                             checkOutTime: listing.checkOutTime,
                           ),
@@ -984,7 +984,7 @@ class _Cost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final nights = stayNightsBetween(booking.checkIn, booking.checkOut);
+    final nights = stayNightsBetween(booking.stayCheckIn, booking.stayCheckOut);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1010,7 +1010,7 @@ class _Cost extends StatelessWidget {
         _PriceRow(label: 'Предоплата онлайн', value: formatRub(booking.prepay)),
         const SizedBox(height: 8),
         _PriceRow(
-          label: 'Оплатить при заселении ${_shortDate(booking.checkIn)}',
+          label: 'Оплатить при заселении ${_shortDate(booking.stayCheckIn)}',
           value: formatRub(booking.remainder),
         ),
       ],
@@ -1064,9 +1064,9 @@ class _CancelTerms extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final until = DateTime(
-      booking.checkIn.year,
-      booking.checkIn.month,
-      booking.checkIn.day,
+      booking.stayCheckIn.year,
+      booking.stayCheckIn.month,
+      booking.stayCheckIn.day,
     ).subtract(const Duration(days: 1));
     final time = listing.checkOutTime.isEmpty ? '12:00' : listing.checkOutTime;
     return Column(

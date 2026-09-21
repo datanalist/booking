@@ -37,6 +37,12 @@ class ListingFigmaIcon extends StatelessWidget {
     leaf: Size.square(14),
   );
 
+  static const calendar14 = ListingFigmaIcon._(
+    asset: 'images/listing/calendar-14.svg',
+    box: Size.square(14),
+    leaf: Size.square(14),
+  );
+
   static const star18 = ListingFigmaIcon._(
     asset: 'images/listing/star-18.svg',
     box: Size.square(18),

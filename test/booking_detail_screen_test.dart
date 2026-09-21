@@ -133,6 +133,32 @@ void main() {
   );
 
   testWidgets(
+    'change_requested detail shows requested dates not confirmed ones',
+    (tester) async {
+      await _openDetail(
+        tester,
+        _booking(
+          id: 'changed',
+          status: BookingStatus.changeRequested,
+          checkIn: DateTime(2024, 11, 14),
+          checkOut: DateTime(2024, 11, 19),
+        ).copyWith(
+          requestedCheckIn: DateTime(2024, 12, 1),
+          requestedCheckOut: DateTime(2024, 12, 5),
+          adults: 4,
+          total: 12000,
+        ),
+      );
+
+      expect(find.text('ожидание подтверждения от владельца'), findsOneWidget);
+      expect(find.textContaining('01.12.2024'), findsWidgets);
+      expect(find.textContaining('05.12.2024'), findsWidgets);
+      expect(find.textContaining('14.11.2024'), findsNothing);
+      expect(find.text('12 000 ₽'), findsWidgets);
+    },
+  );
+
+  testWidgets(
     'awaiting_prepayment shows prepay chip, amount and both footer buttons',
     (tester) async {
       await _openDetail(

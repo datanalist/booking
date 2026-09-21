@@ -187,6 +187,60 @@ void main() {
     expect(result?.status, BookingStatus.changeRequested);
   });
 
+  testWidgets(
+    'send with new guests returns booking that shows updated guests',
+    (tester) async {
+      final booking = _booking();
+      final repo = FakeBookingsRepository([booking]);
+      BookingsRepositoryScope.instance = repo;
+      Booking? result;
+
+      await tester.pumpWidget(
+        _app(
+          Builder(
+            builder: (context) {
+              return Scaffold(
+                body: TextButton(
+                  onPressed: () async {
+                    result = await showBookingChangeSheet(context, booking);
+                  },
+                  child: const Text('open'),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('booking-change-edit-guests')));
+      await tester.pumpAndSettle();
+      expect(find.byType(GuestsSheet), findsOneWidget);
+
+      // + взрослый: 2 → 3
+      await tester.tap(find.byKey(const ValueKey('guests-adults-plus')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('guests-save')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('booking-change-send')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('booking-change-sent-ok')));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.status, BookingStatus.changeRequested);
+      expect(result!.adults, 3);
+      expect(result!.children, 1);
+      expect(result!.guestsLabel, '4 гостя');
+      // Даты без правок — check_in старые, requested пустые.
+      expect(result!.datesLabel, '14.11.2024 - 19.11.2024');
+      expect(result!.requestedCheckIn, isNull);
+    },
+  );
+
   testWidgets('change rows open stay dates and guests sheets', (tester) async {
     await tester.pumpWidget(
       _app(

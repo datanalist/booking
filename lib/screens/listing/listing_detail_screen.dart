@@ -230,6 +230,10 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                               onChat: () => openHostChatStub(
                                 context,
                                 hostName: detail.host.name,
+                                listingId: listing.id,
+                                hostId: listing.hostId.isNotEmpty
+                                    ? listing.hostId
+                                    : detail.host.id,
                               ),
                             ),
                           ),

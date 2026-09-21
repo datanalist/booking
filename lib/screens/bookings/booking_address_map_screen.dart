@@ -7,7 +7,9 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 import '../../config/mapbox_config.dart';
 import '../../config/mapbox_geocoding.dart';
 import '../../config/mapbox_style.dart';
+import '../../data/auth_repository.dart';
 import '../../data/booking.dart';
+import '../../data/favorites_repository.dart';
 import '../../theme/app_theme.dart';
 import '../listing/listing_detail_screen.dart';
 import '../search/search_apartment_card.dart';
@@ -62,6 +64,7 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
   Style? _style;
   String? _selectedId;
   final _favorites = <String>{};
+  var _favGen = 0;
 
   Booking get _booking => widget.booking;
 
@@ -111,6 +114,9 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
       _resolving = true;
       _geocodeAddress();
     }
+    FavoritesRepositoryScope.listVersion.addListener(_onFavoritesChanged);
+    AuthRepositoryScope.session.addListener(_onFavoritesChanged);
+    _syncFavorites();
     if (!_searchStyle) {
       if (MapboxConfig.accessToken.isEmpty &&
           !BookingAddressMapScreen._isWidgetTest) {
@@ -124,6 +130,29 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
         _loadStyle();
       }
     }
+  }
+
+  @override
+  void dispose() {
+    FavoritesRepositoryScope.listVersion.removeListener(_onFavoritesChanged);
+    AuthRepositoryScope.session.removeListener(_onFavoritesChanged);
+    super.dispose();
+  }
+
+  void _onFavoritesChanged() => _syncFavorites();
+
+  Future<void> _syncFavorites() async {
+    if (!favoritesCanWrite) return;
+    final gen = ++_favGen;
+    try {
+      final items = await FavoritesRepositoryScope.instance.fetchMine();
+      if (!mounted || gen != _favGen) return;
+      setState(() {
+        _favorites
+          ..clear()
+          ..addAll([for (final item in items) item.id]);
+      });
+    } catch (_) {}
   }
 
   Future<void> _geocodeAddress() async {
@@ -168,9 +197,35 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
   }
 
   void _toggleFavorite(String id) {
+    final removing = _favorites.contains(id);
     setState(() {
-      if (!_favorites.remove(id)) _favorites.add(id);
+      if (removing) {
+        _favorites.remove(id);
+      } else {
+        _favorites.add(id);
+      }
     });
+    _favGen++;
+    _writeFavorite(id, removing: removing);
+  }
+
+  Future<void> _writeFavorite(String id, {required bool removing}) async {
+    try {
+      await writeFavorite(
+        repository: FavoritesRepositoryScope.instance,
+        listingId: id,
+        removing: removing,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        if (removing) {
+          _favorites.add(id);
+        } else {
+          _favorites.remove(id);
+        }
+      });
+    }
   }
 
   void _openListing(SearchListing listing) {

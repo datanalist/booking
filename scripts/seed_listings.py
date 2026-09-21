@@ -38,7 +38,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Collection names are literals. Never take them from env/CLI without this check.
 _PB_COLLECTIONS = frozenset(
-    {"users", "listings", "bookings", "notifications", "reviews", "_superusers"}
+    {
+        "users",
+        "listings",
+        "bookings",
+        "notifications",
+        "reviews",
+        "favorites",
+        "chats",
+        "messages",
+        "_superusers",
+    }
 )
 _PB_PLACEHOLDER = re.compile(r"\{:([A-Za-z_][A-Za-z0-9_]*)\}")
 _PB_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")

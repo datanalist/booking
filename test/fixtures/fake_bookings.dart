@@ -72,6 +72,11 @@ class FakeBookingsRepository implements BookingsRepository {
     int? adults,
     int? children,
     int? pets,
+    int? total,
+    int? prepay,
+    int? remainder,
+    int? commission,
+    int? hostAmount,
   }) async {
     final index = items.indexWhere((item) => item.id == id);
     if (index < 0) {
@@ -85,6 +90,11 @@ class FakeBookingsRepository implements BookingsRepository {
       adults: adults,
       children: children,
       pets: pets,
+      total: total,
+      prepay: prepay,
+      remainder: remainder,
+      commission: commission,
+      hostAmount: hostAmount,
     );
     items[index] = next;
     BookingsRepositoryScope.notifyChanged();

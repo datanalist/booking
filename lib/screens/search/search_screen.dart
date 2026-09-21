@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../data/auth_repository.dart';
+import '../../data/favorites_repository.dart';
 import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
 import '../listing/listing_detail_screen.dart';
+import 'active_search_stay.dart';
 import 'search_apartment_card.dart';
 import 'search_filters_sheet.dart';
 import 'search_listing.dart';
@@ -41,10 +44,52 @@ class _SearchScreenState extends State<SearchScreen> {
     return {for (final item in _listings) item.city}.toList()..sort();
   }
 
+  var _favGen = 0;
+
+  FavoritesRepository get _favoritesRepository =>
+      FavoritesRepositoryScope.instance;
+
   @override
   void initState() {
     super.initState();
+    _publishStay();
+    FavoritesRepositoryScope.listVersion.addListener(_onFavoritesChanged);
+    AuthRepositoryScope.session.addListener(_onFavoritesChanged);
+    _syncFavorites();
     _load();
+  }
+
+  @override
+  void dispose() {
+    FavoritesRepositoryScope.listVersion.removeListener(_onFavoritesChanged);
+    AuthRepositoryScope.session.removeListener(_onFavoritesChanged);
+    super.dispose();
+  }
+
+  void _publishStay() {
+    ActiveSearchStay.publish(
+      checkIn: _query.checkIn,
+      checkOut: _query.checkOut,
+      adults: _query.adults,
+      children: _query.children,
+      pets: _query.pets,
+    );
+  }
+
+  void _onFavoritesChanged() => _syncFavorites();
+
+  Future<void> _syncFavorites() async {
+    if (!favoritesCanWrite) return;
+    final gen = ++_favGen;
+    try {
+      final items = await _favoritesRepository.fetchMine();
+      if (!mounted || gen != _favGen) return;
+      setState(() {
+        _favorites
+          ..clear()
+          ..addAll([for (final item in items) item.id]);
+      });
+    } catch (_) {}
   }
 
   var _loadGen = 0;
@@ -151,6 +196,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final datesChanged =
         next.checkIn != _query.checkIn || next.checkOut != _query.checkOut;
     setState(() => _query = next);
+    _publishStay();
     if (datesChanged) await _load();
   }
 
@@ -223,9 +269,35 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _toggleFavorite(String id) {
+    final removing = _favorites.contains(id);
     setState(() {
-      if (!_favorites.remove(id)) _favorites.add(id);
+      if (removing) {
+        _favorites.remove(id);
+      } else {
+        _favorites.add(id);
+      }
     });
+    _favGen++;
+    _writeFavorite(id, removing: removing);
+  }
+
+  Future<void> _writeFavorite(String id, {required bool removing}) async {
+    try {
+      await writeFavorite(
+        repository: _favoritesRepository,
+        listingId: id,
+        removing: removing,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        if (removing) {
+          _favorites.add(id);
+        } else {
+          _favorites.remove(id);
+        }
+      });
+    }
   }
 
   Widget _mapBody() {
