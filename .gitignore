@@ -24,6 +24,9 @@ pb_data/
 *.sqlite
 *.sqlite3
 
+# Local chat QA dumps (screenshots and UI XML)
+tmp-chat-qa/
+
 # Miscellaneous
 *.class
 *.log
