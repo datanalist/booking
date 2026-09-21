@@ -154,6 +154,7 @@ class _BookingConfirmationSheetState extends State<BookingConfirmationSheet> {
       context,
       checkIn: _draft.checkIn,
       checkOut: _draft.checkOut,
+      listingId: _listing.id,
     );
     if (!mounted || result == null) return;
     final next = _draft.copyWith(

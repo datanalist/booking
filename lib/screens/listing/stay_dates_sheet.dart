@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
 import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
@@ -18,15 +19,27 @@ class StayDatesSheet extends StatefulWidget {
     super.key,
     this.initialCheckIn,
     this.initialCheckOut,
+    this.listingId,
+    this.excludeBookingId,
+    this.occupiedRanges,
+    this.listingsRepository,
   });
 
   final DateTime? initialCheckIn;
   final DateTime? initialCheckOut;
+  final String? listingId;
+  final String? excludeBookingId;
+  final List<OccupiedStayRange>? occupiedRanges;
+  final ListingsRepository? listingsRepository;
 
   static Future<StayDates?> show(
     BuildContext context, {
     DateTime? checkIn,
     DateTime? checkOut,
+    String? listingId,
+    String? excludeBookingId,
+    List<OccupiedStayRange>? occupiedRanges,
+    ListingsRepository? listingsRepository,
   }) {
     return showModalBottomSheet<StayDates>(
       context: context,
@@ -39,6 +52,10 @@ class StayDatesSheet extends StatefulWidget {
       builder: (context) => StayDatesSheet(
         initialCheckIn: checkIn,
         initialCheckOut: checkOut,
+        listingId: listingId,
+        excludeBookingId: excludeBookingId,
+        occupiedRanges: occupiedRanges,
+        listingsRepository: listingsRepository,
       ),
     );
   }
@@ -50,17 +67,54 @@ class StayDatesSheet extends StatefulWidget {
 class _StayDatesSheetState extends State<StayDatesSheet> {
   late DateTime? _checkIn;
   late DateTime? _checkOut;
+  var _occupied = const <OccupiedStayRange>[];
+  Future<void>? _occupiedLoad;
+
+  ListingsRepository get _repository =>
+      widget.listingsRepository ?? ListingsRepositoryScope.instance;
 
   @override
   void initState() {
     super.initState();
     _checkIn = widget.initialCheckIn;
     _checkOut = widget.initialCheckOut;
+    final injected = widget.occupiedRanges;
+    if (injected != null) {
+      _occupied = injected;
+    } else if ((widget.listingId ?? '').trim().isNotEmpty) {
+      _occupiedLoad = _loadOccupied();
+    }
   }
 
-  bool get _canSave => stayNightsBetween(_checkIn, _checkOut) > 0;
+  Future<void> _loadOccupied() async {
+    final ranges = await _repository.fetchOccupiedDates(
+      listingId: widget.listingId!.trim(),
+      excludeBookingId: widget.excludeBookingId,
+    );
+    if (!mounted) return;
+    setState(() => _occupied = ranges);
+  }
+
+  bool get _canSave {
+    if (stayNightsBetween(_checkIn, _checkOut) <= 0) return false;
+    return !stayConflictsWithOccupied(
+      checkIn: _checkIn!,
+      checkOut: _checkOut!,
+      ranges: _occupied,
+    );
+  }
+
+  bool _selectable(DateTime day, {required bool checkOut}) {
+    return stayDaySelectable(
+      day: day,
+      checkOut: checkOut,
+      ranges: _occupied,
+    );
+  }
 
   Future<void> _pickDate({required bool checkOut}) async {
+    if (_occupiedLoad != null) await _occupiedLoad;
+    if (!mounted) return;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final picked = await showStayDatePicker(
@@ -69,19 +123,48 @@ class _StayDatesSheetState extends State<StayDatesSheet> {
       today: today,
       currentCheckIn: _checkIn,
       currentCheckOut: _checkOut,
+      selectableDay: (day) => _selectable(day, checkOut: checkOut),
     );
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
+    if (!_selectable(picked, checkOut: checkOut)) return;
     setState(() {
       if (checkOut) {
         _checkOut = picked;
+        if (_checkIn != null &&
+            stayConflictsWithOccupied(
+              checkIn: _checkIn!,
+              checkOut: picked,
+              ranges: _occupied,
+            )) {
+          _checkIn = null;
+          return;
+        }
       } else {
         _checkIn = picked;
+        if (_checkOut != null &&
+            stayConflictsWithOccupied(
+              checkIn: picked,
+              checkOut: _checkOut!,
+              ranges: _occupied,
+            )) {
+          _checkOut = null;
+          return;
+        }
       }
       final completed = completeSearchStayDates(
         checkIn: _checkIn,
         checkOut: _checkOut,
         today: today,
       );
+      if (completed.checkIn != null &&
+          completed.checkOut != null &&
+          stayConflictsWithOccupied(
+            checkIn: completed.checkIn!,
+            checkOut: completed.checkOut!,
+            ranges: _occupied,
+          )) {
+        return;
+      }
       _checkIn = completed.checkIn;
       _checkOut = completed.checkOut;
     });
@@ -99,7 +182,12 @@ class _StayDatesSheetState extends State<StayDatesSheet> {
     final checkOut = completed.checkOut;
     if (checkIn == null ||
         checkOut == null ||
-        stayNightsBetween(checkIn, checkOut) <= 0) {
+        stayNightsBetween(checkIn, checkOut) <= 0 ||
+        stayConflictsWithOccupied(
+          checkIn: checkIn,
+          checkOut: checkOut,
+          ranges: _occupied,
+        )) {
       return;
     }
     Navigator.pop(context, StayDates(checkIn: checkIn, checkOut: checkOut));

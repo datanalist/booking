@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:booking/data/listings_repository.dart';
 import 'package:booking/screens/listing/stay_dates_sheet.dart';
 import 'package:booking/screens/search/search_query_sheet.dart';
 import 'package:booking/theme/app_theme.dart';
@@ -159,5 +160,77 @@ void main() {
 
   test('stay date format matches the search filter', () {
     expect(formatSearchDate(DateTime(2024, 11, 14)), '14.11.2024');
+  });
+
+  testWidgets('occupied night is not selectable and a free day is', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: StayDatesSheet(
+            initialCheckIn: DateTime(2026, 10, 20),
+            initialCheckOut: DateTime(2026, 10, 25),
+            occupiedRanges: [
+              OccupiedStayRange(
+                start: DateTime(2026, 10, 1),
+                end: DateTime(2026, 10, 10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('stay-dates-check-in')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('3'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ОК'));
+    await tester.pumpAndSettle();
+    expect(find.text('20.10.2026'), findsOneWidget);
+    expect(find.text('03.10.2026'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('stay-dates-check-in')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ОК'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('15.10.2026'), findsOneWidget);
+    expect(find.text('20.10.2026'), findsNothing);
+  });
+
+  testWidgets('save stays disabled when the range overlaps occupied nights', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: StayDatesSheet(
+            initialCheckIn: DateTime(2026, 10, 3),
+            initialCheckOut: DateTime(2026, 10, 6),
+            occupiedRanges: [
+              OccupiedStayRange(
+                start: DateTime(2026, 10, 1),
+                end: DateTime(2026, 10, 10),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final save = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('stay-dates-save')),
+    );
+    expect(save.onPressed, isNull);
   });
 }

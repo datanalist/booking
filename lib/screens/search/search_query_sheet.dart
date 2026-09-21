@@ -112,12 +112,36 @@ String formatSearchDate(DateTime date) {
   return (first: first, last: last, initial: initial);
 }
 
+@visibleForTesting
+DateTime stayDatePickerInitial({
+  required DateTime preferred,
+  required DateTime first,
+  required DateTime last,
+  bool Function(DateTime day)? selectableDay,
+}) {
+  DateTime dayOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
+  final start = dayOnly(first);
+  final end = dayOnly(last);
+  var preferredDay = dayOnly(preferred);
+  if (preferredDay.isBefore(start)) preferredDay = start;
+  if (preferredDay.isAfter(end)) preferredDay = end;
+  if (selectableDay == null || selectableDay(preferredDay)) return preferredDay;
+  var cursor = start;
+  while (!cursor.isAfter(end)) {
+    if (selectableDay(cursor)) return cursor;
+    cursor = cursor.add(const Duration(days: 1));
+  }
+  return preferredDay;
+}
+
 Future<DateTime?> showStayDatePicker(
   BuildContext context, {
   required bool checkOut,
   required DateTime today,
   DateTime? currentCheckIn,
   DateTime? currentCheckOut,
+  bool Function(DateTime day)? selectableDay,
 }) {
   final bounds = stayDatePickerBounds(
     checkOut: checkOut,
@@ -125,12 +149,24 @@ Future<DateTime?> showStayDatePicker(
     currentCheckIn: currentCheckIn,
     currentCheckOut: currentCheckOut,
   );
+  final initial = stayDatePickerInitial(
+    preferred: bounds.initial,
+    first: bounds.first,
+    last: bounds.last,
+    selectableDay: selectableDay,
+  );
+  final predicate = selectableDay == null
+      ? null
+      : (DateTime day) =>
+            selectableDay(DateTime(day.year, day.month, day.day));
+  final usePredicate = predicate == null || predicate(initial);
   return showDatePicker(
     context: context,
     locale: const Locale('ru', 'RU'),
-    initialDate: bounds.initial,
+    initialDate: initial,
     firstDate: bounds.first,
     lastDate: bounds.last,
+    selectableDayPredicate: usePredicate ? predicate : null,
     builder: (context, child) {
       return Theme(
         data: Theme.of(context).copyWith(

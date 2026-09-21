@@ -89,6 +89,8 @@ class _BookingChangeSheetState extends State<BookingChangeSheet> {
       context,
       checkIn: _checkIn,
       checkOut: _checkOut,
+      listingId: widget.booking.listingId,
+      excludeBookingId: widget.booking.id,
     );
     if (!mounted || result == null) return;
     setState(() {

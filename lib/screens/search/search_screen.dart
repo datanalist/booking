@@ -48,14 +48,20 @@ class _SearchScreenState extends State<SearchScreen> {
     _load();
   }
 
+  var _loadGen = 0;
+
   Future<void> _load() async {
+    final gen = ++_loadGen;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final listings = await _repository.fetchPublished();
-      if (!mounted) return;
+      final listings = await _repository.fetchPublished(
+        checkIn: _query.checkIn,
+        checkOut: _query.checkOut,
+      );
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         _listings = listings;
         _filters = _filters.withPriceBounds(
@@ -66,7 +72,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _loading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || gen != _loadGen) return;
       setState(() {
         _error = error;
         _loading = false;
@@ -140,11 +146,13 @@ class _SearchScreenState extends State<SearchScreen> {
     );
     if (!mounted || selected == null) return;
     final now = DateTime.now();
-    setState(() {
-      _query = selected.completed(
-        today: DateTime(now.year, now.month, now.day),
-      );
-    });
+    final next = selected.completed(
+      today: DateTime(now.year, now.month, now.day),
+    );
+    final datesChanged =
+        next.checkIn != _query.checkIn || next.checkOut != _query.checkOut;
+    setState(() => _query = next);
+    if (datesChanged) await _load();
   }
 
   Future<void> _openFilters() async {

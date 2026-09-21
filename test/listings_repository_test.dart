@@ -1,6 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:pocketbase/pocketbase.dart';
 
+import 'package:booking/data/booking.dart';
 import 'package:booking/data/listings_repository.dart';
 import 'package:booking/data/reviews_repository.dart';
 import 'package:booking/screens/search/search_listing.dart';
@@ -208,4 +213,277 @@ void main() {
     expect(review.stars, 5);
     expect(review.text, 'Отлично');
   });
+
+  test('stayRangeOverlaps matches occupying booking formula', () {
+    final occupiedStart = DateTime(2026, 10, 1);
+    final occupiedEnd = DateTime(2026, 10, 10);
+
+    expect(
+      stayRangeOverlaps(
+        occupiedStart: occupiedStart,
+        occupiedEnd: occupiedEnd,
+        requestedCheckIn: DateTime(2026, 10, 3),
+        requestedCheckOut: DateTime(2026, 10, 6),
+      ),
+      isTrue,
+    );
+    expect(
+      stayRangeOverlaps(
+        occupiedStart: occupiedStart,
+        occupiedEnd: occupiedEnd,
+        requestedCheckIn: DateTime(2026, 10, 10),
+        requestedCheckOut: DateTime(2026, 10, 12),
+      ),
+      isFalse,
+    );
+    expect(
+      stayRangeOverlaps(
+        occupiedStart: occupiedStart,
+        occupiedEnd: occupiedEnd,
+        requestedCheckIn: DateTime(2026, 9, 20),
+        requestedCheckOut: DateTime(2026, 10, 1),
+      ),
+      isFalse,
+    );
+  });
+
+  test('publishedListingsFilter binds excluded ids through pbFilter', () {
+    expect(publishedListingsFilter(), 'status = "published"');
+    expect(
+      publishedListingsFilter(['studio-msk', "x' || id != '"]),
+      "status = \"published\" && id != 'studio-msk' && "
+      r"id != 'x\' || id != \''",
+    );
+  });
+
+  test('stayDaySelectable disables occupying nights but keeps checkout morning', () {
+    final occupied = [
+      OccupiedStayRange(
+        start: DateTime(2026, 10, 1),
+        end: DateTime(2026, 10, 10),
+      ),
+    ];
+
+    expect(
+      stayDaySelectable(
+        day: DateTime(2026, 10, 3),
+        checkOut: false,
+        ranges: occupied,
+      ),
+      isFalse,
+    );
+    expect(
+      stayDaySelectable(
+        day: DateTime(2026, 10, 15),
+        checkOut: false,
+        ranges: occupied,
+      ),
+      isTrue,
+    );
+    expect(
+      stayDaySelectable(
+        day: DateTime(2026, 10, 1),
+        checkOut: true,
+        ranges: occupied,
+      ),
+      isTrue,
+    );
+    expect(
+      stayDaySelectable(
+        day: DateTime(2026, 10, 3),
+        checkOut: true,
+        ranges: occupied,
+      ),
+      isFalse,
+    );
+    expect(
+      stayDaySelectable(
+        day: DateTime(2026, 10, 10),
+        checkOut: false,
+        ranges: occupied,
+      ),
+      isTrue,
+    );
+    expect(
+      stayConflictsWithOccupied(
+        checkIn: DateTime(2026, 10, 3),
+        checkOut: DateTime(2026, 10, 6),
+        ranges: occupied,
+      ),
+      isTrue,
+    );
+    expect(
+      stayConflictsWithOccupied(
+        checkIn: DateTime(2026, 9, 20),
+        checkOut: DateTime(2026, 10, 1),
+        ranges: occupied,
+      ),
+      isFalse,
+    );
+  });
+
+  test('parseOccupiedListingIds reads hook payload only', () {
+    expect(parseOccupiedListingIds(null), isEmpty);
+    expect(
+      parseOccupiedListingIds({
+        'listingIds': ['studio-msk', ' kazan-loft ', ''],
+      }),
+      ['studio-msk', 'kazan-loft'],
+    );
+  });
+
+  test('fetchPublished without dates does not call occupied hook', () async {
+    var occupiedCalls = 0;
+    final client = PocketBase(
+      'http://pb.test',
+      httpClientFactory: () => MockClient((request) async {
+        if (request.url.path.contains('occupied-listings')) {
+          occupiedCalls++;
+          return _jsonOk({'listingIds': ['studio-msk']});
+        }
+        if (request.url.path.contains('/api/collections/listings/records')) {
+          expect(request.url.queryParameters['filter'], 'status = "published"');
+          return _jsonOk(_listingsPayload(['kazan-loft']));
+        }
+        return _jsonOk({'items': []});
+      }),
+    );
+
+    final listings = await PocketBaseListingsRepository(
+      client: client,
+      reviews: _EmptyReviews(),
+    ).fetchPublished();
+
+    expect(occupiedCalls, 0);
+    expect(listings.map((item) => item.id), ['kazan-loft']);
+  });
+
+  test('fetchPublished with stay dates excludes occupied listing ids', () async {
+    final client = PocketBase(
+      'http://pb.test',
+      httpClientFactory: () => MockClient((request) async {
+        if (request.url.path.contains('occupied-listings')) {
+          expect(request.url.queryParameters['checkIn'], isNotEmpty);
+          expect(request.url.queryParameters['checkOut'], isNotEmpty);
+          return _jsonOk({
+            'listingIds': ['studio-msk'],
+          });
+        }
+        if (request.url.path.contains('/api/collections/listings/records')) {
+          expect(
+            request.url.queryParameters['filter'],
+            "status = \"published\" && id != 'studio-msk'",
+          );
+          return _jsonOk(_listingsPayload(['kazan-loft']));
+        }
+        return _jsonOk({'items': []});
+      }),
+    );
+
+    final listings = await PocketBaseListingsRepository(
+      client: client,
+      reviews: _EmptyReviews(),
+    ).fetchPublished(
+      checkIn: DateTime(2026, 10, 1),
+      checkOut: DateTime(2026, 10, 5),
+    );
+
+    expect(listings.map((item) => item.id), ['kazan-loft']);
+  });
+
+  test('parseOccupiedStayRanges reads only start/end', () {
+    expect(parseOccupiedStayRanges(null), isEmpty);
+    final ranges = parseOccupiedStayRanges({
+      'ranges': [
+        {'start': '2026-10-01', 'end': '2026-10-10'},
+        {'start': '2026-10-20', 'guest': 'secret@mail.com'},
+      ],
+    });
+    expect(ranges, hasLength(1));
+    expect(ranges.single.start, DateTime(2026, 10, 1));
+    expect(ranges.single.end, DateTime(2026, 10, 10));
+  });
+
+  test('fetchOccupiedDates binds listing and excludeBookingId', () async {
+    final client = PocketBase(
+      'http://pb.test',
+      httpClientFactory: () => MockClient((request) async {
+        expect(request.url.path.contains('occupied-dates'), isTrue);
+        expect(request.url.queryParameters['listing'], 'studio-msk');
+        expect(request.url.queryParameters['excludeBookingId'], 'booking-1');
+        return _jsonOk({
+          'ranges': [
+            {'start': '2026-10-01', 'end': '2026-10-10'},
+          ],
+        });
+      }),
+    );
+
+    final ranges = await PocketBaseListingsRepository(
+      client: client,
+    ).fetchOccupiedDates(
+      listingId: 'studio-msk',
+      excludeBookingId: 'booking-1',
+    );
+
+    expect(ranges, hasLength(1));
+    expect(ranges.single.start, DateTime(2026, 10, 1));
+    expect(ranges.single.end, DateTime(2026, 10, 10));
+  });
+}
+
+class _EmptyReviews implements ReviewsRepository {
+  @override
+  Future<StayReview?> fetchForBooking(String bookingId) async => null;
+
+  @override
+  Future<bool> hasGuestListingReview(String bookingId) async => false;
+
+  @override
+  Future<List<ListingReview>> fetchForListing(String listingId) async =>
+      const [];
+
+  @override
+  Future<Map<String, List<ListingReview>>> fetchForListings(
+    Iterable<String> listingIds,
+  ) async =>
+      {};
+
+  @override
+  Future<StayReview> create({
+    required Booking booking,
+    required int rating,
+    String comment = '',
+  }) {
+    throw UnimplementedError();
+  }
+}
+
+http.Response _jsonOk(Object body) {
+  return http.Response.bytes(
+    utf8.encode(body is String ? body : jsonEncode(body)),
+    200,
+    headers: {'content-type': 'application/json; charset=utf-8'},
+  );
+}
+
+Map<String, Object?> _listingsPayload(List<String> ids) {
+  return {
+    'page': 1,
+    'perPage': 500,
+    'totalItems': ids.length,
+    'totalPages': 1,
+    'items': [
+      for (final id in ids)
+        {
+          'id': id,
+          'collectionId': 'listings',
+          'collectionName': 'listings',
+          'title': id,
+          'city': 'Kazan',
+          'status': 'published',
+          'price_night': 3100,
+        },
+    ],
+  };
 }

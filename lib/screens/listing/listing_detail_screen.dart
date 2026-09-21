@@ -259,6 +259,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ),
             _BookingBar(
               listing: listing,
+              listingsRepository: _repository,
               draftStore: widget.draftStore,
               bookingsRepository: widget.bookingsRepository,
               notificationsRepository: widget.notificationsRepository,
@@ -852,6 +853,7 @@ class _HostListings extends StatelessWidget {
 class _BookingBar extends StatefulWidget {
   const _BookingBar({
     required this.listing,
+    this.listingsRepository,
     this.draftStore,
     this.bookingsRepository,
     this.notificationsRepository,
@@ -862,6 +864,7 @@ class _BookingBar extends StatefulWidget {
   });
 
   final SearchListing listing;
+  final ListingsRepository? listingsRepository;
   final BookingDraftStore? draftStore;
   final BookingsRepository? bookingsRepository;
   final NotificationsRepository? notificationsRepository;
@@ -876,14 +879,20 @@ class _BookingBar extends StatefulWidget {
 
 class _BookingBarState extends State<_BookingBar> {
   late SearchListing _stay;
+  var _occupied = const <OccupiedStayRange>[];
+  Future<void>? _occupiedLoad;
 
   BookingDraftStore get _drafts =>
       widget.draftStore ?? BookingDraftStore.instance;
+
+  ListingsRepository get _listings =>
+      widget.listingsRepository ?? ListingsRepositoryScope.instance;
 
   @override
   void initState() {
     super.initState();
     _stay = widget.listing;
+    _occupiedLoad = _loadOccupied();
     _restoreDraft();
   }
 
@@ -892,6 +901,7 @@ class _BookingBarState extends State<_BookingBar> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.listing.id != widget.listing.id) {
       _stay = widget.listing;
+      _occupiedLoad = _loadOccupied();
       _restoreDraft();
       return;
     }
@@ -912,7 +922,25 @@ class _BookingBarState extends State<_BookingBar> {
     });
   }
 
+  Future<void> _loadOccupied() async {
+    final ranges = await _listings.fetchOccupiedDates(
+      listingId: widget.listing.id,
+    );
+    if (!mounted) return;
+    setState(() => _occupied = ranges);
+  }
+
+  bool _selectable(DateTime day, {required bool checkOut}) {
+    return stayDaySelectable(
+      day: day,
+      checkOut: checkOut,
+      ranges: _occupied,
+    );
+  }
+
   Future<void> _pickStayDates() async {
+    if (_occupiedLoad != null) await _occupiedLoad;
+    if (!mounted) return;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final checkIn = await _pickDate(checkOut: false, today: today);
@@ -922,7 +950,15 @@ class _BookingBarState extends State<_BookingBar> {
       today: today,
       checkIn: checkIn,
     );
-    if (!mounted || checkOut == null) return;
+    if (!mounted ||
+        checkOut == null ||
+        stayConflictsWithOccupied(
+          checkIn: checkIn,
+          checkOut: checkOut,
+          ranges: _occupied,
+        )) {
+      return;
+    }
     setState(() {
       _stay = widget.listing.withStay(checkIn: checkIn, checkOut: checkOut);
     });
@@ -939,6 +975,7 @@ class _BookingBarState extends State<_BookingBar> {
       today: today,
       currentCheckIn: checkIn ?? _stay.checkIn,
       currentCheckOut: _stay.checkOut,
+      selectableDay: (day) => _selectable(day, checkOut: checkOut),
     );
   }
 
@@ -950,6 +987,8 @@ class _BookingBarState extends State<_BookingBar> {
       context,
       checkIn: saved?.checkIn ?? listing.checkIn,
       checkOut: saved?.checkOut ?? listing.checkOut,
+      listingId: listing.id,
+      listingsRepository: _listings,
     );
     if (!mounted || result == null) return;
     final guests = StayGuests.normalized(

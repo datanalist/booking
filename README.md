@@ -37,7 +37,8 @@
 **Поиск и карточка**
 - Публичные `listings` со `status = published`, хозяин через `expand=host`
 - Рейтинг и число отзывов на карточке поиска и деталке — из коллекции `reviews` (`kind = listing`); если записей нет или запрос не удался, берутся денорм-поля `listings.rating` / `listings.reviews_count`
-- Поиск по городу, датам и гостям (Mapbox Geocoding), фильтры: тип жилья, цена, удобства, доп. опции
+- Поиск по городу, датам и гостям (Mapbox Geocoding), фильтры: тип жилья, цена, удобства, доп. опции. Если гость указал заезд и выезд, список и карта **скрывают** жильё, которое уже занято чужой бронью (`pending_host`, `awaiting_prepayment`, `confirmed`, `change_requested`, `cancel_requested`) или блоком календаря `listing_blocks` (если коллекция есть). Занятость считает хук `GET /api/vallome/occupied-listings` — гость не читает чужие `bookings`. Без дат каталог как раньше: все `published`. Если хук ещё не на VPS, поиск не ломается и показывает все объявления
+- На карточке объявления и в шите «Даты проживания» занятые ночи **нельзя выбрать** (`selectableDayPredicate`, полуинтервал `[check_in, check_out)`: день выезда одной брони может быть заездом другой). Диапазоны приходят с `GET /api/vallome/occupied-dates?listing=`; при правке своей брони её id передаётся как `excludeBookingId`, чтобы текущие ночи остались доступны. Сохранение пересекающегося диапазона блокируется и на клиенте, и хуком `bookings_overlap.pb.js`
 - Форма «Снять жилье» — отдельный экран (`MaterialPageRoute`), не modal-sheet: так поле города принимает клавиатуру на Android 16
 - Чипы под шапкой — только параметры этой формы (город, даты, гости)
 - Список и карта с пинами; фото с файлового API PocketBase (`ListingImage`)
@@ -141,6 +142,7 @@ ssh root@159.194.252.80 'install -o pocketbase -g pocketbase -m 644 /tmp/change_
 | `magic_link.pb.js` | `POST /api/vallome/magic-request` шлёт письмо без записи в БД; пользователь создаётся при клике «Авторизоваться» с `account_status = active`; `/api/vallome/magic-auth` и `/api/vallome/magic-wait`; подтверждённая заявка на смену email применяется здесь |
 | `change_email.pb.js` | `POST /api/vallome/change-email`: заявка на смену email текущего пользователя; адрес применяется только после magic-link на новый ящик |
 | `bookings_overlap.pb.js` | Запрет пересечения дат на занятом жилье |
+| `occupied_listings.pb.js` | `GET /api/vallome/occupied-listings` — id занятых объявлений на диапазон дат (поиск). `GET /api/vallome/occupied-dates` — диапазоны `{start,end}` одного жилья для календаря карточки, без PII гостей. Те же occupying-статусы и overlap, плюс `listing_blocks` если коллекция есть |
 
 Отдельного хука `/api/vallome/` для уведомлений нет: клиент пишет в `notifications` сам, если `createRule` пускает `@request.body.user = @request.auth.id` (как у `bookings`). Коллекцию поднимает `scripts/ensure_notifications.py`.
 

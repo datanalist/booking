@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/booking.dart';
 import 'package:booking/data/booking_draft.dart';
+import 'package:booking/data/listings_repository.dart';
 import 'package:booking/screens/listing/booking_confirmation_sheet.dart';
 import 'package:booking/screens/listing/guests_sheet.dart';
 import 'package:booking/screens/listing/listing_detail.dart';
@@ -36,8 +37,19 @@ Widget _app(Widget home) {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late ListingsRepository previousListings;
+
   setUpAll(() async {
     await initializeDateFormatting('ru');
+  });
+
+  setUp(() {
+    previousListings = ListingsRepositoryScope.instance;
+    ListingsRepositoryScope.instance = FakeListingsRepository();
+  });
+
+  tearDown(() {
+    ListingsRepositoryScope.instance = previousListings;
   });
 
   test('listing detail maps a PocketBase listing and host extras', () {

@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:booking/data/booking.dart';
 import 'package:booking/data/bookings_repository.dart';
+import 'package:booking/data/listings_repository.dart';
 import 'package:booking/screens/bookings/booking_change_sheet.dart';
 import 'package:booking/screens/listing/guests_sheet.dart';
 import 'package:booking/screens/listing/listing_icons.dart';
@@ -54,6 +55,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late BookingsRepository previousRepository;
+  late ListingsRepository previousListings;
 
   setUpAll(() async {
     await initializeDateFormatting('ru');
@@ -61,10 +63,13 @@ void main() {
 
   setUp(() {
     previousRepository = BookingsRepositoryScope.instance;
+    previousListings = ListingsRepositoryScope.instance;
+    ListingsRepositoryScope.instance = FakeListingsRepository();
   });
 
   tearDown(() {
     BookingsRepositoryScope.instance = previousRepository;
+    ListingsRepositoryScope.instance = previousListings;
   });
 
   testWidgets('opens the change booking sheet', (tester) async {

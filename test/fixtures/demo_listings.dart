@@ -236,9 +236,61 @@ class FakeListingsRepository implements ListingsRepository {
     : items = items ?? kDemoListings;
 
   final List<SearchListing> items;
+  final occupiedStays = <String, List<(DateTime, DateTime)>>{};
+  final occupiedByBooking = <String, List<(DateTime, DateTime)>>{};
 
   @override
-  Future<List<SearchListing>> fetchPublished() async => items;
+  Future<List<SearchListing>> fetchPublished({
+    DateTime? checkIn,
+    DateTime? checkOut,
+  }) async {
+    if (checkIn == null || checkOut == null || !checkOut.isAfter(checkIn)) {
+      return items;
+    }
+    return [
+      for (final item in items)
+        if (!_occupied(item.id, checkIn, checkOut)) item,
+    ];
+  }
+
+  bool _occupied(String listingId, DateTime checkIn, DateTime checkOut) {
+    final ranges = occupiedStays[listingId];
+    if (ranges == null) return false;
+    for (final range in ranges) {
+      if (stayRangeOverlaps(
+        occupiedStart: range.$1,
+        occupiedEnd: range.$2,
+        requestedCheckIn: checkIn,
+        requestedCheckOut: checkOut,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Future<List<OccupiedStayRange>> fetchOccupiedDates({
+    required String listingId,
+    String? excludeBookingId,
+  }) async {
+    var ranges = occupiedStays[listingId] ?? const <(DateTime, DateTime)>[];
+    final exclude = excludeBookingId?.trim() ?? '';
+    if (exclude.isNotEmpty) {
+      final own = occupiedByBooking[exclude];
+      if (own != null) {
+        ranges = [
+          for (final range in ranges)
+            if (!own.any((item) => item.$1 == range.$1 && item.$2 == range.$2))
+              range,
+        ];
+      }
+    }
+    return [
+      for (final range in ranges)
+        OccupiedStayRange(start: range.$1, end: range.$2),
+    ];
+  }
 
   @override
   Future<ListingDetail> fetchDetail(SearchListing listing) async {

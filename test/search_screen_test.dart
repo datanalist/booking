@@ -91,6 +91,69 @@ void main() {
     );
   });
 
+  testWidgets('occupied listing is hidden only for overlapping stay dates', (
+    tester,
+  ) async {
+    ListingsRepositoryScope.instance = FakeListingsRepository()
+      ..occupiedStays['kazan-loft'] = [
+        (DateTime(2026, 10, 1), DateTime(2026, 10, 10)),
+      ];
+
+    await _pumpSearch(tester);
+    await _submitSearchCity(tester, 'Казань');
+    expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(SearchQuerySheet))).pop(
+      SearchQuery(
+        city: 'Казань',
+        checkIn: DateTime(2026, 10, 3),
+        checkOut: DateTime(2026, 10, 6),
+        adults: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Лофт у Казанского кремля'), findsNothing);
+    expect(
+      find.text(
+        'Нет подходящих вариантов\nПопробуйте изменить параметры поиска',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Карта'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('map-pin-kazan-loft')), findsNothing);
+    expect(find.byKey(const ValueKey('no-matches-map-card')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Карта'));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(SearchQuerySheet))).pop(
+      SearchQuery(
+        city: 'Казань',
+        checkIn: DateTime(2026, 10, 20),
+        checkOut: DateTime(2026, 10, 25),
+        adults: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Поиск'));
+    await tester.pumpAndSettle();
+    Navigator.of(tester.element(find.byType(SearchQuerySheet))).pop(
+      const SearchQuery(city: 'Казань', adults: 1),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Лофт у Казанского кремля'), findsOneWidget);
+  });
+
   testWidgets('cards price the stay from the selected dates', (tester) async {
     await _pumpSearch(tester);
 

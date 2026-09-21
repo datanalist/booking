@@ -8,9 +8,17 @@ import 'pocketbase_filter.dart';
 import 'reviews_repository.dart';
 
 abstract class ListingsRepository {
-  Future<List<SearchListing>> fetchPublished();
+  Future<List<SearchListing>> fetchPublished({
+    DateTime? checkIn,
+    DateTime? checkOut,
+  });
 
   Future<ListingDetail> fetchDetail(SearchListing listing);
+
+  Future<List<OccupiedStayRange>> fetchOccupiedDates({
+    required String listingId,
+    String? excludeBookingId,
+  });
 }
 
 class ListingsRepositoryScope {
@@ -18,8 +26,9 @@ class ListingsRepositoryScope {
 }
 
 class PocketBaseListingsRepository implements ListingsRepository {
-  PocketBaseListingsRepository({this._client, ReviewsRepository? reviews})
-    : _reviewsOverride = reviews;
+  PocketBaseListingsRepository({PocketBase? client, ReviewsRepository? reviews})
+    : _client = client,
+      _reviewsOverride = reviews;
 
   final PocketBase? _client;
   final ReviewsRepository? _reviewsOverride;
@@ -30,13 +39,67 @@ class PocketBaseListingsRepository implements ListingsRepository {
 
   static const _expand = 'host';
   static const _published = 'status = "published"';
+  static const occupiedListingsPath = '/api/vallome/occupied-listings';
+  static const occupiedDatesPath = '/api/vallome/occupied-dates';
 
   @override
-  Future<List<SearchListing>> fetchPublished() async {
+  Future<List<SearchListing>> fetchPublished({
+    DateTime? checkIn,
+    DateTime? checkOut,
+  }) async {
+    final excludeIds = checkIn != null &&
+            checkOut != null &&
+            checkOut.isAfter(checkIn)
+        ? await _occupiedListingIds(checkIn, checkOut)
+        : const <String>[];
     final records = await _pb
         .collection(PbCollection.listings)
-        .getFullList(filter: _published, expand: _expand, sort: '-created');
-    return _mapRecords(records);
+        .getFullList(
+          filter: publishedListingsFilter(excludeIds),
+          expand: _expand,
+          sort: '-created',
+        );
+    final mapped = await _mapRecords(records);
+    if (excludeIds.isEmpty) return mapped;
+    final blocked = excludeIds.toSet();
+    return [for (final item in mapped) if (!blocked.contains(item.id)) item];
+  }
+
+  Future<List<String>> _occupiedListingIds(
+    DateTime checkIn,
+    DateTime checkOut,
+  ) async {
+    try {
+      final raw = await _pb.send(
+        occupiedListingsPath,
+        query: {
+          'checkIn': stayDateValue(checkIn),
+          'checkOut': stayDateValue(checkOut),
+        },
+      );
+      return parseOccupiedListingIds(raw);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<List<OccupiedStayRange>> fetchOccupiedDates({
+    required String listingId,
+    String? excludeBookingId,
+  }) async {
+    final id = listingId.trim();
+    if (id.isEmpty) return const [];
+    try {
+      final query = <String, dynamic>{'listing': id};
+      final exclude = excludeBookingId?.trim() ?? '';
+      if (exclude.isNotEmpty) query['excludeBookingId'] = exclude;
+      return parseOccupiedStayRanges(
+        await _pb.send(occupiedDatesPath, query: query),
+      );
+    } catch (_) {
+      return const [];
+    }
   }
 
   @override
@@ -237,6 +300,134 @@ class PocketBaseListingsRepository implements ListingsRepository {
     }
     return (0, 0);
   }
+}
+
+/// Occupying stay from `/api/vallome/occupied-dates`. Half-open nights
+/// `[start, end)` — checkout morning can be another guest's check-in.
+@immutable
+class OccupiedStayRange {
+  const OccupiedStayRange({required this.start, required this.end});
+
+  final DateTime start;
+  final DateTime end;
+}
+
+DateTime stayDay(DateTime value) => DateTime(value.year, value.month, value.day);
+
+/// Overlap used by search hide and `pb_hooks/bookings_overlap.pb.js`:
+/// `check_in < requestedCheckOut && check_out > requestedCheckIn`.
+bool stayRangeOverlaps({
+  required DateTime occupiedStart,
+  required DateTime occupiedEnd,
+  required DateTime requestedCheckIn,
+  required DateTime requestedCheckOut,
+}) {
+  return occupiedStart.isBefore(requestedCheckOut) &&
+      occupiedEnd.isAfter(requestedCheckIn);
+}
+
+/// Occupying night = `[start, end)`.
+bool stayNightOccupied(DateTime day, Iterable<OccupiedStayRange> ranges) {
+  final d = stayDay(day);
+  for (final range in ranges) {
+    final start = stayDay(range.start);
+    final end = stayDay(range.end);
+    if (!d.isBefore(start) && d.isBefore(end)) return true;
+  }
+  return false;
+}
+
+/// Check-out may still pick the start morning of an occupying stay.
+bool stayDaySelectable({
+  required DateTime day,
+  required bool checkOut,
+  required Iterable<OccupiedStayRange> ranges,
+}) {
+  if (!stayNightOccupied(day, ranges)) return true;
+  if (!checkOut) return false;
+  final d = stayDay(day);
+  for (final range in ranges) {
+    if (stayDay(range.start) == d) return true;
+  }
+  return false;
+}
+
+bool stayConflictsWithOccupied({
+  required DateTime checkIn,
+  required DateTime checkOut,
+  required Iterable<OccupiedStayRange> ranges,
+}) {
+  final start = stayDay(checkIn);
+  final end = stayDay(checkOut);
+  for (final range in ranges) {
+    if (stayRangeOverlaps(
+      occupiedStart: stayDay(range.start),
+      occupiedEnd: stayDay(range.end),
+      requestedCheckIn: start,
+      requestedCheckOut: end,
+    )) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// UTC date-only value for the occupied-listings hook and booking filters.
+String stayDateValue(DateTime date) {
+  return DateTime.utc(date.year, date.month, date.day).toIso8601String();
+}
+
+/// `status = "published"` plus `id !=` exclusions bound through [pbFilter].
+@visibleForTesting
+String publishedListingsFilter([List<String> excludeIds = const []]) {
+  if (excludeIds.isEmpty) return 'status = "published"';
+  final params = <String, Object?>{};
+  final parts = <String>['status = "published"'];
+  for (var i = 0; i < excludeIds.length; i++) {
+    final id = excludeIds[i].trim();
+    if (id.isEmpty) continue;
+    params['ex$i'] = id;
+    parts.add('id != {:ex$i}');
+  }
+  if (params.isEmpty) return 'status = "published"';
+  return pbFilter(parts.join(' && '), params);
+}
+
+@visibleForTesting
+List<String> parseOccupiedListingIds(Object? raw) {
+  if (raw is! Map) return const [];
+  final ids = raw['listingIds'] ?? raw['listing_ids'];
+  if (ids is! List) return const [];
+  return [
+    for (final item in ids)
+      if ('$item'.trim().isNotEmpty) '$item'.trim(),
+  ];
+}
+
+@visibleForTesting
+List<OccupiedStayRange> parseOccupiedStayRanges(Object? raw) {
+  if (raw is! Map) return const [];
+  final items = raw['ranges'];
+  if (items is! List) return const [];
+  final ranges = <OccupiedStayRange>[];
+  for (final item in items) {
+    if (item is! Map) continue;
+    final start = _parseStayDay(item['start']);
+    final end = _parseStayDay(item['end']);
+    if (start == null || end == null || !end.isAfter(start)) continue;
+    ranges.add(OccupiedStayRange(start: start, end: end));
+  }
+  return ranges;
+}
+
+DateTime? _parseStayDay(Object? raw) {
+  if (raw is DateTime) return stayDay(raw);
+  if (raw is String && raw.trim().isNotEmpty) {
+    final parsed = DateTime.tryParse(raw.trim());
+    if (parsed == null) return null;
+    return stayDay(parsed);
+  }
+  return null;
 }
 
 /// Expanded `listings.host` → `users` record, or null if the expand is missing.
