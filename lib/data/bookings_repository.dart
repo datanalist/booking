@@ -10,6 +10,9 @@ import 'pocketbase_filter.dart';
 abstract class BookingsRepository {
   Future<List<Booking>> fetchMine();
 
+  /// Неотменённая бронь текущего гостя на объявление — ключ к чату с хозяином.
+  Future<Booking?> findHostChatEligible({required String listingId});
+
   Future<Booking> create({
     required SearchListing listing,
     required DateTime checkIn,
@@ -75,6 +78,34 @@ class PocketBaseBookingsRepository implements BookingsRepository {
       sort: '-created',
     );
     return [for (final record in records) _map(record)];
+  }
+
+  @override
+  Future<Booking?> findHostChatEligible({required String listingId}) async {
+    final userId = _userId;
+    if (userId.isEmpty || !_pb.authStore.isValid || listingId.isEmpty) {
+      return null;
+    }
+    try {
+      final records = await _pb.collection(collection).getList(
+        page: 1,
+        perPage: 1,
+        filter: pbFilter(
+          'guest = {:userId} && listing = {:listingId} && status != {:cancelled}',
+          {
+            'userId': userId,
+            'listingId': listingId,
+            'cancelled': BookingStatus.cancelled.apiKey,
+          },
+        ),
+        expand: _expand,
+        sort: '-created',
+      );
+      if (records.items.isEmpty) return null;
+      return _map(records.items.first);
+    } on ClientException {
+      return null;
+    }
   }
 
   @override

@@ -8,6 +8,7 @@ import 'package:pocketbase/pocketbase.dart';
 
 import '../../data/auth_repository.dart';
 import '../../data/booking.dart';
+import '../../data/bookings_repository.dart';
 import '../../data/chat.dart';
 import '../../data/chats_repository.dart';
 import '../../screens/auth/photo_access.dart';
@@ -849,6 +850,7 @@ class _SquareIconButton extends StatelessWidget {
 }
 
 /// Открыть чат с владельцем из брони / карточки объявления.
+/// Без брони текущего гостя на это жильё диалог не создаётся.
 Future<void> openHostChat(
   BuildContext context, {
   Booking? booking,
@@ -856,18 +858,27 @@ Future<void> openHostChat(
   String listingId = '',
   String hostId = '',
   ChatsRepository? repository,
+  BookingsRepository? bookingsRepository,
 }) async {
   final repo = repository ?? ChatsRepositoryScope.instance;
+  final bookings = bookingsRepository ?? BookingsRepositoryScope.instance;
   try {
-    final ChatPreview chat;
-    if (booking != null) {
-      chat = await repo.getOrCreateForBooking(booking);
-    } else {
-      chat = await repo.getOrCreateForListing(
-        listingId: listingId,
-        hostId: hostId,
+    var resolved = booking;
+    if (resolved == null) {
+      final listing = listingId.trim();
+      if (listing.isEmpty) {
+        throw const ChatException(
+          'Чат с владельцем откроется после бронирования этого жилья',
+        );
+      }
+      resolved = await bookings.findHostChatEligible(listingId: listing);
+    }
+    if (resolved == null) {
+      throw const ChatException(
+        'Чат с владельцем откроется после бронирования этого жилья',
       );
     }
+    final chat = await repo.getOrCreateForBooking(resolved);
     if (!context.mounted) return;
     await ChatThreadScreen.open(context, chat: chat, repository: repo);
   } catch (error) {
@@ -879,7 +890,7 @@ Future<void> openHostChat(
   }
 }
 
-/// Совместимость со старыми вызовами заглушки.
+/// Alias для старых вызовов; данные — из PocketBase, не stub.
 Future<void> openHostChatStub(
   BuildContext context, {
   Booking? booking,

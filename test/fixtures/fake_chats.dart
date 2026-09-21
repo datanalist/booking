@@ -25,6 +25,11 @@ class FakeChatsRepository implements ChatsRepository {
     for (final chat in chats) {
       if (chat.listingId == listingId && chat.hostId == hostId) return chat;
     }
+    if (bookingId.trim().isEmpty) {
+      throw const ChatException(
+        'Чат с владельцем откроется после бронирования этого жилья',
+      );
+    }
     final created = ChatPreview(
       id: 'chat-$listingId',
       kind: ChatKind.listing,
@@ -32,7 +37,9 @@ class FakeChatsRepository implements ChatsRepository {
       hostId: hostId,
       listingId: listingId,
       bookingId: bookingId,
-      counterpartyName: 'Анна Иваненко',
+      // Имя собеседника = переданный hostId (в тестах id или имя).
+      // Не подставляем демо-Анну — иначе маскируется смена владельца.
+      counterpartyName: hostId.isEmpty ? 'Владелец' : hostId,
       listingTitle: 'Уютная студия в центре Москвы',
       city: 'Москва',
       checkIn: DateTime(2024, 9, 12),
@@ -44,12 +51,39 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
-  Future<ChatPreview> getOrCreateForBooking(Booking booking) {
-    return getOrCreateForListing(
-      listingId: booking.listingId,
+  Future<ChatPreview> getOrCreateForBooking(Booking booking) async {
+    for (final chat in chats) {
+      if (chat.listingId == booking.listingId && chat.hostId == booking.hostId) {
+        return chat;
+      }
+    }
+    if (booking.id.trim().isEmpty) {
+      throw const ChatException(
+        'Чат с владельцем откроется после бронирования этого жилья',
+      );
+    }
+    final hostName = booking.hostName.trim();
+    final created = ChatPreview(
+      id: 'chat-${booking.listingId}',
+      kind: ChatKind.listing,
+      guestId: 'guest-1',
       hostId: booking.hostId,
+      listingId: booking.listingId,
       bookingId: booking.id,
+      // Имя из брони (listing.host), не seed-id и не захардкоженная Анна.
+      counterpartyName: hostName.isNotEmpty
+          ? hostName
+          : (booking.hostId.isEmpty ? 'Владелец' : booking.hostId),
+      listingTitle: booking.title.isNotEmpty
+          ? booking.title
+          : 'Уютная студия в центре Москвы',
+      city: booking.city.isNotEmpty ? booking.city : 'Москва',
+      checkIn: booking.checkIn,
+      checkOut: booking.checkOut,
+      adults: booking.adults,
     );
+    chats.add(created);
+    return created;
   }
 
   @override

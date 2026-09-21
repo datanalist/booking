@@ -2,7 +2,7 @@
 
 Клиентское Flutter-приложение для бронирования жилья. Макет: [Figma — Booking](https://www.figma.com/design/zqPAmK0qrRQtqMp5IP3K5u/Booking).
 
-Бэкенд — PocketBase на `https://pb.booking.vallome.ru`. Каталог опубликованных объявлений, брони гостя и избранное клиент читает и пишет по API; чаты в UI на заглушках, серверные коллекции `chats` / `messages` поднимаются `ensure_chats.py` / `ensure_messages.py`. Вход по email — письмо с кнопкой **Авторизоваться** (под капотом OTP коллекции `users`, без ввода кода).
+Бэкенд — PocketBase на `https://pb.booking.vallome.ru`. Каталог опубликованных объявлений, брони гостя, избранное и чаты клиент читает и пишет по API (`chats` / `messages`); шапка треда берёт владельца из `listing.host`. Вход по email — письмо с кнопкой **Авторизоваться** (под капотом OTP коллекции `users`, без ввода кода).
 
 ## Что сделано
 
@@ -146,7 +146,8 @@ ssh root@159.194.252.80 'install -o pocketbase -g pocketbase -m 644 /tmp/change_
 | `change_email.pb.js` | `POST /api/vallome/change-email`: заявка на смену email текущего пользователя; адрес применяется только после magic-link на новый ящик |
 | `bookings_overlap.pb.js` | Запрет пересечения дат на занятом жилье |
 | `occupied_listings.pb.js` | `GET /api/vallome/occupied-listings` — id занятых объявлений на диапазон дат (поиск и карта). `GET /api/vallome/occupied-dates` — диапазоны `{start,end}` одного жилья для календаря карточки, без PII гостей. Статусы как у «Предстоящие», пересечение по дням, плюс `listing_blocks` если коллекция есть |
-| `chats_messages.pb.js` | Один тред `kind=listing` на пару `(listing, guest)`; обновляет `last_message` / `last_message_at` после create в `messages` |
+| `chats_messages.pb.js` | Один тред `kind=listing` на пару `(listing, guest)`; listing-чат создаётся только с `booking` гостя на это жильё; обновляет `last_message` / `last_message_at` после create в `messages` |
+| `chats_sync_listing_host.pb.js` | После смены `listings.host` выравнивает `chats.host` и `bookings.host` по этому объявлению (иначе шапка чата оставляет прежнего хозяина) |
 
 Отдельного хука `/api/vallome/` для уведомлений нет: клиент пишет в `notifications` сам, если `createRule` пускает `@request.body.user = @request.auth.id` (как у `bookings`). Коллекцию поднимает `scripts/ensure_notifications.py`. После `ensure_chats.py` имеет смысл снова запустить `ensure_notifications.py`, чтобы у `notifications` появилась relation `chat`.
 
@@ -154,7 +155,7 @@ ssh root@159.194.252.80 'install -o pocketbase -g pocketbase -m 644 /tmp/change_
 
 | Коллекция | Поля | Правила |
 | --- | --- | --- |
-| `chats` | `kind` `[listing, support]`, `listing`, `booking`, `guest` (req), `host`, `staff`, `last_message`, `last_message_at`, `guest_last_read`, `host_last_read` | list/view/update — участник (`guest`/`host`/`staff`); create — `guest` = текущий user |
+| `chats` | `kind` `[listing, support]`, `listing`, `booking`, `guest` (req), `host`, `staff`, `last_message`, `last_message_at`, `guest_last_read`, `host_last_read` | list/view/update — участник (`guest`/`host`/`staff`); create listing — `guest` = текущий user **и** `booking` его брони на это `listing`; support — только `guest` = текущий |
 | `messages` | `chat` (req), `author` (req), `text`, `images` (file multi), `files` (file multi) | list/view — участник чата; create — `author` = текущий и участник чата |
 
 Вход в приложении: свой email → письмо → **Авторизоваться** → вернуться в приложение. Телефон пока заглушка `+79999999999` / код `77777`.

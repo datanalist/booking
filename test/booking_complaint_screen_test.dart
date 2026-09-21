@@ -37,7 +37,7 @@ Booking _booking() {
     photo: listing.photo,
     city: listing.city,
     address: listing.address,
-    hostName: listing.host?.name ?? 'Анна Иваненко',
+    hostName: listing.host?.name ?? '',
     hostAvatar: listing.host?.avatarUrl ?? '',
   );
 }
@@ -139,7 +139,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('chat-thread-back')), findsOneWidget);
-    expect(find.text('Анна Иваненко'), findsWidgets);
+    expect(find.text(_listing().host!.name), findsWidgets);
     expect(find.byKey(const ValueKey('chat-input')), findsOneWidget);
   });
 
@@ -228,7 +228,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Пожаловаться на владельца жилья'), findsOneWidget);
-    expect(find.text('Анна Иваненко'), findsOneWidget);
+    expect(find.text(_listing().host!.name), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('complaint-host-text')),

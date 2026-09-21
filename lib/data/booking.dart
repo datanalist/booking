@@ -18,6 +18,10 @@ enum BookingStatus {
       this == BookingStatus.cancelled ||
       this == BookingStatus.cancelRequested;
 
+  /// Чат с владельцем с карточки жилья: любая бронь гостя, кроме отменённой.
+  /// Черновиков в API нет — запрос (`pending_host`) уже считается бронью.
+  bool get allowsHostChat => this != BookingStatus.cancelled;
+
   /// Статусы вкладки «Предстоящие». Чужая бронь с таким статусом
   /// закрывает жильё в поиске и на карте на пересекающиеся даты.
   static const upcomingApiKeys = [

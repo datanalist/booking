@@ -104,17 +104,23 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   late final PageController _photos = PageController();
   var _photoIndex = 0;
   late ListingDetail _detail;
+  Booking? _hostChatBooking;
 
   ListingsRepository get _repository =>
       widget.repository ?? ListingsRepositoryScope.instance;
+
+  BookingsRepository get _bookingsRepository =>
+      widget.bookingsRepository ?? BookingsRepositoryScope.instance;
 
   @override
   void initState() {
     super.initState();
     _detail = widget.initialDetail ?? ListingDetail.fromListing(widget.listing);
+    BookingsRepositoryScope.listVersion.addListener(_refreshHostChatAccess);
     if (widget.initialDetail == null) {
       _load();
     }
+    _refreshHostChatAccess();
   }
 
   Future<void> _load() async {
@@ -124,6 +130,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       setState(() => _detail = detail);
     } catch (_) {
       // Карточка уже собрана из записи списка; хозяин/другие объекты подтянутся при повторе.
+    }
+  }
+
+  Future<void> _refreshHostChatAccess() async {
+    final listingId = widget.listing.id;
+    try {
+      final booking = await _bookingsRepository.findHostChatEligible(
+        listingId: listingId,
+      );
+      if (!mounted || listingId != widget.listing.id) return;
+      setState(() => _hostChatBooking = booking);
+    } catch (_) {
+      if (!mounted || listingId != widget.listing.id) return;
+      setState(() => _hostChatBooking = null);
     }
   }
 
@@ -153,6 +173,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   @override
   void dispose() {
+    BookingsRepositoryScope.listVersion.removeListener(_refreshHostChatAccess);
     _photos.dispose();
     super.dispose();
   }
@@ -227,14 +248,18 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: ListingHostSection(
                               host: detail.host,
-                              onChat: () => openHostChatStub(
-                                context,
-                                hostName: detail.host.name,
-                                listingId: listing.id,
-                                hostId: listing.hostId.isNotEmpty
-                                    ? listing.hostId
-                                    : detail.host.id,
-                              ),
+                              // Чат с хозяином только после брони этого жилья.
+                              onChat: _hostChatBooking == null
+                                  ? null
+                                  : () => openHostChatStub(
+                                        context,
+                                        booking: _hostChatBooking,
+                                        hostName: detail.host.name,
+                                        listingId: listing.id,
+                                        hostId: listing.hostId.isNotEmpty
+                                            ? listing.hostId
+                                            : detail.host.id,
+                                      ),
                             ),
                           ),
                           if (detail.hostListings.isNotEmpty) ...[

@@ -2,6 +2,7 @@
 
 // Keep chats.last_message / last_message_at in sync after a new message.
 // Enforce one listing chat per (listing, guest) pair (schema note).
+// Listing chats may be created only when the guest has a booking for that listing.
 
 onRecordCreateRequest((e) => {
   const record = e.record
@@ -16,6 +17,7 @@ onRecordCreateRequest((e) => {
     e.next()
     return
   }
+
   const existing = $app.findRecordsByFilter(
     "chats",
     'kind = "listing" && listing = {:listing} && guest = {:guest}',
@@ -27,6 +29,36 @@ onRecordCreateRequest((e) => {
   if (existing && existing.length > 0) {
     throw new BadRequestError("Чат по этому жилью уже есть")
   }
+
+  const bookingId = record.getString("booking")
+  if (!bookingId) {
+    throw new BadRequestError(
+      "Чат с владельцем откроется после бронирования этого жилья",
+    )
+  }
+
+  let booking
+  try {
+    booking = $app.findRecordById("bookings", bookingId)
+  } catch (err) {
+    throw new BadRequestError(
+      "Чат с владельцем откроется после бронирования этого жилья",
+    )
+  }
+
+  const bookingGuest = booking.getString("guest")
+  const bookingListing = booking.getString("listing")
+  if (bookingGuest !== guest || bookingListing !== listing) {
+    throw new BadRequestError(
+      "Чат с владельцем откроется после бронирования этого жилья",
+    )
+  }
+
+  const auth = e.auth
+  if (!auth || auth.id !== guest) {
+    throw new BadRequestError("Войдите, чтобы написать владельцу")
+  }
+
   e.next()
 }, "chats")
 

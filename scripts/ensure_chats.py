@@ -31,13 +31,24 @@ LIST_VIEW_RULE = PARTICIPANT
 CREATE_RULE = (
     "@request.auth.id != '' && "
     "@request.body.guest = @request.auth.id && "
-    "(@request.body.kind = 'listing' || @request.body.kind = 'support')"
+    "("
+    "@request.body.kind = 'support' || "
+    "("
+    "@request.body.kind = 'listing' && "
+    "@request.body.booking != '' && "
+    "@request.body.booking.guest = @request.auth.id && "
+    "@request.body.booking.listing = @request.body.listing"
+    ")"
+    ")"
 )
+# host можно выровнять на listing.host после смены владельца объявления
+# (гость или текущий/новый хозяин — участники треда).
 UPDATE_RULE = (
     PARTICIPANT
     + " && "
     "(@request.body.guest:isset = false || @request.body.guest = guest) && "
-    "(@request.body.host:isset = false || @request.body.host = host) && "
+    "(@request.body.host:isset = false || @request.body.host = host || "
+    "@request.body.host = listing.host) && "
     "(@request.body.staff:isset = false || @request.body.staff = staff) && "
     "(@request.body.listing:isset = false || @request.body.listing = listing) && "
     "(@request.body.kind:isset = false || @request.body.kind = kind)"

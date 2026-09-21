@@ -110,8 +110,10 @@
 - `last_message`: text; `last_message_at`: date — превью `_ChatPreview`
 - `guest_last_read`, `host_last_read`: date — непрочитанные на списке (**экран**)
 - unique `(listing, guest)` при `kind=listing` — один тред на пару (хук `pb_hooks/chats_messages.pb.js`)
+- `host` должен совпадать с `listings.host`; при смене владельца объявления хук `pb_hooks/chats_sync_listing_host.pb.js` и клиентский `getOrCreateForListing` выравнивают `chats.host` (шапка треда читает имя/аватар из `listing.host`)
+- создать listing-чат можно только с `booking` текущего гостя на это же `listing` (правило `createRule` + хук); без брони диалог не создаётся. Чат с карточки поиска/объявления показывается только при неотменённой брони (`status != cancelled`).
 
-Коллекцию поднимает `scripts/ensure_chats.py`. Участники (guest / host / staff) читают и обновляют свои чаты; создать listing-чат может только `guest` = текущая сессия.
+Коллекцию поднимает `scripts/ensure_chats.py`. Участники (guest / host / staff) читают и обновляют свои чаты; создать listing-чат может только `guest` = текущая сессия **и** только привязав свою бронь этого жилья.
 
 ### `messages`
 

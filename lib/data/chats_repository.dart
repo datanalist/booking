@@ -6,6 +6,7 @@ import 'package:pocketbase/pocketbase.dart';
 
 import 'auth_repository.dart';
 import 'booking.dart';
+import 'bookings_repository.dart';
 import 'chat.dart';
 import 'pocketbase_client.dart';
 import 'pocketbase_filter.dart';
@@ -69,7 +70,9 @@ class PocketBaseChatsRepository implements ChatsRepository {
 
   static const chatsCollection = PbCollection.chats;
   static const messagesCollection = PbCollection.messages;
-  static const _chatExpand = 'host,guest,staff,listing,booking';
+  // listing.host — актуальный владелец объявления (chat.host может устареть
+  // после смены хозяина в админке).
+  static const _chatExpand = 'host,guest,staff,listing,listing.host,booking';
   static const _messageExpand = 'author';
 
   final PocketBase? _client;
@@ -129,6 +132,13 @@ class PocketBaseChatsRepository implements ChatsRepository {
       throw const ChatException('Не удалось определить владельца жилья');
     }
 
+    var resolvedBookingId = bookingId.trim();
+    if (resolvedBookingId.isEmpty) {
+      final eligible = await BookingsRepositoryScope.instance
+          .findHostChatEligible(listingId: listingId);
+      resolvedBookingId = eligible?.id ?? '';
+    }
+
     final existing = await _pb.collection(chatsCollection).getList(
       page: 1,
       perPage: 1,
@@ -140,19 +150,36 @@ class PocketBaseChatsRepository implements ChatsRepository {
     );
     if (existing.items.isNotEmpty) {
       final chat = _mapChat(existing.items.first, guestId);
-      if (bookingId.isNotEmpty && chat.bookingId.isEmpty) {
+      final body = <String, dynamic>{};
+      // Источник правды для собеседника — текущий host объявления / брони.
+      if (hostId.isNotEmpty && chat.hostId != hostId) {
+        body['host'] = hostId;
+      }
+      if (resolvedBookingId.isNotEmpty && chat.bookingId.isEmpty) {
+        body['booking'] = resolvedBookingId;
+      }
+      if (body.isNotEmpty) {
         try {
           final updated = await _pb.collection(chatsCollection).update(
             chat.id,
-            body: {'booking': bookingId},
+            body: body,
             expand: _chatExpand,
           );
+          ChatsRepositoryScope.notifyChanged();
           return _mapChat(updated, guestId);
         } on ClientException {
+          // Правила API могли запретить смену host — шапка всё равно
+          // берёт имя из listing.host в _mapChat.
           return chat;
         }
       }
       return chat;
+    }
+
+    if (resolvedBookingId.isEmpty) {
+      throw const ChatException(
+        'Чат с владельцем откроется после бронирования этого жилья',
+      );
     }
 
     try {
@@ -161,8 +188,8 @@ class PocketBaseChatsRepository implements ChatsRepository {
         'listing': listingId,
         'guest': guestId,
         'host': hostId,
+        'booking': resolvedBookingId,
       };
-      if (bookingId.isNotEmpty) body['booking'] = bookingId;
       final record = await _pb.collection(chatsCollection).create(
         body: body,
         expand: _chatExpand,
@@ -401,16 +428,32 @@ class PocketBaseChatsRepository implements ChatsRepository {
 
   ChatPreview _mapChat(RecordModel record, String viewerId) {
     final guestId = _relationId(record, 'guest');
-    final hostId = _relationId(record, 'host');
     final staffId = _relationId(record, 'staff');
     final host = _expanded(record, 'host');
     final guest = _expanded(record, 'guest');
     final staff = _expanded(record, 'staff');
     final listing = _expanded(record, 'listing');
     final booking = _expanded(record, 'booking');
+    // Актуальный владелец — из объявления; chat.host мог остаться от прежнего.
+    final listingHost = listing == null ? null : _expanded(listing, 'host');
+    final listingHostId = listing == null
+        ? ''
+        : _relationId(listing, 'host');
+    final chatHostId = _relationId(record, 'host');
+    final hostId =
+        listingHostId.isNotEmpty ? listingHostId : chatHostId;
+    // Не подставляем expand chat.host, если он уже не совпадает с listing.host.
+    final RecordModel? hostRecord;
+    if (listingHost != null) {
+      hostRecord = listingHost;
+    } else if (listingHostId.isEmpty || listingHostId == chatHostId) {
+      hostRecord = host;
+    } else {
+      hostRecord = null;
+    }
 
     final amGuest = viewerId == guestId;
-    final counterparty = amGuest ? host : guest;
+    final counterparty = amGuest ? hostRecord : guest;
 
     final listingPhotos =
         listing == null ? const <String>[] : _fileUrls(listing, 'photos');

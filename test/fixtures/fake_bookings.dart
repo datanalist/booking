@@ -14,6 +14,16 @@ class FakeBookingsRepository implements BookingsRepository {
   Future<List<Booking>> fetchMine() async => List<Booking>.from(items);
 
   @override
+  Future<Booking?> findHostChatEligible({required String listingId}) async {
+    for (final booking in items) {
+      if (booking.listingId == listingId && booking.status.allowsHostChat) {
+        return booking;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<Booking> create({
     required SearchListing listing,
     required DateTime checkIn,

@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/booking.dart';
 import 'package:booking/data/booking_draft.dart';
+import 'package:booking/data/bookings_repository.dart';
 import 'package:booking/data/listings_repository.dart';
 import 'package:booking/screens/listing/booking_confirmation_sheet.dart';
 import 'package:booking/screens/listing/guests_sheet.dart';
@@ -134,6 +135,7 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
 
     expect(find.text('Уютная студия в центре Москвы'), findsOneWidget);
     expect(find.text('Москва, ул. Невская 48'), findsOneWidget);
@@ -144,12 +146,52 @@ void main() {
     expect(find.text('Анна Иваненко'), findsOneWidget);
     expect(find.text('Верификация пройдена'), findsOneWidget);
     expect(find.text('4 года сдает жилье'), findsOneWidget);
-    expect(find.byKey(const ValueKey('listing-host-chat')), findsOneWidget);
+    // Без брони кнопка чата с хозяином скрыта.
+    expect(find.byKey(const ValueKey('listing-host-chat')), findsNothing);
     expect(find.text('Другие объявления владельца'), findsOneWidget);
     expect(find.text('Частный дом в 10 км от Москвы'), findsOneWidget);
     expect(find.text('Забронировать'), findsOneWidget);
     expect(find.text('3 034 ₽'), findsOneWidget);
     expect(find.text('Выберите даты'), findsOneWidget);
+  });
+
+  testWidgets('listing host chat appears after guest books the listing', (
+    tester,
+  ) async {
+    final favorites = <String>{};
+    final listing = kDemoListings.firstWhere((item) => item.id == 'studio-msk');
+    final detail = ListingDetail.fromListing(listing);
+    final previousBookings = BookingsRepositoryScope.instance;
+    BookingsRepositoryScope.instance = FakeBookingsRepository([
+      Booking(
+        id: 'b1',
+        listingId: listing.id,
+        guestId: 'guest',
+        hostId: listing.hostId,
+        checkIn: DateTime(2026, 9, 12),
+        checkOut: DateTime(2026, 9, 15),
+        status: BookingStatus.confirmed,
+      ),
+    ]);
+    addTearDown(() {
+      BookingsRepositoryScope.instance = previousBookings;
+    });
+
+    await tester.pumpWidget(
+      _app(
+        ListingDetailScreen(
+          listing: listing,
+          favorites: favorites,
+          initialDetail: detail,
+          onFavorite: (id) {
+            if (!favorites.remove(id)) favorites.add(id);
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('listing-host-chat')), findsOneWidget);
   });
 
   testWidgets('booking bar totals the selected stay nights', (tester) async {
