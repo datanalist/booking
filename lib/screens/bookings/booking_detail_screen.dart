@@ -106,7 +106,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   }
 
   Future<void> _openAddress() {
-    return showBookingAddressDialog(context, _booking);
+    return showBookingAddressDialog(
+      context,
+      _booking,
+      listing: _detail.listing,
+    );
   }
 
   Future<void> _openChange() async {

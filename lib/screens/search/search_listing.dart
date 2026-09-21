@@ -197,6 +197,45 @@ class SearchListing {
       cancellationAllowed: cancellationAllowed,
     );
   }
+
+  SearchListing withCoordinates(double latitude, double longitude) {
+    return SearchListing(
+      id: id,
+      title: title,
+      city: city,
+      type: type,
+      address: address,
+      description: description,
+      dates: dates,
+      nights: nights,
+      total: total,
+      perNight: perNight,
+      rating: rating,
+      reviews: reviews,
+      photo: photo,
+      photos: photos,
+      imageIndex: imageIndex,
+      latitude: latitude,
+      longitude: longitude,
+      pricePerNight: pricePerNight,
+      price14: price14,
+      price28: price28,
+      maxGuests: maxGuests,
+      petsAllowed: petsAllowed,
+      hostId: hostId,
+      host: host,
+      features: features,
+      amenities: amenities,
+      reviewsList: reviewsList,
+      checkIn: checkIn,
+      checkOut: checkOut,
+      houseRules: houseRules,
+      checkInTime: checkInTime,
+      checkOutTime: checkOutTime,
+      accessInfo: accessInfo,
+      cancellationAllowed: cancellationAllowed,
+    );
+  }
 }
 
 class StayQuote {

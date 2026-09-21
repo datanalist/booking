@@ -10,6 +10,18 @@ void main() {
     expect(BookingStatus.cancelRequested.isPast, isTrue);
     expect(BookingStatus.pendingHost.isPast, isFalse);
     expect(BookingStatus.confirmed.isPast, isFalse);
+    expect(BookingStatus.changeRequested.isPast, isFalse);
+    expect(BookingStatus.awaitingPrepayment.isPast, isFalse);
+    expect(
+      BookingStatus.upcomingApiKeys,
+      [
+        for (final status in BookingStatus.values)
+          if (!status.isPast) status.apiKey,
+      ],
+    );
+    expect(BookingStatus.upcomingApiKeys, isNot(contains('cancel_requested')));
+    expect(BookingStatus.upcomingApiKeys, isNot(contains('cancelled')));
+    expect(BookingStatus.upcomingApiKeys, isNot(contains('completed')));
     expect(BookingStatus.fromApi('awaiting_prepayment'),
         BookingStatus.awaitingPrepayment);
     expect(BookingStatus.fromApi('pending_host'), BookingStatus.pendingHost);

@@ -6,6 +6,8 @@ import 'package:booking/config/mapbox_geocoding.dart';
 import 'package:booking/data/booking.dart';
 import 'package:booking/screens/bookings/booking_address_dialog.dart';
 import 'package:booking/screens/bookings/booking_address_map_screen.dart';
+import 'package:booking/screens/search/search_listing.dart';
+import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/theme/app_theme.dart';
 
 Booking _booking({
@@ -115,6 +117,64 @@ void main() {
     expect(find.text('Тверская улица, 1'), findsOneWidget);
   });
 
+  testWidgets(
+    'yes with listing shows price pin and apartment preview',
+    (tester) async {
+      const listing = SearchListing(
+        id: 'listing-1',
+        title: 'Студия у Кремля',
+        city: 'Москва',
+        type: 'Квартира',
+        address: 'Тверская улица, 1',
+        description: '',
+        dates: '',
+        nights: '',
+        total: '15 170 ₽',
+        perNight: '5 057 ₽ / ночь',
+        rating: '4.9',
+        reviews: '(12)',
+        photo: '',
+        photos: [''],
+        imageIndex: 0,
+        latitude: 55.7584,
+        longitude: 37.6018,
+        pricePerNight: 5057,
+      );
+
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: Builder(
+              builder: (context) {
+                return TextButton(
+                  onPressed: () => showBookingAddressDialog(
+                    context,
+                    _booking(),
+                    listing: listing,
+                  ),
+                  child: const Text('open-address'),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open-address'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey<String>('booking-address-yes')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BookingAddressMapScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('map-pin-listing-1')), findsOneWidget);
+      expect(find.byType(PricePin), findsOneWidget);
+      expect(find.byKey(const ValueKey('listing-card-listing-1')), findsOneWidget);
+      expect(find.text('Студия у Кремля'), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('booking-address-pin')), findsNothing);
+      expect(find.byIcon(Icons.location_on), findsNothing);
+    },
+  );
+
   testWidgets('yes with 0,0 and no geocode shows the address text', (
     tester,
   ) async {
@@ -164,4 +224,62 @@ void main() {
     expect(find.byKey(const ValueKey<String>('booking-address-pin')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('booking-address-text')), findsNothing);
   });
+
+  testWidgets(
+    'listing without coordinates geocodes onto a price pin and preview',
+    (tester) async {
+      BookingAddressMapScreen.debugGeocode = (query) async {
+        expect(query, 'Невский проспект, 1');
+        return const [
+          AddressSuggestion(
+            label: 'Невский проспект, 1, Санкт-Петербург',
+            city: 'Санкт-Петербург',
+            latitude: 59.9343,
+            longitude: 30.3351,
+          ),
+        ];
+      };
+
+      const listing = SearchListing(
+        id: 'listing-spb',
+        title: 'Лофт у Невского',
+        city: 'Санкт-Петербург',
+        type: 'Квартира',
+        address: 'Невский проспект, 1',
+        description: '',
+        dates: '',
+        nights: '',
+        total: '12 000 ₽',
+        perNight: '4 000 ₽ / ночь',
+        rating: '4.8',
+        reviews: '(5)',
+        photo: '',
+        photos: [''],
+        imageIndex: 0,
+        latitude: 0,
+        longitude: 0,
+        pricePerNight: 4000,
+      );
+
+      await tester.pumpWidget(
+        _app(
+          BookingAddressMapScreen(
+            booking: _booking(
+              latitude: 0,
+              longitude: 0,
+              address: 'Невский проспект, 1',
+              city: 'Санкт-Петербург',
+            ),
+            listing: listing,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('map-pin-listing-spb')), findsOneWidget);
+      expect(find.byKey(const ValueKey('listing-card-listing-spb')), findsOneWidget);
+      expect(find.byKey(const ValueKey<String>('booking-address-pin')), findsNothing);
+    },
+  );
 }

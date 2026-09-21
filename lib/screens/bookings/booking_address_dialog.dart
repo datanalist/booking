@@ -2,16 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../../data/booking.dart';
 import '../../theme/app_theme.dart';
+import '../search/search_listing.dart';
 import 'booking_address_map_screen.dart';
 
 const _barrier = Color(0xFF525353);
 const _titleColor = Color(0xFF1A1B1D);
 
 /// Подтверждение открытия карты по адресу брони (Figma `1:13629`).
+///
+/// [listing] — для предстоящих: карта как в поиске (ценовой пин + preview).
+/// Без [listing] (архив) — прежний одиночный пин адреса.
 Future<void> showBookingAddressDialog(
   BuildContext context,
-  Booking booking,
-) async {
+  Booking booking, {
+  SearchListing? listing,
+}) async {
   final openMap = await showGeneralDialog<bool>(
     context: context,
     barrierDismissible: true,
@@ -28,7 +33,10 @@ Future<void> showBookingAddressDialog(
   if (openMap != true || !context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) => BookingAddressMapScreen(booking: booking),
+      builder: (_) => BookingAddressMapScreen(
+        booking: booking,
+        listing: listing,
+      ),
     ),
   );
 }

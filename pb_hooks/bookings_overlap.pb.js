@@ -5,12 +5,12 @@
 // Helpers live inside the handler so JSVM executor VMs can see them.
 // Filter values are bound with {:placeholder} — never concatenated.
 function rejectIfOverlap(e) {
+  // Same keys as BookingStatus.upcomingApiKeys (Брони → Предстоящие).
   const OCCUPYING = [
     "pending_host",
     "awaiting_prepayment",
     "confirmed",
     "change_requested",
-    "cancel_requested",
   ]
 
   const record = e.record

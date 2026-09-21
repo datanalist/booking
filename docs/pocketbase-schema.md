@@ -78,7 +78,7 @@
 
 Чипы `_BookingStatus` (**экран**): `pending_host` / `awaiting_prepayment` / `confirmed` / `cancelled`.  
 «Прошлые» = `completed` + `cancelled`.  
-Занятость дат = `pending_host` ∪ `awaiting_prepayment` ∪ `confirmed` ∪ `change_requested` ∪ `cancel_requested` ∪ `listing_blocks`.
+Занятость дат для поиска и карты = статусы вкладки «Предстоящие»: `pending_host` ∪ `awaiting_prepayment` ∪ `confirmed` ∪ `change_requested`, плюс `listing_blocks`. `completed`, `cancelled` и `cancel_requested` даты не занимают.
 
 Сумма возврата — у `tickets`, не здесь.
 

@@ -9,24 +9,38 @@ import '../../config/mapbox_geocoding.dart';
 import '../../config/mapbox_style.dart';
 import '../../data/booking.dart';
 import '../../theme/app_theme.dart';
+import '../listing/listing_detail_screen.dart';
+import '../search/search_apartment_card.dart';
+import '../search/search_listing.dart';
+import '../search/search_map_view.dart';
 
 const _mapFill = Color(0xFFE8EEE4);
 const _minZoom = 3.0;
 const _maxZoom = 19.0;
 const _pinSize = 40.0;
+const _meta = Color(0xFF9A9A9A);
+const _priceMuted = Color(0xFF6B6B6B);
 
 typedef BookingAddressGeocode =
     Future<List<AddressSuggestion>> Function(String query);
 
-/// Карта адреса жилья: Mapbox/flutter_map, как [SearchMapView], либо текст.
+/// Карта адреса жилья.
+///
+/// Для предстоящей брони ([listing] задан) — как поиск: [SearchMapView],
+/// [PricePin] и нижний preview [SearchApartmentCard].
+/// Для архива ([listing] == null) — одиночный пин `Icons.location_on`.
 class BookingAddressMapScreen extends StatefulWidget {
   const BookingAddressMapScreen({
     super.key,
     required this.booking,
+    this.listing,
     this.geocode,
   });
 
   final Booking booking;
+
+  /// Объявление брони: если задано — карта как в поиске.
+  final SearchListing? listing;
   final BookingAddressGeocode? geocode;
 
   @visibleForTesting
@@ -46,36 +60,69 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
   LatLng? _point;
   var _resolving = false;
   Style? _style;
+  String? _selectedId;
+  final _favorites = <String>{};
 
   Booking get _booking => widget.booking;
+
+  bool get _searchStyle => widget.listing != null;
 
   String get _label {
     final label = _booking.addressLabel.trim();
     return label.isEmpty ? 'Адрес не указан' : label;
   }
 
-  bool get _hasStoredPoint =>
-      _booking.latitude != 0 || _booking.longitude != 0;
+  bool get _hasStoredPoint {
+    if (_booking.latitude != 0 || _booking.longitude != 0) return true;
+    final listing = widget.listing;
+    if (listing == null) return false;
+    return listing.latitude != 0 || listing.longitude != 0;
+  }
+
+  LatLng? get _storedPoint {
+    if (_booking.latitude != 0 || _booking.longitude != 0) {
+      return LatLng(_booking.latitude, _booking.longitude);
+    }
+    final listing = widget.listing;
+    if (listing != null &&
+        (listing.latitude != 0 || listing.longitude != 0)) {
+      return LatLng(listing.latitude, listing.longitude);
+    }
+    return null;
+  }
+
+  SearchListing? get _mapListing {
+    final listing = widget.listing;
+    final point = _point;
+    if (listing == null || point == null) return null;
+    return listing.withCoordinates(point.latitude, point.longitude);
+  }
 
   @override
   void initState() {
     super.initState();
-    if (_hasStoredPoint) {
-      _point = LatLng(_booking.latitude, _booking.longitude);
+    final stored = _storedPoint;
+    if (stored != null) {
+      _point = stored;
+      if (_searchStyle) {
+        _selectedId = widget.listing!.id;
+      }
     } else {
       _resolving = true;
       _geocodeAddress();
     }
-    if (MapboxConfig.accessToken.isEmpty &&
-        !BookingAddressMapScreen._isWidgetTest) {
-      MapboxConfig.initialize().then((_) {
-        if (mounted) {
-          setState(() {});
-          _loadStyle();
-        }
-      });
-    } else {
-      _loadStyle();
+    if (!_searchStyle) {
+      if (MapboxConfig.accessToken.isEmpty &&
+          !BookingAddressMapScreen._isWidgetTest) {
+        MapboxConfig.initialize().then((_) {
+          if (mounted) {
+            setState(() {});
+            _loadStyle();
+          }
+        });
+      } else {
+        _loadStyle();
+      }
     }
   }
 
@@ -101,6 +148,9 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
       _resolving = false;
       if (match != null) {
         _point = LatLng(match.latitude!, match.longitude!);
+        if (_searchStyle) {
+          _selectedId = widget.listing!.id;
+        }
       }
     });
   }
@@ -115,6 +165,21 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
     } catch (_) {
       // Остаётся растровая подложка с language=ru.
     }
+  }
+
+  void _toggleFavorite(String id) {
+    setState(() {
+      if (!_favorites.remove(id)) _favorites.add(id);
+    });
+  }
+
+  void _openListing(SearchListing listing) {
+    ListingDetailScreen.open(
+      context,
+      listing: listing,
+      favorites: _favorites,
+      onFavorite: _toggleFavorite,
+    );
   }
 
   @override
@@ -174,9 +239,38 @@ class _BookingAddressMapScreenState extends State<BookingAddressMapScreen> {
         ),
       );
     }
+    if (_searchStyle) {
+      return _searchMapBody();
+    }
     return ColoredBox(
       color: _mapFill,
       child: _AddressMap(point: point, style: _style),
+    );
+  }
+
+  Widget _searchMapBody() {
+    final listing = _mapListing!;
+    final selected = _selectedId == listing.id ? listing : null;
+    return SearchMapView(
+      listings: [listing],
+      selectedId: _selectedId,
+      onSelectPin: (id) {
+        setState(() => _selectedId = id);
+      },
+      preview: selected == null
+          ? null
+          : SearchApartmentCard(
+              listing: selected,
+              favorite: _favorites.contains(selected.id),
+              meta: _meta,
+              priceMuted: _priceMuted,
+              compact: true,
+              onOpen: () => _openListing(selected),
+              onFavorite: () => _toggleFavorite(selected.id),
+              onClose: () {
+                setState(() => _selectedId = null);
+              },
+            ),
     );
   }
 }

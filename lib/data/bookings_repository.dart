@@ -46,13 +46,7 @@ class PocketBaseBookingsRepository implements BookingsRepository {
 
   static const collection = PbCollection.bookings;
   static const _expand = 'listing,host';
-  static const occupyingStatuses = [
-    'pending_host',
-    'awaiting_prepayment',
-    'confirmed',
-    'change_requested',
-    'cancel_requested',
-  ];
+  static const occupyingStatuses = BookingStatus.upcomingApiKeys;
 
   final PocketBase? _client;
   PocketBase get _pb => _client ?? pocketBase;

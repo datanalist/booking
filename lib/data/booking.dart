@@ -18,6 +18,15 @@ enum BookingStatus {
       this == BookingStatus.cancelled ||
       this == BookingStatus.cancelRequested;
 
+  /// Статусы вкладки «Предстоящие». Чужая бронь с таким статусом
+  /// закрывает жильё в поиске и на карте на пересекающиеся даты.
+  static const upcomingApiKeys = [
+    'pending_host',
+    'awaiting_prepayment',
+    'confirmed',
+    'change_requested',
+  ];
+
   static BookingStatus fromApi(String value) {
     for (final status in BookingStatus.values) {
       if (status.apiKey == value) return status;

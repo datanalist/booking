@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:booking/config/mapbox_config.dart';
 import 'package:booking/data/booking.dart';
 import 'package:booking/data/bookings_repository.dart';
 import 'package:booking/data/listings_repository.dart';
+import 'package:booking/screens/bookings/booking_address_map_screen.dart';
 import 'package:booking/screens/bookings/booking_detail_screen.dart';
 import 'package:booking/screens/bookings/bookings_screen.dart';
 import 'package:booking/screens/listing/listing_detail.dart';
+import 'package:booking/screens/search/search_map_view.dart';
 import 'package:booking/theme/app_theme.dart';
 
 import 'fixtures/demo_listings.dart';
@@ -76,6 +79,10 @@ void main() {
 
   setUpAll(() async {
     await initializeDateFormatting('ru');
+  });
+
+  setUp(() {
+    MapboxConfig.accessToken = '';
   });
 
   testWidgets('tap on upcoming card opens booking detail', (tester) async {
@@ -172,6 +179,46 @@ void main() {
       );
       expect(find.text('Как попасть внутрь'), findsOneWidget);
       expect(find.textContaining('Введите код домофона 3486'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'upcoming address opens search-style map with pin and listing card',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(393, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final listing = kDemoListings.first;
+      await _openDetail(
+        tester,
+        _booking(id: 'addr', status: BookingStatus.confirmed).copyWith(
+          latitude: listing.latitude,
+          longitude: listing.longitude,
+        ),
+      );
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('booking-address')),
+        240,
+        scrollable: find
+            .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(find.byKey(const ValueKey('booking-address')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('booking-address-dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('booking-address-yes')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(BookingAddressMapScreen), findsOneWidget);
+      expect(find.byKey(ValueKey('map-pin-${listing.id}')), findsOneWidget);
+      expect(find.byType(PricePin), findsOneWidget);
+      expect(find.byKey(ValueKey('listing-card-${listing.id}')), findsOneWidget);
+      expect(find.byKey(const ValueKey('booking-address-pin')), findsNothing);
     },
   );
 }

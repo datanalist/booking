@@ -5,12 +5,12 @@
 // Helpers live inside the handler so JSVM executor VMs can see them.
 // Filter values are bound with {:placeholder} — never concatenated.
 routerAdd("GET", "/api/vallome/occupied-listings", (e) => {
+  // Same keys as BookingStatus.upcomingApiKeys (Брони → Предстоящие).
   const OCCUPYING = [
     "pending_host",
     "awaiting_prepayment",
     "confirmed",
     "change_requested",
-    "cancel_requested",
   ]
 
   function str(value) {
@@ -30,11 +30,41 @@ routerAdd("GET", "/api/vallome/occupied-listings", (e) => {
     return ""
   }
 
-  function bindDate(value) {
+  function dayKey(value) {
     const raw = str(value).trim()
-    const match = raw.match(/^(\d{4}-\d{2}-\d{2})/)
-    if (!match) return ""
-    return match[1] + " 00:00:00.000Z"
+    const match = raw.match(/(\d{4}-\d{2}-\d{2})/)
+    return match ? match[1] : ""
+  }
+
+  function listingIdOf(record) {
+    var raw = ""
+    try {
+      raw = record.get("listing")
+    } catch (err) {}
+    if (raw && typeof raw === "object") {
+      try {
+        if (raw.length) return str(raw[0]).trim()
+      } catch (err) {}
+      try {
+        if (raw.id) return str(raw.id).trim()
+      } catch (err) {}
+    }
+    const id = str(raw).trim()
+    if (id && id !== "null" && id !== "undefined") return id
+    try {
+      return str(record.getString("listing")).trim()
+    } catch (err) {}
+    return ""
+  }
+
+  // Half-open nights [check_in, check_out): compare calendar days only.
+  // PocketBase may store "YYYY-MM-DD HH:MM:SS.sssZ" or an ISO "T" form;
+  // a full-timestamp filter then misses a same-day overlap.
+  function stayOverlaps(startRaw, endRaw, checkInDay, checkOutDay) {
+    const start = dayKey(startRaw)
+    const end = dayKey(endRaw)
+    if (!start || !end || start >= end) return false
+    return start < checkOutDay && end > checkInDay
   }
 
   function collectionExists(name) {
@@ -61,12 +91,39 @@ routerAdd("GET", "/api/vallome/occupied-listings", (e) => {
           params,
         )
       } catch (err) {
+        try {
+          console.log("occupied-listings: " + collection + " " + err)
+        } catch (logErr) {}
         break
       }
       if (!found || found.length === 0) break
       for (var i = 0; i < found.length; i++) {
-        const id = str(found[i].get("listing")).trim()
-        if (id) ids.push(id)
+        if (collection === "bookings") {
+          var status = ""
+          try {
+            status = str(found[i].get("status")).trim()
+          } catch (err) {}
+          var occupies = false
+          for (var s = 0; s < OCCUPYING.length; s++) {
+            if (status === OCCUPYING[s]) occupies = true
+          }
+          if (!occupies) continue
+        }
+        const id = listingIdOf(found[i])
+        if (!id) continue
+        const startField = collection === "listing_blocks" ? "start" : "check_in"
+        const endField = collection === "listing_blocks" ? "end" : "check_out"
+        if (
+          !stayOverlaps(
+            found[i].get(startField),
+            found[i].get(endField),
+            checkInDay,
+            checkOutDay,
+          )
+        ) {
+          continue
+        }
+        ids.push(id)
       }
       if (found.length < limit) break
       offset += limit
@@ -74,39 +131,20 @@ routerAdd("GET", "/api/vallome/occupied-listings", (e) => {
     return ids
   }
 
-  const checkIn = bindDate(readQuery("checkIn") || readQuery("check_in"))
-  const checkOut = bindDate(readQuery("checkOut") || readQuery("check_out"))
-  if (!checkIn || !checkOut || checkIn >= checkOut) {
+  const checkInDay = dayKey(readQuery("checkIn") || readQuery("check_in"))
+  const checkOutDay = dayKey(readQuery("checkOut") || readQuery("check_out"))
+  if (!checkInDay || !checkOutDay || checkInDay >= checkOutDay) {
     return e.json(200, { listingIds: [] })
   }
 
-  const params = {
-    checkIn: checkIn,
-    checkOut: checkOut,
-  }
-  const statusExpr = OCCUPYING.map(function (status, i) {
-    params["status" + i] = status
-    return "status = {:status" + i + "}"
-  }).join(" || ")
-
   const unique = {}
-  const fromBookings = collectListingIds(
-    "bookings",
-    "(" +
-      statusExpr +
-      ") && check_in < {:checkOut} && check_out > {:checkIn}",
-    params,
-  )
+  const fromBookings = collectListingIds("bookings", "id != ''", {})
   for (var b = 0; b < fromBookings.length; b++) {
     unique[fromBookings[b]] = true
   }
 
   if (collectionExists("listing_blocks")) {
-    const fromBlocks = collectListingIds(
-      "listing_blocks",
-      "start < {:checkOut} && end > {:checkIn}",
-      { checkIn: checkIn, checkOut: checkOut },
-    )
+    const fromBlocks = collectListingIds("listing_blocks", "id != ''", {})
     for (var i = 0; i < fromBlocks.length; i++) {
       unique[fromBlocks[i]] = true
     }
@@ -118,12 +156,12 @@ routerAdd("GET", "/api/vallome/occupied-listings", (e) => {
 // Sibling route: occupied ranges for one listing's calendar.
 // Do not return guest/host PII — only start/end. Helpers stay nested.
 routerAdd("GET", "/api/vallome/occupied-dates", (e) => {
+  // Same keys as BookingStatus.upcomingApiKeys (Брони → Предстоящие).
   const OCCUPYING = [
     "pending_host",
     "awaiting_prepayment",
     "confirmed",
     "change_requested",
-    "cancel_requested",
   ]
 
   function str(value) {
