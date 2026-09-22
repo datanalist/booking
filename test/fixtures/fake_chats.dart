@@ -133,6 +133,7 @@ class FakeChatsRepository implements ChatsRepository {
   Future<void> markRead(ChatPreview chat) async {}
 
   final chatListeners = <String, List<void Function()>>{};
+  final chatsListeners = <void Function()>[];
   final messageListeners = <String, List<void Function(ChatMessage)>>{};
 
   @override
@@ -170,9 +171,28 @@ class FakeChatsRepository implements ChatsRepository {
     }
   }
 
+  /// Обновление превью в списке без SSE (как после хука `$app.save` на PB).
+  void replaceChat(ChatPreview chat) {
+    final index = chats.indexWhere((item) => item.id == chat.id);
+    if (index >= 0) {
+      chats[index] = chat;
+    } else {
+      chats.insert(0, chat);
+    }
+  }
+
+  void emitChatsChanged() {
+    for (final listener in List<void Function()>.of(chatsListeners)) {
+      listener();
+    }
+  }
+
   @override
   Future<UnsubscribeFunc> subscribeChats(void Function() onChange) async {
-    return () async {};
+    chatsListeners.add(onChange);
+    return () async {
+      chatsListeners.remove(onChange);
+    };
   }
 }
 

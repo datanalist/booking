@@ -17,16 +17,28 @@ class ChatScreen extends StatefulWidget {
 
   final ChatsRepository? repository;
 
+  /// Для виджет-тестов: `Duration.zero` отключает Timer.periodic
+  /// (иначе `pumpAndSettle` никогда не завершится).
+  @visibleForTesting
+  static Duration? debugPollInterval;
+
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  /// На проде SSE по `chats` тоже бывает тихим (как create `messages`).
+  /// Без poll превью и бейдж вкладки зависают, пока пользователь не
+  /// переключит вкладку / не сделает pull-to-refresh.
+  static const _pollInterval = Duration(seconds: 2);
+
   var _items = const <ChatPreview>[];
   var _loading = false;
   var _tabVisible = false;
+  var _refreshInFlight = false;
   Object? _error;
   UnsubscribeFunc? _unsubscribe;
+  Timer? _pollTimer;
 
   ChatsRepository get _repository =>
       widget.repository ?? ChatsRepositoryScope.instance;
@@ -36,10 +48,11 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     AuthRepositoryScope.session.addListener(_reload);
     ChatsRepositoryScope.listVersion.addListener(_reload);
-    // Подписка живёт и на других вкладках: бейдж нижней панели
+    // Подписка и poll живут и на других вкладках: бейдж нижней панели
     // должен видеть входящие, пока открыт «Поиск» или «Брони».
-    _load();
+    unawaited(_refresh(silent: false));
     _listenRealtime();
+    _startPolling();
   }
 
   @override
@@ -47,29 +60,47 @@ class _ChatScreenState extends State<ChatScreen> {
     super.didChangeDependencies();
     final visible = TickerMode.of(context);
     if (visible && !_tabVisible) {
-      _load();
+      unawaited(_refresh(silent: _items.isNotEmpty));
     }
     _tabVisible = visible;
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     AuthRepositoryScope.session.removeListener(_reload);
     ChatsRepositoryScope.listVersion.removeListener(_reload);
     unawaited(_stopRealtime());
     super.dispose();
   }
 
-  void _reload() => _load();
+  void _reload() => unawaited(_refresh(silent: _items.isNotEmpty));
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    final interval = ChatScreen.debugPollInterval ?? _pollInterval;
+    if (interval <= Duration.zero) return;
+    _pollTimer = Timer.periodic(interval, (_) {
+      unawaited(_refresh(silent: true));
+    });
+  }
+
+  /// Hot reload не вызывает initState: таймер мог так и не стартовать.
+  void _ensurePolling() {
+    final interval = ChatScreen.debugPollInterval ?? _pollInterval;
+    if (interval <= Duration.zero) return;
+    if (_pollTimer != null && _pollTimer!.isActive) return;
+    _startPolling();
+  }
 
   Future<void> _listenRealtime() async {
     await _stopRealtime();
     try {
       _unsubscribe = await _repository.subscribeChats(() {
-        if (mounted) _load();
+        if (mounted) unawaited(_refresh(silent: true));
       });
     } catch (_) {
-      // Realtime optional — list still works via pull.
+      // Realtime optional — list still works via poll / pull.
     }
   }
 
@@ -79,11 +110,15 @@ class _ChatScreenState extends State<ChatScreen> {
     if (stop != null) await stop();
   }
 
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _refresh({required bool silent}) async {
+    if (!mounted || _refreshInFlight) return;
+    _refreshInFlight = true;
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
       final items = await _repository.fetchMine();
       if (!mounted) return;
@@ -93,23 +128,28 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _items = items;
         _loading = false;
+        _error = null;
       });
     } catch (error) {
       if (!mounted) return;
+      if (silent && _items.isNotEmpty) return;
       setState(() {
         _error = error;
         _loading = false;
       });
+    } finally {
+      _refreshInFlight = false;
     }
   }
 
   Future<void> _open(ChatPreview chat) async {
     await ChatThreadScreen.open(context, chat: chat, repository: _repository);
-    if (mounted) _load();
+    if (mounted) unawaited(_refresh(silent: true));
   }
 
   @override
   Widget build(BuildContext context) {
+    _ensurePolling();
     return ColoredBox(
       color: AppColors.white,
       child: SafeArea(
@@ -123,13 +163,13 @@ class _ChatScreenState extends State<ChatScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null && _items.isEmpty) {
-      return _ChatError(onRetry: _load);
+      return _ChatError(onRetry: () => unawaited(_refresh(silent: false)));
     }
     if (_items.isEmpty) {
       return const _EmptyChats();
     }
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _refresh(silent: false),
       color: AppColors.orange,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),

@@ -26,12 +26,14 @@ void main() {
       userId: 'guest-1',
       email: 'guest@test.com',
     );
+    ChatScreen.debugPollInterval = Duration.zero;
     ChatThreadScreen.debugPollInterval = Duration.zero;
   });
 
   tearDown(() {
     ChatsRepositoryScope.instance = previous;
     AuthRepositoryScope.session.value = null;
+    ChatScreen.debugPollInterval = null;
     ChatThreadScreen.debugPollInterval = null;
   });
 
@@ -170,5 +172,90 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Вы тут'), findsOneWidget);
+  });
+
+  testWidgets('list preview and unread refresh when chats subscription fires', (
+    tester,
+  ) async {
+    final repo = FakeChatsRepository(chats: demoChatPreviews());
+    ChatsRepositoryScope.instance = repo;
+    ChatsRepositoryScope.setUnread(0);
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: ChatScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Добрый день, бронирование…'), findsOneWidget);
+    expect(ChatsRepositoryScope.unreadCount.value, 2);
+
+    final base = demoChatPreviews().first;
+    repo.replaceChat(
+      ChatPreview(
+        id: base.id,
+        kind: base.kind,
+        guestId: base.guestId,
+        hostId: base.hostId,
+        counterpartyName: base.counterpartyName,
+        lastMessage: '666',
+        lastMessageAt: DateTime(2026, 9, 22, 16, 6),
+        listingTitle: base.listingTitle,
+        city: base.city,
+        checkIn: base.checkIn,
+        checkOut: base.checkOut,
+        adults: base.adults,
+        unreadCount: 5,
+      ),
+    );
+    repo.emitChatsChanged();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('666'), findsOneWidget);
+    expect(find.text('Добрый день, бронирование…'), findsNothing);
+    expect(ChatsRepositoryScope.unreadCount.value, 5);
+  });
+
+  testWidgets('list polls for new previews when chats SSE stays quiet', (
+    tester,
+  ) async {
+    ChatScreen.debugPollInterval = const Duration(milliseconds: 40);
+    final repo = FakeChatsRepository(chats: demoChatPreviews());
+    ChatsRepositoryScope.instance = repo;
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: ChatScreen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(find.text('Добрый день, бронирование…'), findsOneWidget);
+
+    final base = demoChatPreviews().first;
+    repo.replaceChat(
+      ChatPreview(
+        id: base.id,
+        kind: base.kind,
+        guestId: base.guestId,
+        hostId: base.hostId,
+        counterpartyName: base.counterpartyName,
+        lastMessage: '555',
+        lastMessageAt: DateTime(2026, 9, 22, 15, 47),
+        listingTitle: base.listingTitle,
+        city: base.city,
+        checkIn: base.checkIn,
+        checkOut: base.checkOut,
+        adults: base.adults,
+        unreadCount: 4,
+      ),
+    );
+    // SSE молчит — только poll подхватывает превью и бейдж.
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump();
+
+    expect(find.text('555'), findsOneWidget);
+    expect(ChatsRepositoryScope.unreadCount.value, 4);
   });
 }
