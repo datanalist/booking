@@ -143,10 +143,12 @@ void main() {
     expect(find.byKey(const ValueKey('chat-input')), findsOneWidget);
   });
 
-  testWidgets('booking support writes a booking ticket and shows sent dialog', (
+  testWidgets('booking support writes a booking ticket after text', (
     tester,
   ) async {
     final tickets = FakeTicketsRepository();
+    final chats = FakeChatsRepository();
+    ChatsRepositoryScope.instance = chats;
     await openScreen(tester, tickets: tickets);
 
     await tester.tap(find.byKey(const ValueKey('complaint-booking')));
@@ -154,23 +156,30 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('complaint-booking-support')));
     await tester.pumpAndSettle();
 
+    expect(find.text('Обратиться в поддержку'), findsWidgets);
+    expect(find.byKey(const ValueKey('chat-thread')), findsNothing);
+    expect(find.text('Поддержка'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('complaint-booking-support-text')),
+      'Проблема с бронью',
+    );
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('complaint-booking-support-send')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('complaint-booking-support-send')));
+    await tester.pumpAndSettle();
+
     expect(tickets.created, hasLength(1));
     expect(tickets.created.single.type, TicketType.booking);
-    expect(tickets.created.single.authorId, 'guest-1');
+    expect(tickets.created.single.text, 'Проблема с бронью');
     expect(tickets.created.single.bookingId, 'booking-1');
     expect(tickets.created.single.listingId, 'studio-msk');
     expect(tickets.created.single.hostId, 'anna');
-    expect(tickets.created.single.text, 'Жалоба на бронирование');
-
+    expect(chats.chats, isEmpty);
     expect(find.byKey(const ValueKey('complaint-sent-dialog')), findsOneWidget);
-    expect(find.text('Жалоба отправлена'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('complaint-sent-ok')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('complaint-sent-dialog')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('booking-complaint-screen')),
-      findsOneWidget,
-    );
   });
 
   testWidgets('listing complaint writes a listing ticket after text', (

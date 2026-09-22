@@ -12,6 +12,7 @@ import 'booking_complaint_booking_dialog.dart';
 import 'booking_complaint_host_sheet.dart';
 import 'booking_complaint_listing_sheet.dart';
 import 'booking_complaint_sent_dialog.dart';
+import 'booking_complaint_support_sheet.dart';
 
 const _ink = Color(0xFF1A1B1D);
 const _backBorder = Color(0xFFFFE4B8);
@@ -71,18 +72,14 @@ class BookingComplaintScreen extends StatelessWidget {
       await openHostChatStub(context, booking: booking);
       return;
     }
-    try {
-      await _tickets.create(
-        type: TicketType.booking,
-        booking: booking,
-        text: 'Жалоба на бронирование',
-      );
-      if (!context.mounted) return;
+    final sent = await showBookingComplaintSupportSheet(
+      context,
+      booking: booking,
+      ticketsRepository: _tickets,
+      photoLibrary: photoLibrary,
+    );
+    if (sent == true && context.mounted) {
       await showComplaintSentDialog(context);
-    } on TicketException catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 
