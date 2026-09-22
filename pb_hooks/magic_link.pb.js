@@ -310,6 +310,16 @@ function magicAuthHandler(e) {
       } catch (err) {}
     }
 
+    function ensureAccountStatus(user) {
+      var status = ""
+      try {
+        status = str(user.get("account_status"))
+      } catch (err) {}
+      if (!status || status === "null" || status === "undefined") {
+        user.set("account_status", "active")
+      }
+    }
+
     var record = null
     if (changeUserId) {
       try {
@@ -327,6 +337,7 @@ function magicAuthHandler(e) {
       if (typeof record.setVerified === "function") {
         record.setVerified(true)
       }
+      ensureAccountStatus(record)
       try {
         e.app.save(record)
       } catch (err) {
@@ -348,6 +359,7 @@ function magicAuthHandler(e) {
         if (typeof record.setVerified === "function") {
           record.setVerified(true)
         }
+        ensureAccountStatus(record)
         try {
           e.app.save(record)
         } catch (err) {
@@ -364,6 +376,7 @@ function magicAuthHandler(e) {
             : !!record.get("verified")
         if (!isVerified && typeof record.setVerified === "function") {
           record.setVerified(true)
+          ensureAccountStatus(record)
           e.app.save(record)
         }
         try {
@@ -384,7 +397,12 @@ function magicAuthHandler(e) {
   }
 
   function consumeOtp(otpId, password) {
-    const otp = e.app.findOTPById(otpId)
+    var otp = null
+    try {
+      otp = e.app.findOTPById(otpId)
+    } catch (err) {
+      throw new Error("not found")
+    }
     if (!otp) {
       throw new Error("not found")
     }
@@ -444,10 +462,21 @@ function magicAuthHandler(e) {
       return sendHtml(200, successPage(token))
     } catch (err) {
       logErr(err)
-      if (str(err).indexOf("occupied") >= 0) {
+      const text = str(err)
+      if (text.indexOf("occupied") >= 0) {
         return sendHtml(400, errorPage(OCCUPIED_MSG))
       }
-      return sendHtml(400, errorPage(EXPIRED_MSG))
+      if (
+        text.indexOf("expired") >= 0 ||
+        text.indexOf("invalid") >= 0 ||
+        text.indexOf("not found") >= 0
+      ) {
+        return sendHtml(400, errorPage(EXPIRED_MSG))
+      }
+      return sendHtml(
+        400,
+        errorPage("Не удалось завершить вход. Запросите новое письмо в приложении."),
+      )
     }
   } catch (err) {
     logErr(err)

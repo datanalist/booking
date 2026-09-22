@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 abstract final class AppColors {
   static const white = Color(0xFFFFFFFF);
   static const orange = Color(0xFFF88A2A);
+  static const badgeRed = Color(0xFFE34043);
   static const yellow = Color(0xFFFBC028);
   static const overlayBottom = Color(0xFF2A2926);
   static const textPrimary = Color(0xFF1A1A1A);
@@ -14,8 +15,28 @@ abstract final class AppColors {
   static const emptyHint = Color(0xFF6B6B6B);
 }
 
+/// Clamping physics, no Android [StretchingOverscrollIndicator].
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    return const ClampingScrollPhysics();
+  }
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 abstract final class AppTheme {
   static const fontFamily = 'Noto Sans';
+  static const scrollBehavior = AppScrollBehavior();
 
   static ThemeData get light {
     final base = ThemeData(

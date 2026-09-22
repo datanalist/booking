@@ -63,6 +63,8 @@
 - `listing`: relation → `listings`, required
 - unique `(user, listing)` — одно избранное на пару
 
+Гость читает, создаёт и удаляет только свои записи (`user` = текущая сессия). Правки записи нет: сердце снова добавляет пару. Коллекцию поднимает `scripts/ensure_favorites.py`.
+
 ### `bookings`
 
 - `listing`, `guest`, `host`: relation → `listings` / `users`, required
@@ -78,7 +80,7 @@
 
 Чипы `_BookingStatus` (**экран**): `pending_host` / `awaiting_prepayment` / `confirmed` / `cancelled`.  
 «Прошлые» = `completed` + `cancelled`.  
-Занятость дат = `pending_host` ∪ `awaiting_prepayment` ∪ `confirmed` ∪ `change_requested` ∪ `cancel_requested` ∪ `listing_blocks`.
+Занятость дат для поиска и карты = статусы вкладки «Предстоящие»: `pending_host` ∪ `awaiting_prepayment` ∪ `confirmed` ∪ `change_requested`, плюс `listing_blocks`. `completed`, `cancelled` и `cancel_requested` даты не занимают.
 
 Сумма возврата — у `tickets`, не здесь.
 
@@ -107,7 +109,11 @@
 - `staff`: relation → `users` — админ в чате (**ТЗ**; на превью строка «…, Админ»)
 - `last_message`: text; `last_message_at`: date — превью `_ChatPreview`
 - `guest_last_read`, `host_last_read`: date — непрочитанные на списке (**экран**)
-- unique `(listing, guest)` при `kind=listing` — один тред на пару (хук)
+- unique `(listing, guest)` при `kind=listing` — один тред на пару (хук `pb_hooks/chats_messages.pb.js`)
+- `host` должен совпадать с `listings.host`; при смене владельца объявления хук `pb_hooks/chats_sync_listing_host.pb.js` и клиентский `getOrCreateForListing` выравнивают `chats.host` (шапка треда читает имя/аватар из `listing.host`)
+- создать listing-чат можно только с `booking` текущего гостя на это же `listing` (правило `createRule` + хук); без брони диалог не создаётся. Чат с карточки поиска/объявления показывается только при неотменённой брони (`status != cancelled`).
+
+Коллекцию поднимает `scripts/ensure_chats.py`. Участники (guest / host / staff) читают и обновляют свои чаты; создать listing-чат может только `guest` = текущая сессия **и** только привязав свою бронь этого жилья.
 
 ### `messages`
 
@@ -116,6 +122,8 @@
 - `text`: text
 - `images`: file, multiple
 - `files`: file, multiple — файлы шлёт сотрудник (**ТЗ**)
+
+Коллекцию поднимает `scripts/ensure_messages.py` (после `ensure_chats.py`). Список/создание только для участников чата. Хук обновляет `chats.last_message` / `last_message_at` после нового сообщения.
 
 ### `tickets`
 

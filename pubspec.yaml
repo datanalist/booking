@@ -75,9 +75,12 @@ flutter:
     - images/logo.svg
     - "images/ mapFrame.svg"
     - images/search/
+    - images/bookings/
+    - images/favorites/
     - images/onbordins.v1/
     - images/chat/
     - images/profile/
+    - images/listing/
     - images/SearchBarIcons/Bold/
     - images/SearchBarIcons/Light-Outline/
 

@@ -39,6 +39,7 @@ class _BookingAppState extends State<BookingApp> {
       title: 'GlobalStay',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      scrollBehavior: AppTheme.scrollBehavior,
       locale: const Locale('ru', 'RU'),
       supportedLocales: const [Locale('ru', 'RU')],
       localizationsDelegates: const [

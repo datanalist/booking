@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../data/auth_repository.dart';
+import '../../data/chats_repository.dart';
+import '../../data/notifications_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../auth/auth_screen.dart';
+import '../chat/chat_thread_screen.dart';
+import 'notifications_screen.dart';
 import 'personal_data_screen.dart';
 
 const _menuFill = Color(0xFFFFFBF2);
@@ -13,15 +17,71 @@ const _badgeRed = Color(0xFFE34043);
 
 const _guestName = 'Владислав Коваленко';
 const _guestPhone = '+7 (900) 123-45-67';
-const _stubNotificationCount = 2;
 
 /// Вкладка «Профиль» по макету (фрейм 1:14012): аватар, имя и меню.
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key, this.authRepository});
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({
+    super.key,
+    this.authRepository,
+    this.notificationsRepository,
+  });
 
   final AuthRepository? authRepository;
+  final NotificationsRepository? notificationsRepository;
 
-  AuthRepository get _auth => authRepository ?? AuthRepositoryScope.instance;
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  AuthRepository get _auth =>
+      widget.authRepository ?? AuthRepositoryScope.instance;
+
+  NotificationsRepository get _notifications =>
+      widget.notificationsRepository ?? NotificationsRepositoryScope.instance;
+
+  @override
+  void initState() {
+    super.initState();
+    AuthRepositoryScope.session.addListener(_refreshUnread);
+    _refreshUnread();
+  }
+
+  @override
+  void dispose() {
+    AuthRepositoryScope.session.removeListener(_refreshUnread);
+    super.dispose();
+  }
+
+  Future<void> _refreshUnread() async {
+    try {
+      await _notifications.unreadCount();
+    } catch (_) {
+      NotificationsRepositoryScope.setUnread(0);
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    await NotificationsScreen.open(
+      context,
+      repository: _notifications,
+    );
+    if (!mounted) return;
+    await _refreshUnread();
+  }
+
+  Future<void> _openSupport() async {
+    try {
+      final chat = await ChatsRepositoryScope.instance.getOrCreateSupport();
+      if (!mounted) return;
+      await ChatThreadScreen.open(context, chat: chat);
+    } on ChatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
+  }
 
   Future<void> _onLogout(BuildContext context) async {
     final confirmed = await showLogoutConfirmDialog(context);
@@ -128,13 +188,21 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 36),
-                _ProfileMenu(
-                  onPersonalData: () => PersonalDataScreen.open(
-                    context,
-                    authRepository: _auth,
-                  ),
-                  onLogout: () => _onLogout(context),
-                  onDeleteAccount: () => _onDeleteAccount(context),
+                ValueListenableBuilder<int>(
+                  valueListenable: NotificationsRepositoryScope.unreadCount,
+                  builder: (_, unread, _) {
+                    return _ProfileMenu(
+                      unreadCount: unread,
+                      onPersonalData: () => PersonalDataScreen.open(
+                        context,
+                        authRepository: _auth,
+                      ),
+                      onNotifications: _openNotifications,
+                      onSupport: _openSupport,
+                      onLogout: () => _onLogout(context),
+                      onDeleteAccount: () => _onDeleteAccount(context),
+                    );
+                  },
                 ),
               ],
             ),
@@ -147,12 +215,18 @@ class ProfileScreen extends StatelessWidget {
 
 class _ProfileMenu extends StatelessWidget {
   const _ProfileMenu({
+    required this.unreadCount,
     required this.onPersonalData,
+    required this.onNotifications,
+    required this.onSupport,
     required this.onLogout,
     required this.onDeleteAccount,
   });
 
+  final int unreadCount;
   final VoidCallback onPersonalData;
+  final VoidCallback onNotifications;
+  final VoidCallback onSupport;
   final VoidCallback onLogout;
   final VoidCallback onDeleteAccount;
 
@@ -165,14 +239,18 @@ class _ProfileMenu extends StatelessWidget {
         label: 'Личные данные',
         onTap: onPersonalData,
       ),
-      const _MenuItemData(
+      _MenuItemData(
+        key: const ValueKey<String>('profile-notifications'),
         icon: Icons.notifications_none_outlined,
         label: 'Уведомления',
-        badgeCount: _stubNotificationCount,
+        badgeCount: unreadCount > 0 ? unreadCount : null,
+        onTap: onNotifications,
       ),
-      const _MenuItemData(
+      _MenuItemData(
+        key: const ValueKey<String>('profile-support'),
         icon: Icons.help_outline,
         label: 'Написать в поддержку',
+        onTap: onSupport,
       ),
       _MenuItemData(
         key: const ValueKey<String>('profile-logout'),

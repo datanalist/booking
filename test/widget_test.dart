@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/bookings_repository.dart';
 import 'package:booking/data/listings_repository.dart';
+import 'package:booking/data/notifications_repository.dart';
 import 'package:booking/main.dart';
 import 'package:booking/screens/onboarding_screen.dart';
 import 'package:booking/screens/splash_screen.dart';
@@ -12,6 +13,7 @@ import 'package:booking/screens/splash_screen.dart';
 import 'fixtures/demo_listings.dart';
 import 'fixtures/fake_auth.dart';
 import 'fixtures/fake_bookings.dart';
+import 'fixtures/fake_notifications.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +21,8 @@ void main() {
   setUp(() {
     ListingsRepositoryScope.instance = FakeListingsRepository();
     BookingsRepositoryScope.instance = FakeBookingsRepository();
+    NotificationsRepositoryScope.instance = FakeNotificationsRepository();
+    NotificationsRepositoryScope.setUnread(0);
     AuthRepositoryScope.instance = PocketBaseAuthRepository();
     AuthRepositoryScope.session.value = null;
     AuthRepositoryScope.authLinkError.value = null;

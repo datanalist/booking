@@ -37,7 +37,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 # Collection names are literals. Never take them from env/CLI without this check.
-_PB_COLLECTIONS = frozenset({"users", "listings", "bookings", "_superusers"})
+_PB_COLLECTIONS = frozenset(
+    {
+        "users",
+        "listings",
+        "bookings",
+        "notifications",
+        "reviews",
+        "favorites",
+        "chats",
+        "messages",
+        "_superusers",
+    }
+)
 _PB_PLACEHOLDER = re.compile(r"\{:([A-Za-z_][A-Za-z0-9_]*)\}")
 _PB_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -89,7 +101,11 @@ AUTH_STUB_USER = {
     "key": "auth_stub",
     "email": "example@mail.com",
     "name": "Example Mail",
+    "first_name": "Example",
+    "last_name": "Mail",
     "phone": "+79999999999",
+    "roles": ["guest"],
+    "verified_host": False,
 }
 
 USERS = [
@@ -98,21 +114,40 @@ USERS = [
         "key": "anna",
         "email": f"anna.ivanenko{SEED_DOMAIN}",
         "name": "Анна Иваненко",
+        "first_name": "Анна",
+        "last_name": "Иваненко",
+        "roles": ["guest", "host"],
+        "verified_host": True,
+        "years_hosting": 4,
     },
     {
         "key": "rail",
         "email": f"rail.safin{SEED_DOMAIN}",
         "name": "Раиль Сафин",
+        "first_name": "Раиль",
+        "last_name": "Сафин",
+        "roles": ["guest", "host"],
+        "verified_host": True,
+        "years_hosting": 2,
     },
     {
         "key": "marina",
         "email": f"marina.orlova{SEED_DOMAIN}",
         "name": "Марина Орлова",
+        "first_name": "Марина",
+        "last_name": "Орлова",
+        "roles": ["guest", "host"],
+        "verified_host": True,
+        "years_hosting": 1,
     },
     {
         "key": "guest",
         "email": f"guest.demo{SEED_DOMAIN}",
         "name": "Демо Гость",
+        "first_name": "Демо",
+        "last_name": "Гость",
+        "roles": ["guest"],
+        "verified_host": False,
     },
 ]
 
@@ -496,8 +531,6 @@ def listing_fields(item: dict, host_id: str) -> dict[str, str]:
         "price_14": str(item["price_14"]),
         "price_28": str(item["price_28"]),
         "status": item["status"],
-        "rating": str(item["rating"]),
-        "reviews_count": str(item["reviews_count"]),
     }
 
 
@@ -514,14 +547,43 @@ def ensure_user_view_rule(pb: PocketBase) -> None:
     print("updated users.viewRule so listing.host expand works for guests")
 
 
-def users_has_phone(pb: PocketBase) -> bool:
+def users_field_names(pb: PocketBase) -> set[str]:
     collection = pb.request("GET", "/api/collections/users")
-    return any(field.get("name") == "phone" for field in collection.get("fields") or [])
+    return {str(field.get("name")) for field in collection.get("fields") or []}
+
+
+def users_has_phone(pb: PocketBase) -> bool:
+    return "phone" in users_field_names(pb)
+
+
+def apply_user_profile(body: dict, user: dict, field_names: set[str]) -> dict:
+    """Write domain host/profile fields when the collection already has them.
+
+    `verified` (email OTP) stays a separate caller concern from `verified_host`.
+    """
+    first = user.get("first_name")
+    last = user.get("last_name")
+    if not first and not last and user.get("name"):
+        parts = str(user["name"]).strip().split(None, 1)
+        first = parts[0] if parts else ""
+        last = parts[1] if len(parts) > 1 else ""
+    mapping = {
+        "first_name": first,
+        "last_name": last,
+        "roles": user.get("roles"),
+        "verified_host": user.get("verified_host"),
+        "years_hosting": user.get("years_hosting"),
+    }
+    for key, value in mapping.items():
+        if value is None or key not in field_names:
+            continue
+        body[key] = value
+    return body
 
 
 def seed_auth_stub_user(pb: PocketBase) -> dict:
     """Create or refresh example@mail.com used by the Email auth tab."""
-    has_phone = users_has_phone(pb)
+    field_names = users_field_names(pb)
     existing = pb.first(
         "users",
         pb_filter("email = {:email}", {"email": AUTH_STUB_USER["email"]}),
@@ -534,7 +596,8 @@ def seed_auth_stub_user(pb: PocketBase) -> dict:
         "passwordConfirm": SEED_PASSWORD,
         "verified": True,
     }
-    if has_phone:
+    apply_user_profile(body, AUTH_STUB_USER, field_names)
+    if "phone" in field_names:
         body["phone"] = AUTH_STUB_USER["phone"]
     if existing:
         update = {
@@ -544,7 +607,8 @@ def seed_auth_stub_user(pb: PocketBase) -> dict:
             "password": SEED_PASSWORD,
             "passwordConfirm": SEED_PASSWORD,
         }
-        if has_phone:
+        apply_user_profile(update, AUTH_STUB_USER, field_names)
+        if "phone" in field_names:
             update["phone"] = AUTH_STUB_USER["phone"]
         record = pb.update("users", existing["id"], update)
         print(f"auth stub exists {AUTH_STUB_USER['email']} -> {record['id']}")
@@ -556,7 +620,7 @@ def seed_auth_stub_user(pb: PocketBase) -> dict:
 
 def seed_users(pb: PocketBase) -> dict[str, str]:
     ids: dict[str, str] = {}
-    has_phone = users_has_phone(pb)
+    field_names = users_field_names(pb)
     for user in USERS:
         existing = pb.first(
             "users",
@@ -570,7 +634,8 @@ def seed_users(pb: PocketBase) -> dict[str, str]:
             "passwordConfirm": SEED_PASSWORD,
             "verified": True,
         }
-        if has_phone and user.get("phone"):
+        apply_user_profile(body, user, field_names)
+        if "phone" in field_names and user.get("phone"):
             body["phone"] = user["phone"]
             body["emailVisibility"] = True
         if existing:
@@ -581,7 +646,8 @@ def seed_users(pb: PocketBase) -> dict[str, str]:
                 "password": SEED_PASSWORD,
                 "passwordConfirm": SEED_PASSWORD,
             }
-            if has_phone and user.get("phone"):
+            apply_user_profile(update, user, field_names)
+            if "phone" in field_names and user.get("phone"):
                 update["phone"] = user["phone"]
             record = pb.update("users", existing["id"], update)
             print(f"user exists {user['email']} -> {record['id']}")
@@ -645,8 +711,6 @@ def seed_listings(pb: PocketBase, user_ids: dict[str, str], reset: bool) -> None
                 "price_14": item["price_14"],
                 "price_28": item["price_28"],
                 "status": item["status"],
-                "rating": item["rating"],
-                "reviews_count": item["reviews_count"],
             }.items()})
             print(f"listing updated {item['title']} -> {record['id']}")
             continue

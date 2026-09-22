@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../data/chats_repository.dart';
 import '../screens/bookings/bookings_screen.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/favorites/favorites_screen.dart';
@@ -54,7 +55,9 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value:
-          (_index == 0 ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+          (_index == 0 || _index == 1
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark)
               .copyWith(
                 statusBarColor: Colors.transparent,
                 systemNavigationBarColor: AppColors.tabBarFill,
@@ -72,10 +75,16 @@ class _MainShellState extends State<MainShell> {
             ProfileScreen(),
           ],
         ),
-        bottomNavigationBar: _AppTabBar(
-          currentIndex: _index,
-          destinations: _tabs,
-          onTap: (value) => setState(() => _index = value),
+        bottomNavigationBar: ValueListenableBuilder<int>(
+          valueListenable: ChatsRepositoryScope.unreadCount,
+          builder: (context, unread, _) {
+            return _AppTabBar(
+              currentIndex: _index,
+              destinations: _tabs,
+              unreadChats: unread,
+              onTap: (value) => setState(() => _index = value),
+            );
+          },
         ),
       ),
     );
@@ -99,11 +108,13 @@ class _AppTabBar extends StatelessWidget {
   const _AppTabBar({
     required this.currentIndex,
     required this.destinations,
+    required this.unreadChats,
     required this.onTap,
   });
 
   final int currentIndex;
   final List<_TabDestination> destinations;
+  final int unreadChats;
   final ValueChanged<int> onTap;
 
   @override
@@ -127,6 +138,9 @@ class _AppTabBar extends StatelessWidget {
                     child: _TabItem(
                       destination: destinations[i],
                       selected: i == currentIndex,
+                      badgeCount: destinations[i].label == 'Чаты'
+                          ? unreadChats
+                          : 0,
                       onTap: () => onTap(i),
                     ),
                   ),
@@ -143,11 +157,13 @@ class _TabItem extends StatelessWidget {
   const _TabItem({
     required this.destination,
     required this.selected,
+    required this.badgeCount,
     required this.onTap,
   });
 
   final _TabDestination destination;
   final bool selected;
+  final int badgeCount;
   final VoidCallback onTap;
 
   @override
@@ -159,13 +175,28 @@ class _TabItem extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(
-            selected ? destination.selectedIcon : destination.icon,
+          SizedBox(
             width: 24,
             height: 24,
-            fit: BoxFit.contain,
-            color: color,
-            excludeFromSemantics: true,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Image.asset(
+                  selected ? destination.selectedIcon : destination.icon,
+                  width: 24,
+                  height: 24,
+                  fit: BoxFit.contain,
+                  color: color,
+                  excludeFromSemantics: true,
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -8,
+                    right: -10,
+                    child: _IncomingBadge(count: badgeCount),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 4),
           Text(
@@ -182,6 +213,40 @@ class _TabItem extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Красный счётчик входящих на иконке «Чаты»: тот же кружок 24×24, что в макете.
+class _IncomingBadge extends StatelessWidget {
+  const _IncomingBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      key: const ValueKey('chats-tab-unread-badge'),
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: const ShapeDecoration(
+        color: AppColors.badgeRed,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(30)),
+        ),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: AppColors.white,
+          fontSize: 12,
+          fontFamily: AppTheme.fontFamily,
+          fontWeight: FontWeight.w700,
+          height: 1.2,
+        ),
       ),
     );
   }

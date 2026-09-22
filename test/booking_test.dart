@@ -4,13 +4,35 @@ import 'package:booking/data/booking.dart';
 import 'package:booking/screens/search/search_listing.dart';
 
 void main() {
-  test('past statuses are completed and cancelled', () {
+  test('past statuses are completed, cancelled and cancel_requested', () {
     expect(BookingStatus.completed.isPast, isTrue);
     expect(BookingStatus.cancelled.isPast, isTrue);
+    expect(BookingStatus.cancelRequested.isPast, isTrue);
     expect(BookingStatus.pendingHost.isPast, isFalse);
     expect(BookingStatus.confirmed.isPast, isFalse);
+    expect(BookingStatus.changeRequested.isPast, isFalse);
+    expect(BookingStatus.awaitingPrepayment.isPast, isFalse);
+    expect(
+      BookingStatus.upcomingApiKeys,
+      [
+        for (final status in BookingStatus.values)
+          if (!status.isPast) status.apiKey,
+      ],
+    );
+    expect(BookingStatus.upcomingApiKeys, isNot(contains('cancel_requested')));
+    expect(BookingStatus.upcomingApiKeys, isNot(contains('cancelled')));
+    expect(BookingStatus.upcomingApiKeys, isNot(contains('completed')));
     expect(BookingStatus.fromApi('awaiting_prepayment'),
         BookingStatus.awaitingPrepayment);
+    expect(BookingStatus.fromApi('pending_host'), BookingStatus.pendingHost);
+    expect(
+      BookingStatus.fromApi('change_requested'),
+      BookingStatus.changeRequested,
+    );
+    expect(
+      BookingStatus.fromApi('pending_host'),
+      isNot(BookingStatus.fromApi('change_requested')),
+    );
   });
 
   test('booking money splits 15 percent commission as prepay', () {
@@ -22,6 +44,41 @@ void main() {
     expect(money.prepay, 900);
     expect(money.hostAmount, 5100);
     expect(money.remainder, 5100);
+  });
+
+  test('card dates follow the upcoming Figma format', () {
+    expect(
+      Booking(
+        id: '1',
+        listingId: 'l',
+        guestId: 'g',
+        hostId: 'h',
+        checkIn: DateTime(2024, 11, 14),
+        checkOut: DateTime(2024, 11, 19),
+        status: BookingStatus.pendingHost,
+      ).datesLabel,
+      '14.11.2024 - 19.11.2024',
+    );
+  });
+
+  test('datesLabel prefers requested dates after change request', () {
+    final booking = Booking(
+      id: '1',
+      listingId: 'l',
+      guestId: 'g',
+      hostId: 'h',
+      checkIn: DateTime(2024, 11, 14),
+      checkOut: DateTime(2024, 11, 19),
+      status: BookingStatus.changeRequested,
+      adults: 2,
+      children: 1,
+      requestedCheckIn: DateTime(2024, 12, 1),
+      requestedCheckOut: DateTime(2024, 12, 5),
+    );
+    expect(booking.datesLabel, '01.12.2024 - 05.12.2024');
+    expect(booking.stayCheckIn, DateTime(2024, 12, 1));
+    expect(booking.stayCheckOut, DateTime(2024, 12, 5));
+    expect(booking.guestsLabel, '3 гостя');
   });
 
   test('guest label uses russian plural', () {

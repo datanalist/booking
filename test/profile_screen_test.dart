@@ -3,27 +3,45 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/bookings_repository.dart';
+import 'package:booking/data/chats_repository.dart';
+import 'package:booking/data/notifications_repository.dart';
+import 'package:booking/data/chat.dart';
+import 'package:booking/screens/chat/chat_thread_screen.dart';
 import 'package:booking/screens/profile/profile_screen.dart';
 import 'package:booking/shell/main_shell.dart';
 
 import 'fixtures/fake_auth.dart';
 import 'fixtures/fake_bookings.dart';
+import 'fixtures/fake_chats.dart';
+import 'fixtures/fake_notifications.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late AuthRepository previousAuth;
   late AuthSession? previousSession;
+  late NotificationsRepository previousNotifications;
+  late ChatsRepository previousChats;
 
   setUp(() {
     previousAuth = AuthRepositoryScope.instance;
     previousSession = AuthRepositoryScope.session.value;
+    previousNotifications = NotificationsRepositoryScope.instance;
+    previousChats = ChatsRepositoryScope.instance;
     BookingsRepositoryScope.instance = FakeBookingsRepository();
+    NotificationsRepositoryScope.instance = FakeNotificationsRepository();
+    NotificationsRepositoryScope.setUnread(0);
+    ChatsRepositoryScope.instance = FakeChatsRepository();
+    ChatsRepositoryScope.setUnread(0);
   });
 
   tearDown(() {
     AuthRepositoryScope.instance = previousAuth;
     AuthRepositoryScope.session.value = previousSession;
+    NotificationsRepositoryScope.instance = previousNotifications;
+    NotificationsRepositoryScope.setUnread(0);
+    ChatsRepositoryScope.instance = previousChats;
+    ChatsRepositoryScope.setUnread(0);
   });
 
   testWidgets('profile shows stub identity and menu items', (tester) async {
@@ -37,7 +55,7 @@ void main() {
     expect(find.text('+7 (900) 123-45-67'), findsOneWidget);
     expect(find.text('Личные данные'), findsOneWidget);
     expect(find.text('Уведомления'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('2'), findsNothing);
     expect(find.text('Написать в поддержку'), findsOneWidget);
     expect(find.text('Выйти из аккаунта'), findsOneWidget);
     expect(find.text('Удалить аккаунт'), findsOneWidget);
@@ -210,6 +228,37 @@ void main() {
     expect(
       find.text('Не удалось удалить аккаунт. Проверьте соединение'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('support menu opens one support chat without a listing', (
+    tester,
+  ) async {
+    ChatThreadScreen.debugPollInterval = Duration.zero;
+    addTearDown(() => ChatThreadScreen.debugPollInterval = null);
+
+    final chats = FakeChatsRepository();
+    ChatsRepositoryScope.instance = chats;
+
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: ProfileScreen())),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('profile-support')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey<String>('chat-thread')), findsOneWidget);
+    expect(find.text('Поддержка'), findsOneWidget);
+    expect(find.text('Объявление'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('chat-thread-back')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('profile-support')));
+    await tester.pumpAndSettle();
+
+    expect(
+      chats.chats.where((chat) => chat.kind == ChatKind.support),
+      hasLength(1),
     );
   });
 }

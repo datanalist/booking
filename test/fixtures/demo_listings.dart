@@ -47,6 +47,11 @@ SearchListing _stay({
   required Set<String> features,
   List<String> photos = const [],
   List<ListingReview> reviewsList = const [],
+  String houseRules = '',
+  String checkInTime = '',
+  String checkOutTime = '',
+  String accessInfo = '',
+  bool cancellationAllowed = false,
 }) {
   return SearchListing(
     id: id,
@@ -76,6 +81,11 @@ SearchListing _stay({
     features: features,
     amenities: features.where((item) => item != 'Парковка' && item != 'Бассейн' && item != 'Сауна' && item != 'Камин' && item != 'Завтраки' && item != 'Спортзал' && item != 'Самостоятельное заселение').toList(),
     reviewsList: reviewsList,
+    houseRules: houseRules,
+    checkInTime: checkInTime,
+    checkOutTime: checkOutTime,
+    accessInfo: accessInfo,
+    cancellationAllowed: cancellationAllowed,
   ).withStay();
 }
 
@@ -129,6 +139,13 @@ final kDemoListings = <SearchListing>[
             'В целом всё хорошо! Но были нюансы из-за которых 5 звезд ставить не хочется.',
       ),
     ],
+    houseRules:
+        'Максимум 4 гостя\nНе включать громко музыку или телевизор после 22:00\nНе курить\nНельзя с животными',
+    checkInTime: '14:00',
+    checkOutTime: '12:00',
+    accessInfo:
+        'Введите код домофона 3486\nПоднимитесь на 4 этаж\nВведите код на двери 846395',
+    cancellationAllowed: false,
   ),
   _stay(
     id: 'old-town',
@@ -219,17 +236,71 @@ class FakeListingsRepository implements ListingsRepository {
     : items = items ?? kDemoListings;
 
   final List<SearchListing> items;
+  final occupiedStays = <String, List<(DateTime, DateTime)>>{};
+  final occupiedByBooking = <String, List<(DateTime, DateTime)>>{};
 
   @override
-  Future<List<SearchListing>> fetchPublished() async => items;
+  Future<List<SearchListing>> fetchPublished({
+    DateTime? checkIn,
+    DateTime? checkOut,
+  }) async {
+    if (checkIn == null || checkOut == null || !checkOut.isAfter(checkIn)) {
+      return items;
+    }
+    return [
+      for (final item in items)
+        if (!_occupied(item.id, checkIn, checkOut)) item,
+    ];
+  }
+
+  bool _occupied(String listingId, DateTime checkIn, DateTime checkOut) {
+    final ranges = occupiedStays[listingId];
+    if (ranges == null) return false;
+    for (final range in ranges) {
+      if (stayRangeOverlaps(
+        occupiedStart: range.$1,
+        occupiedEnd: range.$2,
+        requestedCheckIn: checkIn,
+        requestedCheckOut: checkOut,
+      )) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Future<List<OccupiedStayRange>> fetchOccupiedDates({
+    required String listingId,
+    String? excludeBookingId,
+  }) async {
+    var ranges = occupiedStays[listingId] ?? const <(DateTime, DateTime)>[];
+    final exclude = excludeBookingId?.trim() ?? '';
+    if (exclude.isNotEmpty) {
+      final own = occupiedByBooking[exclude];
+      if (own != null) {
+        ranges = [
+          for (final range in ranges)
+            if (!own.any((item) => item.$1 == range.$1 && item.$2 == range.$2))
+              range,
+        ];
+      }
+    }
+    return [
+      for (final range in ranges)
+        OccupiedStayRange(start: range.$1, end: range.$2),
+    ];
+  }
 
   @override
   Future<ListingDetail> fetchDetail(SearchListing listing) async {
+    final matches = items.where((item) => item.id == listing.id);
+    final resolved = matches.isEmpty ? listing : matches.first;
     return ListingDetail.fromListing(
-      listing,
+      resolved,
       hostListings: [
         for (final item in items)
-          if (item.id != listing.id && item.hostId == listing.hostId) item,
+          if (item.id != resolved.id && item.hostId == resolved.hostId) item,
       ],
     );
   }

@@ -1,23 +1,35 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-import '../../data/auth_repository.dart';
 import '../../data/booking.dart';
+import '../../data/booking_draft.dart';
 import '../../data/bookings_repository.dart';
 import '../../data/listings_repository.dart';
+import '../../data/notifications_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
+import '../../widgets/listing_host_section.dart';
 import '../../widgets/listing_image.dart';
+import '../bookings/booking_complaint_booking_dialog.dart';
 import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
+import 'booking_confirmation_sheet.dart';
 import 'host_listings_screen.dart';
 import 'listing_detail.dart';
+import 'listing_reviews_screen.dart';
+import 'guests_sheet.dart';
+import 'listing_icons.dart';
+import 'stay_dates_sheet.dart';
 
-const _meta = Color(0xFF525252);
+const _meta = Color(0xFF525353);
 const _divider = Color(0xFFFFE3B7);
 const _reviewFill = Color(0x0FFBC028);
 const _reviewStroke = Color(0x2BFBC028);
-const _badgeGreen = Color(0xFF49CB5E);
+const _heroOverlay = Color.fromRGBO(16, 51, 99, 0.05);
+const _dotInactive = Color.fromRGBO(251, 192, 40, 0.17);
 
 class ListingDetailScreen extends StatefulWidget {
   const ListingDetailScreen({
@@ -28,6 +40,9 @@ class ListingDetailScreen extends StatefulWidget {
     this.initialDetail,
     this.repository,
     this.bookingsRepository,
+    this.notificationsRepository,
+    this.draftStore,
+    this.onBookingCreated,
     this.adults = 1,
     this.children = 0,
     this.pets = 0,
@@ -39,6 +54,9 @@ class ListingDetailScreen extends StatefulWidget {
   final ListingDetail? initialDetail;
   final ListingsRepository? repository;
   final BookingsRepository? bookingsRepository;
+  final NotificationsRepository? notificationsRepository;
+  final BookingDraftStore? draftStore;
+  final ValueChanged<Booking>? onBookingCreated;
   final int adults;
   final int children;
   final int pets;
@@ -51,6 +69,9 @@ class ListingDetailScreen extends StatefulWidget {
     ListingDetail? initialDetail,
     ListingsRepository? repository,
     BookingsRepository? bookingsRepository,
+    NotificationsRepository? notificationsRepository,
+    BookingDraftStore? draftStore,
+    ValueChanged<Booking>? onBookingCreated,
     int adults = 1,
     int children = 0,
     int pets = 0,
@@ -64,6 +85,9 @@ class ListingDetailScreen extends StatefulWidget {
           initialDetail: initialDetail,
           repository: repository,
           bookingsRepository: bookingsRepository,
+          notificationsRepository: notificationsRepository,
+          draftStore: draftStore,
+          onBookingCreated: onBookingCreated,
           adults: adults,
           children: children,
           pets: pets,
@@ -80,17 +104,23 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
   late final PageController _photos = PageController();
   var _photoIndex = 0;
   late ListingDetail _detail;
+  Booking? _hostChatBooking;
 
   ListingsRepository get _repository =>
       widget.repository ?? ListingsRepositoryScope.instance;
+
+  BookingsRepository get _bookingsRepository =>
+      widget.bookingsRepository ?? BookingsRepositoryScope.instance;
 
   @override
   void initState() {
     super.initState();
     _detail = widget.initialDetail ?? ListingDetail.fromListing(widget.listing);
+    BookingsRepositoryScope.listVersion.addListener(_refreshHostChatAccess);
     if (widget.initialDetail == null) {
       _load();
     }
+    _refreshHostChatAccess();
   }
 
   Future<void> _load() async {
@@ -100,6 +130,20 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       setState(() => _detail = detail);
     } catch (_) {
       // Карточка уже собрана из записи списка; хозяин/другие объекты подтянутся при повторе.
+    }
+  }
+
+  Future<void> _refreshHostChatAccess() async {
+    final listingId = widget.listing.id;
+    try {
+      final booking = await _bookingsRepository.findHostChatEligible(
+        listingId: listingId,
+      );
+      if (!mounted || listingId != widget.listing.id) return;
+      setState(() => _hostChatBooking = booking);
+    } catch (_) {
+      if (!mounted || listingId != widget.listing.id) return;
+      setState(() => _hostChatBooking = null);
     }
   }
 
@@ -118,6 +162,9 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
       onFavorite: widget.onFavorite,
       repository: _repository,
       bookingsRepository: widget.bookingsRepository,
+      notificationsRepository: widget.notificationsRepository,
+      draftStore: widget.draftStore,
+      onBookingCreated: widget.onBookingCreated,
       adults: widget.adults,
       children: widget.children,
       pets: widget.pets,
@@ -126,6 +173,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
 
   @override
   void dispose() {
+    BookingsRepositoryScope.listVersion.removeListener(_refreshHostChatAccess);
     _photos.dispose();
     super.dispose();
   }
@@ -137,7 +185,7 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
     final favorite = _isFavorite(listing.id);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark.copyWith(
+      value: SystemUiOverlayStyle.light.copyWith(
         statusBarColor: Colors.transparent,
         systemNavigationBarColor: AppColors.white,
         systemNavigationBarIconBrightness: Brightness.dark,
@@ -165,23 +213,55 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
                   ),
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                      padding: const EdgeInsets.only(top: 24, bottom: 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _Header(detail: detail),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: _Header(detail: detail),
+                          ),
                           const SizedBox(height: 20),
-                          const _Hairline(),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: _Hairline(),
+                          ),
                           const SizedBox(height: 20),
-                          _Amenities(items: detail.amenities),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: _Amenities(items: detail.amenities),
+                          ),
                           const SizedBox(height: 20),
-                          const _Hairline(),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: _Hairline(),
+                          ),
                           const SizedBox(height: 20),
                           _Reviews(detail: detail),
                           const SizedBox(height: 20),
-                          const _Hairline(),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: _Hairline(),
+                          ),
                           const SizedBox(height: 20),
-                          _Host(host: detail.host),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: ListingHostSection(
+                              host: detail.host,
+                              // Чат с хозяином только после брони этого жилья.
+                              onChat: _hostChatBooking == null
+                                  ? null
+                                  : () => openHostChatStub(
+                                        context,
+                                        booking: _hostChatBooking,
+                                        hostName: detail.host.name,
+                                        listingId: listing.id,
+                                        hostId: listing.hostId.isNotEmpty
+                                            ? listing.hostId
+                                            : detail.host.id,
+                                      ),
+                            ),
+                          ),
                           if (detail.hostListings.isNotEmpty) ...[
                             const SizedBox(height: 20),
                             _HostListings(
@@ -208,10 +288,14 @@ class _ListingDetailScreenState extends State<ListingDetailScreen> {
             ),
             _BookingBar(
               listing: listing,
+              listingsRepository: _repository,
+              draftStore: widget.draftStore,
+              bookingsRepository: widget.bookingsRepository,
+              notificationsRepository: widget.notificationsRepository,
+              onBookingCreated: widget.onBookingCreated,
               adults: widget.adults,
               children: widget.children,
               pets: widget.pets,
-              bookingsRepository: widget.bookingsRepository,
             ),
           ],
         ),
@@ -252,7 +336,13 @@ class _HeroGallery extends StatelessWidget {
             itemCount: photos.length,
             onPageChanged: onPageChanged,
             itemBuilder: (context, page) {
-              return ListingImage(photos[page], fit: BoxFit.cover);
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  ListingImage(photos[page], fit: BoxFit.cover),
+                  const ColoredBox(color: _heroOverlay),
+                ],
+              );
             },
           ),
           Positioned(
@@ -267,9 +357,9 @@ class _HeroGallery extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _CircleButton(
-                      icon: Icons.arrow_back,
                       tooltip: 'Назад',
                       onTap: onBack,
+                      child: const _BackArrowIcon(),
                     ),
                     FavoriteHeartButton(
                       key: const ValueKey('listing-hero-favorite'),
@@ -296,16 +386,14 @@ class _HeroGallery extends StatelessWidget {
 
 class _CircleButton extends StatelessWidget {
   const _CircleButton({
-    required this.icon,
+    required this.child,
     required this.onTap,
     required this.tooltip,
-    this.color = AppColors.textPrimary,
   });
 
-  final IconData icon;
+  final Widget child;
   final VoidCallback onTap;
   final String tooltip;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -320,9 +408,32 @@ class _CircleButton extends StatelessWidget {
           child: SizedBox(
             width: 36,
             height: 36,
-            child: Icon(icon, size: 20, color: color),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: Center(child: child),
+              ),
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BackArrowIcon extends StatelessWidget {
+  const _BackArrowIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: math.pi / 2,
+      child: SvgPicture.asset(
+        'images/profile/arrow-left.svg',
+        width: 13.1667,
+        height: 7.33333,
+        excludeFromSemantics: true,
       ),
     );
   }
@@ -346,9 +457,7 @@ class _PhotoDots extends StatelessWidget {
             width: i == index ? 16 : 8,
             height: 8,
             decoration: BoxDecoration(
-              color: i == index
-                  ? AppColors.white
-                  : AppColors.white.withValues(alpha: 0.55),
+              color: i == index ? AppColors.white : _dotInactive,
               borderRadius: BorderRadius.circular(50),
             ),
           ),
@@ -376,14 +485,14 @@ class _Header extends StatelessWidget {
             fontWeight: FontWeight.w700,
             fontSize: 18,
             height: 1.2,
-            letterSpacing: 0.02,
+            letterSpacing: 0.018,
             color: AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 12),
-        _MetaRow(icon: Icons.location_on_outlined, label: detail.address),
+        _MetaRow(icon: ListingFigmaIcon.mapPin16, label: detail.address),
         const SizedBox(height: 6),
-        _MetaRow(icon: Icons.home_outlined, label: listing.type),
+        _MetaRow(icon: ListingFigmaIcon.home16, label: listing.type),
         const SizedBox(height: 12),
         Text(
           detail.description,
@@ -403,14 +512,14 @@ class _Header extends StatelessWidget {
 class _MetaRow extends StatelessWidget {
   const _MetaRow({required this.icon, required this.label});
 
-  final IconData icon;
+  final Widget icon;
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: _meta),
+        icon,
         const SizedBox(width: 6),
         Expanded(
           child: Text(
@@ -525,50 +634,62 @@ class _Reviews extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Text(
-              'Отзывы',
-              style: TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                height: 1.40,
-                color: AppColors.textPrimary,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              const Text(
+                'Отзывы',
+                style: TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  height: 1.40,
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              listing.rating,
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                height: 1.50,
-                color: AppColors.textPrimary,
+              const SizedBox(width: 4),
+              Text(
+                listing.rating,
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  height: 1.50,
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-            const SizedBox(width: 2),
-            const Icon(Icons.star, size: 18, color: AppColors.yellow),
-            const SizedBox(width: 2),
-            Text(
-              reviewCountLabel(count),
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                height: 1.50,
-                color: AppColors.textPrimary,
+              const SizedBox(width: 2),
+              ListingFigmaIcon.star18,
+              const SizedBox(width: 2),
+              Text(
+                reviewCountLabel(count),
+                style: const TextStyle(
+                  fontFamily: AppTheme.fontFamily,
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  height: 1.50,
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-            const Spacer(),
-            const _SeeAll(),
-          ],
+              const Spacer(),
+              _SeeAll(
+                key: const ValueKey('listing-reviews-see-all'),
+                onTap: () => ListingReviewsScreen.open(
+                  context,
+                  rating: listing.rating,
+                  reviewCount: count,
+                  reviews: detail.reviews,
+                ),
+              ),
+            ],
+          ),
         ),
         if (detail.reviews.isNotEmpty) ...[
           const SizedBox(height: 12),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -638,7 +759,7 @@ class _ReviewCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              _Avatar(label: review.author, size: 30),
+              _Avatar(label: review.author, size: 30, url: review.avatarUrl),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -672,7 +793,7 @@ class _ReviewCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          _Stars(count: review.stars, size: 13),
+          _ReviewStars(count: review.stars),
           const SizedBox(height: 10),
           Text(
             review.text,
@@ -682,135 +803,6 @@ class _ReviewCard extends StatelessWidget {
               fontSize: 12,
               height: 1.50,
               color: AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Host extends StatelessWidget {
-  const _Host({required this.host});
-
-  final ListingHost host;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Владелец',
-          style: TextStyle(
-            fontFamily: AppTheme.fontFamily,
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
-            height: 1.40,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            _Avatar(label: host.name, size: 40),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    host.name,
-                    style: const TextStyle(
-                      fontFamily: AppTheme.fontFamily,
-                      fontWeight: FontWeight.w400,
-                      fontSize: 14,
-                      height: 1.40,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(
-                        host.rating,
-                        style: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontWeight: FontWeight.w400,
-                          fontSize: 12,
-                          height: 1.50,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        reviewCountLabel(host.reviewCount),
-                        style: const TextStyle(
-                          fontFamily: AppTheme.fontFamily,
-                          fontWeight: FontWeight.w400,
-                          fontSize: 12,
-                          height: 1.50,
-                          color: _meta,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Flexible(child: _Stars(count: 5, size: 12)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (host.verified)
-              const _HostBadge(
-                icon: Icons.verified_outlined,
-                label: 'Верификация пройдена',
-              ),
-            if (host.years > 0)
-              _HostBadge(
-                icon: Icons.calendar_month_outlined,
-                label: yearsHostingLabel(host.years),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _HostBadge extends StatelessWidget {
-  const _HostBadge({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: ShapeDecoration(
-        color: _badgeGreen,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AppColors.white),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontWeight: FontWeight.w400,
-              fontSize: 12,
-              height: 1.50,
-              color: AppColors.white,
             ),
           ),
         ],
@@ -839,29 +831,33 @@ class _HostListings extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Другие объявления владельца',
-                style: TextStyle(
-                  fontFamily: AppTheme.fontFamily,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  height: 1.40,
-                  color: AppColors.textPrimary,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Другие объявления владельца',
+                  style: TextStyle(
+                    fontFamily: AppTheme.fontFamily,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    height: 1.40,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
-            ),
-            _SeeAll(
-              key: const ValueKey('listing-host-see-all'),
-              onTap: onSeeAll,
-            ),
-          ],
+              _SeeAll(
+                key: const ValueKey('listing-host-see-all'),
+                onTap: onSeeAll,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Row(
             children: [
               for (var i = 0; i < listings.length; i++) ...[
@@ -870,6 +866,7 @@ class _HostListings extends StatelessWidget {
                   listing: listings[i],
                   favorite: favorites.contains(listings[i].id),
                   width: 260,
+                  showFavorite: false,
                   onTap: () => onOpen(listings[i]),
                   onFavorite: () => onFavorite(listings[i].id),
                 ),
@@ -885,17 +882,25 @@ class _HostListings extends StatelessWidget {
 class _BookingBar extends StatefulWidget {
   const _BookingBar({
     required this.listing,
-    this.adults = 1,
-    this.children = 0,
-    this.pets = 0,
+    this.listingsRepository,
+    this.draftStore,
     this.bookingsRepository,
+    this.notificationsRepository,
+    this.onBookingCreated,
+    this.adults = StayGuests.minAdults,
+    this.children = StayGuests.minChildren,
+    this.pets = StayGuests.minPets,
   });
 
   final SearchListing listing;
+  final ListingsRepository? listingsRepository;
+  final BookingDraftStore? draftStore;
+  final BookingsRepository? bookingsRepository;
+  final NotificationsRepository? notificationsRepository;
+  final ValueChanged<Booking>? onBookingCreated;
   final int adults;
   final int children;
   final int pets;
-  final BookingsRepository? bookingsRepository;
 
   @override
   State<_BookingBar> createState() => _BookingBarState();
@@ -903,15 +908,21 @@ class _BookingBar extends StatefulWidget {
 
 class _BookingBarState extends State<_BookingBar> {
   late SearchListing _stay;
-  var _submitting = false;
+  var _occupied = const <OccupiedStayRange>[];
+  Future<void>? _occupiedLoad;
 
-  BookingsRepository get _bookings =>
-      widget.bookingsRepository ?? BookingsRepositoryScope.instance;
+  BookingDraftStore get _drafts =>
+      widget.draftStore ?? BookingDraftStore.instance;
+
+  ListingsRepository get _listings =>
+      widget.listingsRepository ?? ListingsRepositoryScope.instance;
 
   @override
   void initState() {
     super.initState();
     _stay = widget.listing;
+    _occupiedLoad = _loadOccupied();
+    _restoreDraft();
   }
 
   @override
@@ -919,6 +930,8 @@ class _BookingBarState extends State<_BookingBar> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.listing.id != widget.listing.id) {
       _stay = widget.listing;
+      _occupiedLoad = _loadOccupied();
+      _restoreDraft();
       return;
     }
     _stay = widget.listing.withStay(
@@ -927,7 +940,36 @@ class _BookingBarState extends State<_BookingBar> {
     );
   }
 
+  Future<void> _restoreDraft() async {
+    final draft = await _drafts.load(listingId: widget.listing.id);
+    if (!mounted || draft == null) return;
+    setState(() {
+      _stay = widget.listing.withStay(
+        checkIn: draft.checkIn,
+        checkOut: draft.checkOut,
+      );
+    });
+  }
+
+  Future<void> _loadOccupied() async {
+    final ranges = await _listings.fetchOccupiedDates(
+      listingId: widget.listing.id,
+    );
+    if (!mounted) return;
+    setState(() => _occupied = ranges);
+  }
+
+  bool _selectable(DateTime day, {required bool checkOut}) {
+    return stayDaySelectable(
+      day: day,
+      checkOut: checkOut,
+      ranges: _occupied,
+    );
+  }
+
   Future<void> _pickStayDates() async {
+    if (_occupiedLoad != null) await _occupiedLoad;
+    if (!mounted) return;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final checkIn = await _pickDate(checkOut: false, today: today);
@@ -937,7 +979,15 @@ class _BookingBarState extends State<_BookingBar> {
       today: today,
       checkIn: checkIn,
     );
-    if (!mounted || checkOut == null) return;
+    if (!mounted ||
+        checkOut == null ||
+        stayConflictsWithOccupied(
+          checkIn: checkIn,
+          checkOut: checkOut,
+          ranges: _occupied,
+        )) {
+      return;
+    }
     setState(() {
       _stay = widget.listing.withStay(checkIn: checkIn, checkOut: checkOut);
     });
@@ -948,74 +998,97 @@ class _BookingBarState extends State<_BookingBar> {
     required DateTime today,
     DateTime? checkIn,
   }) {
-    final bounds = stayDatePickerBounds(
+    return showStayDatePicker(
+      context,
       checkOut: checkOut,
       today: today,
       currentCheckIn: checkIn ?? _stay.checkIn,
       currentCheckOut: _stay.checkOut,
-    );
-    return showDatePicker(
-      context: context,
-      locale: const Locale('ru', 'RU'),
-      initialDate: bounds.initial,
-      firstDate: bounds.first,
-      lastDate: bounds.last,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: AppColors.orange,
-              onPrimary: AppColors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      selectableDay: (day) => _selectable(day, checkOut: checkOut),
     );
   }
 
-  Future<void> _requestBooking() async {
+  Future<void> _openStayDates() async {
     final listing = _stay;
-    if (listing.stayNightCount <= 0 ||
-        listing.checkIn == null ||
-        listing.checkOut == null) {
-      _toast('Выберите даты заезда и выезда');
-      return;
-    }
-    final session = AuthRepositoryScope.session.value;
-    final signedIn = session != null && session.userId.isNotEmpty;
-    if (!signedIn) {
-      _toast('Войдите, чтобы забронировать жилье');
-      return;
-    }
-    if (_submitting) return;
-    setState(() => _submitting = true);
-    try {
-      await _bookings.create(
-        listing: listing,
-        checkIn: listing.checkIn!,
-        checkOut: listing.checkOut!,
-        adults: widget.adults < 1 ? 1 : widget.adults,
-        children: widget.children,
-        pets: widget.pets,
+    final saved = await _drafts.load(listingId: listing.id);
+    if (!mounted) return;
+    final result = await StayDatesSheet.show(
+      context,
+      checkIn: saved?.checkIn ?? listing.checkIn,
+      checkOut: saved?.checkOut ?? listing.checkOut,
+      listingId: listing.id,
+      listingsRepository: _listings,
+    );
+    if (!mounted || result == null) return;
+    final guests = StayGuests.normalized(
+      adults: saved?.adults ?? widget.adults,
+      children: saved?.children ?? widget.children,
+      pets: saved?.pets ?? widget.pets,
+      petsAllowed: listing.petsAllowed,
+    );
+    final draft = BookingDraft(
+      listingId: listing.id,
+      checkIn: result.checkIn,
+      checkOut: result.checkOut,
+      adults: guests.adults,
+      children: guests.children,
+      pets: guests.pets,
+    );
+    await _drafts.save(draft);
+    if (!mounted) return;
+    setState(() {
+      _stay = widget.listing.withStay(
+        checkIn: result.checkIn,
+        checkOut: result.checkOut,
       );
-      if (!mounted) return;
-      _toast('Запрос на бронирование отправлен владельцу');
-    } on BookingException catch (error) {
-      if (!mounted) return;
-      _toast(error.message);
-    } catch (_) {
-      if (!mounted) return;
-      _toast('Не удалось отправить запрос на бронирование');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
+    });
+    await _openGuests(draft);
   }
 
-  void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _openGuests(BookingDraft draft) async {
+    final guests = await GuestsSheet.show(
+      context,
+      adults: draft.adults,
+      children: draft.children,
+      pets: draft.pets,
+      petsAllowed: widget.listing.petsAllowed,
+    );
+    if (!mounted || guests == null) return;
+    await _drafts.save(
+      draft.copyWith(
+        adults: guests.adults,
+        children: guests.children,
+        pets: guests.pets,
+        petsAllowed: widget.listing.petsAllowed,
+      ),
+    );
+    if (!mounted) return;
+    await _afterGuestsSaved();
+  }
+
+  Future<void> _afterGuestsSaved() async {
+    final draft = await _drafts.load(listingId: widget.listing.id);
+    if (!mounted || draft == null) return;
+    await BookingConfirmationSheet.show(
+      context,
+      listing: widget.listing.withStay(
+        checkIn: draft.checkIn,
+        checkOut: draft.checkOut,
+      ),
+      draft: draft,
+      draftStore: _drafts,
+      bookingsRepository: widget.bookingsRepository,
+      notificationsRepository: widget.notificationsRepository,
+      onBookingCreated: widget.onBookingCreated,
+    );
+    if (!mounted) return;
+    final remaining = await _drafts.load(listingId: widget.listing.id);
+    setState(() {
+      _stay = widget.listing.withStay(
+        checkIn: remaining?.checkIn,
+        checkOut: remaining?.checkOut,
+      );
+    });
   }
 
   @override
@@ -1043,7 +1116,7 @@ class _BookingBarState extends State<_BookingBar> {
                       fontFamily: AppTheme.fontFamily,
                       fontWeight: FontWeight.w700,
                       fontSize: 18,
-                      letterSpacing: 0.02,
+                      letterSpacing: 0.018,
                       color: AppColors.textPrimary,
                     ),
                   ),
@@ -1117,20 +1190,14 @@ class _BookingBarState extends State<_BookingBar> {
                 height: 52,
                 child: FilledButton(
                   key: const ValueKey('listing-book-button'),
-                  onPressed: _submitting ? null : _requestBooking,
+                  onPressed: _openStayDates,
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Забронировать'),
+                  child: const Text('Забронировать'),
                 ),
               ),
             ],
@@ -1141,11 +1208,10 @@ class _BookingBarState extends State<_BookingBar> {
   }
 }
 
-class _Stars extends StatelessWidget {
-  const _Stars({required this.count, required this.size});
+class _ReviewStars extends StatelessWidget {
+  const _ReviewStars({required this.count});
 
   final int count;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -1154,11 +1220,9 @@ class _Stars extends StatelessWidget {
       children: [
         for (var i = 0; i < 5; i++) ...[
           if (i != 0) const SizedBox(width: 6),
-          Icon(
-            Icons.star,
-            size: size,
-            color: i < count ? AppColors.yellow : const Color(0xFFE8E8E8),
-          ),
+          i < count
+              ? ListingFigmaIcon.reviewStarOn
+              : ListingFigmaIcon.reviewStarOff,
         ],
       ],
     );
@@ -1166,13 +1230,19 @@ class _Stars extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.label, required this.size});
+  const _Avatar({required this.label, required this.size, this.url = ''});
 
   final String label;
+  final String url;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    if (url.isNotEmpty) {
+      return ClipOval(
+        child: ListingImage(url, width: size, height: size, fit: BoxFit.cover),
+      );
+    }
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: const Color(0xFFFFE3B7),

@@ -8,6 +8,12 @@ void main() {
       expect(PbCollection.requireKnown(PbCollection.users), 'users');
       expect(PbCollection.requireKnown(PbCollection.listings), 'listings');
       expect(PbCollection.requireKnown(PbCollection.bookings), 'bookings');
+      expect(
+        PbCollection.requireKnown(PbCollection.notifications),
+        'notifications',
+      );
+      expect(PbCollection.requireKnown(PbCollection.tickets), 'tickets');
+      expect(PbCollection.requireKnown(PbCollection.reviews), 'reviews');
     });
 
     test('rejects unsanitized collection names', () {

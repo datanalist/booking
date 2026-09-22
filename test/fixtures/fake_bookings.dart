@@ -14,6 +14,16 @@ class FakeBookingsRepository implements BookingsRepository {
   Future<List<Booking>> fetchMine() async => List<Booking>.from(items);
 
   @override
+  Future<Booking?> findHostChatEligible({required String listingId}) async {
+    for (final booking in items) {
+      if (booking.listingId == listingId && booking.status.allowsHostChat) {
+        return booking;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<Booking> create({
     required SearchListing listing,
     required DateTime checkIn,
@@ -58,6 +68,46 @@ class FakeBookingsRepository implements BookingsRepository {
     );
     created.add(booking);
     items.add(booking);
+    BookingsRepositoryScope.notifyChanged();
     return booking;
+  }
+
+  @override
+  Future<Booking> patch({
+    required String id,
+    BookingStatus? status,
+    BookingCancelReason? cancelReason,
+    DateTime? requestedCheckIn,
+    DateTime? requestedCheckOut,
+    int? adults,
+    int? children,
+    int? pets,
+    int? total,
+    int? prepay,
+    int? remainder,
+    int? commission,
+    int? hostAmount,
+  }) async {
+    final index = items.indexWhere((item) => item.id == id);
+    if (index < 0) {
+      throw const BookingException('Бронирование не найдено');
+    }
+    final next = items[index].copyWith(
+      status: status,
+      cancelReason: cancelReason,
+      requestedCheckIn: requestedCheckIn,
+      requestedCheckOut: requestedCheckOut,
+      adults: adults,
+      children: children,
+      pets: pets,
+      total: total,
+      prepay: prepay,
+      remainder: remainder,
+      commission: commission,
+      hostAmount: hostAmount,
+    );
+    items[index] = next;
+    BookingsRepositoryScope.notifyChanged();
+    return next;
   }
 }
