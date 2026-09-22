@@ -3,6 +3,7 @@ import 'package:pocketbase/pocketbase.dart';
 import '../screens/search/search_listing.dart';
 import 'auth_repository.dart';
 import 'booking.dart';
+import 'pocketbase_any_of_filter.dart';
 import 'pocketbase_client.dart';
 import 'pocketbase_filter.dart';
 
@@ -147,9 +148,7 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
       final records = await _pb
           .collection(collection)
           .getFullList(
-            filter: pbFilter('listing ?~ {:listingIds} && kind = "listing"', {
-              'listingIds': chunk.join('|'),
-            }),
+            filter: '${pbAnyOf('listing', chunk)} && kind = "listing"',
             expand: 'author',
             sort: '-created',
           );

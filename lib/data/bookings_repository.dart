@@ -4,6 +4,7 @@ import 'package:pocketbase/pocketbase.dart';
 import '../screens/search/search_listing.dart';
 import 'auth_repository.dart';
 import 'booking.dart';
+import 'listings_repository.dart';
 import 'pocketbase_client.dart';
 import 'pocketbase_filter.dart';
 
@@ -54,7 +55,6 @@ class PocketBaseBookingsRepository implements BookingsRepository {
 
   static const collection = PbCollection.bookings;
   static const _expand = 'listing,host';
-  static const occupyingStatuses = BookingStatus.upcomingApiKeys;
 
   final PocketBase? _client;
   PocketBase get _pb => _client ?? pocketBase;
@@ -133,7 +133,7 @@ class PocketBaseBookingsRepository implements BookingsRepository {
       throw const BookingException('Выберите даты заезда и выезда');
     }
     if (await _hasOverlap(listing.id, checkIn, checkOut)) {
-      throw const BookingException('На эти даты жилье уже занято');
+      throw const BookingException('Извините, жилье уже забронировано');
     }
 
     final money = BookingMoney.fromStay(
@@ -344,30 +344,15 @@ class PocketBaseBookingsRepository implements BookingsRepository {
     DateTime checkIn,
     DateTime checkOut,
   ) async {
-    final start = _dateValue(checkIn);
-    final end = _dateValue(checkOut);
-    final params = <String, Object?>{
-      'listing': listingId,
-      'end': end,
-      'start': start,
-    };
-    final statuses = [
-      for (var i = 0; i < occupyingStatuses.length; i++)
-        'status = {:status$i}',
-    ].join(' || ');
-    for (var i = 0; i < occupyingStatuses.length; i++) {
-      params['status$i'] = occupyingStatuses[i];
-    }
-    final result = await _pb.collection(collection).getList(
-      page: 1,
-      perPage: 1,
-      filter: pbFilter(
-        'listing = {:listing} && ($statuses) && '
-        'check_in < {:end} && check_out > {:start}',
-        params,
-      ),
+    // Гость не читает чужие bookings. Занятость приходит с хука.
+    final ranges = await ListingsRepositoryScope.instance.fetchOccupiedDates(
+      listingId: listingId,
     );
-    return result.totalItems > 0;
+    return stayConflictsWithOccupied(
+      checkIn: checkIn,
+      checkOut: checkOut,
+      ranges: ranges,
+    );
   }
 
   Booking _map(RecordModel record) {

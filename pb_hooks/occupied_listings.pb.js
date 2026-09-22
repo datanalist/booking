@@ -113,16 +113,23 @@ routerAdd("GET", "/api/vallome/occupied-listings", (e) => {
         if (!id) continue
         const startField = collection === "listing_blocks" ? "start" : "check_in"
         const endField = collection === "listing_blocks" ? "end" : "check_out"
-        if (
-          !stayOverlaps(
-            found[i].get(startField),
-            found[i].get(endField),
-            checkInDay,
-            checkOutDay,
-          )
-        ) {
-          continue
+        var overlapsStay = stayOverlaps(
+          found[i].get(startField),
+          found[i].get(endField),
+          checkInDay,
+          checkOutDay,
+        )
+        if (!overlapsStay && collection === "bookings") {
+          try {
+            overlapsStay = stayOverlaps(
+              found[i].get("requested_check_in"),
+              found[i].get("requested_check_out"),
+              checkInDay,
+              checkOutDay,
+            )
+          } catch (err) {}
         }
+        if (!overlapsStay) continue
         ids.push(id)
       }
       if (found.length < limit) break
@@ -208,7 +215,15 @@ routerAdd("GET", "/api/vallome/occupied-dates", (e) => {
     ranges.push({ start: start, end: end })
   }
 
-  function collectRanges(collection, filter, params, startField, endField) {
+  function collectRanges(
+    collection,
+    filter,
+    params,
+    startField,
+    endField,
+    altStart,
+    altEnd,
+  ) {
     const ranges = []
     var offset = 0
     const limit = 200
@@ -229,6 +244,17 @@ routerAdd("GET", "/api/vallome/occupied-dates", (e) => {
       if (!found || found.length === 0) break
       for (var i = 0; i < found.length; i++) {
         pushRange(ranges, found[i].get(startField), found[i].get(endField))
+        if (altStart && altEnd) {
+          var altFrom = ""
+          var altTo = ""
+          try {
+            altFrom = found[i].get(altStart)
+          } catch (err) {}
+          try {
+            altTo = found[i].get(altEnd)
+          } catch (err) {}
+          pushRange(ranges, altFrom, altTo)
+        }
       }
       if (found.length < limit) break
       offset += limit
@@ -262,6 +288,8 @@ routerAdd("GET", "/api/vallome/occupied-dates", (e) => {
     params,
     "check_in",
     "check_out",
+    "requested_check_in",
+    "requested_check_out",
   )
 
   if (collectionExists("listing_blocks")) {

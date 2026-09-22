@@ -8,6 +8,7 @@ import '../../data/booking.dart';
 import '../../data/booking_draft.dart';
 import '../../data/bookings_repository.dart';
 import '../../data/listings_repository.dart';
+import '../../data/occupied_stay_ranges.dart';
 import '../../data/notifications_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/favorite_heart_button.dart';
@@ -917,6 +918,9 @@ class _BookingBarState extends State<_BookingBar> {
   ListingsRepository get _listings =>
       widget.listingsRepository ?? ListingsRepositoryScope.instance;
 
+  BookingsRepository get _bookings =>
+      widget.bookingsRepository ?? BookingsRepositoryScope.instance;
+
   @override
   void initState() {
     super.initState();
@@ -952,18 +956,25 @@ class _BookingBarState extends State<_BookingBar> {
   }
 
   Future<void> _loadOccupied() async {
-    final ranges = await _listings.fetchOccupiedDates(
+    final ranges = await loadOccupiedStayRanges(
+      listings: _listings,
+      bookings: _bookings,
       listingId: widget.listing.id,
     );
     if (!mounted) return;
     setState(() => _occupied = ranges);
   }
 
-  bool _selectable(DateTime day, {required bool checkOut}) {
+  bool _selectable(
+    DateTime day, {
+    required bool checkOut,
+    DateTime? anchor,
+  }) {
     return stayDaySelectable(
       day: day,
       checkOut: checkOut,
       ranges: _occupied,
+      anchor: anchor,
     );
   }
 
@@ -1004,7 +1015,11 @@ class _BookingBarState extends State<_BookingBar> {
       today: today,
       currentCheckIn: checkIn ?? _stay.checkIn,
       currentCheckOut: _stay.checkOut,
-      selectableDay: (day) => _selectable(day, checkOut: checkOut),
+      selectableDay: (day) => _selectable(
+        day,
+        checkOut: checkOut,
+        anchor: checkOut ? (checkIn ?? _stay.checkIn) : _stay.checkOut,
+      ),
     );
   }
 
@@ -1018,6 +1033,7 @@ class _BookingBarState extends State<_BookingBar> {
       checkOut: saved?.checkOut ?? listing.checkOut,
       listingId: listing.id,
       listingsRepository: _listings,
+      bookingsRepository: _bookings,
     );
     if (!mounted || result == null) return;
     final guests = StayGuests.normalized(

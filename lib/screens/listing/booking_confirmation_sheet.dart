@@ -12,6 +12,7 @@ import '../../widgets/listing_image.dart';
 import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
 import 'booking_request_sent_dialog.dart';
+import 'booking_unavailable_alert.dart';
 import 'guests_sheet.dart';
 import 'listing_icons.dart';
 import 'stay_dates_sheet.dart';
@@ -155,6 +156,7 @@ class _BookingConfirmationSheetState extends State<BookingConfirmationSheet> {
       checkIn: _draft.checkIn,
       checkOut: _draft.checkOut,
       listingId: _listing.id,
+      bookingsRepository: _bookings,
     );
     if (!mounted || result == null) return;
     final next = _draft.copyWith(
@@ -228,14 +230,14 @@ class _BookingConfirmationSheetState extends State<BookingConfirmationSheet> {
       await showBookingRequestSentDialog(context);
       if (!mounted) return;
       Navigator.pop(context, booking);
-    } on BookingException catch (error) {
+    } on BookingException catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      _showMessage(error.message);
+      await showBookingUnavailableAlert(context);
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      _showMessage('Не удалось сохранить бронирование');
+      await showBookingUnavailableAlert(context);
     }
   }
 

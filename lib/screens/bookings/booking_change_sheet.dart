@@ -6,6 +6,7 @@ import '../../data/listings_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/listing_image.dart';
 import '../listing/booking_confirmation_sheet.dart';
+import '../listing/booking_unavailable_alert.dart';
 import '../listing/guests_sheet.dart';
 import '../listing/listing_icons.dart';
 import '../listing/stay_dates_sheet.dart';
@@ -152,6 +153,7 @@ class _BookingChangeSheetState extends State<BookingChangeSheet> {
       checkOut: _checkOut,
       listingId: widget.booking.listingId,
       excludeBookingId: widget.booking.id,
+      bookingsRepository: _bookings,
     );
     if (!mounted || result == null) return;
     setState(() {
@@ -199,21 +201,15 @@ class _BookingChangeSheetState extends State<BookingChangeSheet> {
       await showBookingChangeSentDialog(context);
       if (!mounted) return;
       Navigator.pop(context, updated);
-    } on BookingException catch (error) {
+    } on BookingException catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      _showMessage(error.message);
+      await showBookingUnavailableAlert(context);
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      _showMessage('Не удалось сохранить бронирование');
+      await showBookingUnavailableAlert(context);
     }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override

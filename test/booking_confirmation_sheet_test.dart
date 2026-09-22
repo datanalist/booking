@@ -289,6 +289,38 @@ void main() {
     expect(find.text(_loginRequired), findsOneWidget);
     expect(find.byKey(const ValueKey('confirmation-sheet')), findsOneWidget);
   });
+
+  testWidgets('book failure shows the unavailable alert', (tester) async {
+    AuthRepositoryScope.session.value = const AuthSession(
+      userId: 'guest-1',
+      email: 'guest@test.com',
+    );
+    final bookings = FakeBookingsRepository()
+      ..failCreateWith = const BookingException('На эти даты жилье уже занято');
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: BookingConfirmationSheet(
+            listing: _listing(),
+            draft: _draft(),
+            draftStore: BookingDraftStore.memory(_draft()),
+            bookingsRepository: bookings,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('confirmation-book')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('booking-unavailable-alert')),
+      findsOneWidget,
+    );
+    expect(find.text('Извините, жилье уже забронировано'), findsOneWidget);
+    expect(find.text('На эти даты жилье уже занято'), findsNothing);
+    expect(bookings.created, isEmpty);
+  });
 }
 
 const _loginRequired = 'Войдите, чтобы забронировать жилье';
