@@ -70,8 +70,46 @@ void main() {
       '2 взрослых, 1 ребенок',
     );
     expect(
-      confirmationCancelUntilLabel(DateTime(2024, 11, 14)),
+      confirmationCancelUntilLabel(
+        DateTime(2024, 11, 14),
+        now: DateTime(2024, 11, 1, 10),
+      ),
       '13.11.2024 12:00',
+    );
+  });
+
+  test('cancel-until shows date only while the cutoff is still ahead', () {
+    expect(
+      confirmationCancelDeadline(DateTime(2026, 9, 23)),
+      DateTime(2026, 9, 22, 12),
+    );
+    expect(
+      confirmationCancelUntilLabel(
+        DateTime(2026, 9, 25),
+        now: DateTime(2026, 9, 23, 2, 18),
+      ),
+      '24.09.2026 12:00',
+    );
+    expect(
+      confirmationCancelUntilLabel(
+        DateTime(2026, 9, 23),
+        now: DateTime(2026, 9, 23, 2, 18),
+      ),
+      'недоступна',
+    );
+    expect(
+      confirmationCancelUntilLabel(
+        DateTime(2026, 9, 24),
+        now: DateTime(2026, 9, 23, 12),
+      ),
+      'недоступна',
+    );
+    expect(
+      confirmationCancelUntilLabel(
+        DateTime(2026, 9, 24),
+        now: DateTime(2026, 9, 23, 11, 59),
+      ),
+      '23.09.2026 12:00',
     );
   });
 
