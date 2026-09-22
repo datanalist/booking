@@ -42,12 +42,24 @@ String confirmationGuestsLabel({
   return parts.join(', ');
 }
 
-String confirmationCancelUntilLabel(DateTime checkIn) {
-  final day = DateTime(checkIn.year, checkIn.month, checkIn.day)
+/// Noon on the calendar day before [checkIn] — existing free-cancel cutoff.
+DateTime confirmationCancelDeadline(DateTime checkIn) {
+  final dayBefore = DateTime(checkIn.year, checkIn.month, checkIn.day)
       .subtract(const Duration(days: 1));
-  return DateFormat('dd.MM.yyyy HH:mm', 'ru').format(
-    DateTime(day.year, day.month, day.day, 12),
-  );
+  return DateTime(dayBefore.year, dayBefore.month, dayBefore.day, 12);
+}
+
+/// Label for «Отмена доступна до». Past cutoffs show «недоступна», not a stale date.
+String confirmationCancelUntilLabel(
+  DateTime checkIn, {
+  DateTime? now,
+}) {
+  final deadline = confirmationCancelDeadline(checkIn);
+  final at = now ?? DateTime.now();
+  if (!deadline.isAfter(at)) {
+    return 'недоступна';
+  }
+  return DateFormat('dd.MM.yyyy HH:mm', 'ru').format(deadline);
 }
 
 String _countLabel(int count, String one, String few, String many) {
