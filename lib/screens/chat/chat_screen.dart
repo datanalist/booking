@@ -36,6 +36,10 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     AuthRepositoryScope.session.addListener(_reload);
     ChatsRepositoryScope.listVersion.addListener(_reload);
+    // Подписка живёт и на других вкладках: бейдж нижней панели
+    // должен видеть входящие, пока открыт «Поиск» или «Брони».
+    _load();
+    _listenRealtime();
   }
 
   @override
@@ -44,10 +48,6 @@ class _ChatScreenState extends State<ChatScreen> {
     final visible = TickerMode.of(context);
     if (visible && !_tabVisible) {
       _load();
-      _listenRealtime();
-    }
-    if (!visible && _tabVisible) {
-      unawaited(_stopRealtime());
     }
     _tabVisible = visible;
   }
@@ -87,6 +87,9 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final items = await _repository.fetchMine();
       if (!mounted) return;
+      ChatsRepositoryScope.setUnread(
+        items.fold<int>(0, (sum, chat) => sum + chat.unreadCount),
+      );
       setState(() {
         _items = items;
         _loading = false;

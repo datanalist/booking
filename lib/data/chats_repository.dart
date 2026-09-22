@@ -59,9 +59,16 @@ abstract class ChatsRepository {
 class ChatsRepositoryScope {
   static ChatsRepository instance = PocketBaseChatsRepository();
   static final listVersion = ValueNotifier<int>(0);
+  static final unreadCount = ValueNotifier<int>(0);
 
   static void notifyChanged() {
     listVersion.value++;
+  }
+
+  static void setUnread(int value) {
+    final next = value < 0 ? 0 : value;
+    if (unreadCount.value == next) return;
+    unreadCount.value = next;
   }
 }
 

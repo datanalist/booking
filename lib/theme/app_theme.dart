@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 abstract final class AppColors {
   static const white = Color(0xFFFFFFFF);
   static const orange = Color(0xFFF88A2A);
+  static const badgeRed = Color(0xFFE34043);
   static const yellow = Color(0xFFFBC028);
   static const overlayBottom = Color(0xFF2A2926);
   static const textPrimary = Color(0xFF1A1A1A);

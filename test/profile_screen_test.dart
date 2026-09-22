@@ -3,12 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/bookings_repository.dart';
+import 'package:booking/data/chats_repository.dart';
 import 'package:booking/data/notifications_repository.dart';
 import 'package:booking/screens/profile/profile_screen.dart';
 import 'package:booking/shell/main_shell.dart';
 
 import 'fixtures/fake_auth.dart';
 import 'fixtures/fake_bookings.dart';
+import 'fixtures/fake_chats.dart';
 import 'fixtures/fake_notifications.dart';
 
 void main() {
@@ -17,14 +19,18 @@ void main() {
   late AuthRepository previousAuth;
   late AuthSession? previousSession;
   late NotificationsRepository previousNotifications;
+  late ChatsRepository previousChats;
 
   setUp(() {
     previousAuth = AuthRepositoryScope.instance;
     previousSession = AuthRepositoryScope.session.value;
     previousNotifications = NotificationsRepositoryScope.instance;
+    previousChats = ChatsRepositoryScope.instance;
     BookingsRepositoryScope.instance = FakeBookingsRepository();
     NotificationsRepositoryScope.instance = FakeNotificationsRepository();
     NotificationsRepositoryScope.setUnread(0);
+    ChatsRepositoryScope.instance = FakeChatsRepository();
+    ChatsRepositoryScope.setUnread(0);
   });
 
   tearDown(() {
@@ -32,6 +38,8 @@ void main() {
     AuthRepositoryScope.session.value = previousSession;
     NotificationsRepositoryScope.instance = previousNotifications;
     NotificationsRepositoryScope.setUnread(0);
+    ChatsRepositoryScope.instance = previousChats;
+    ChatsRepositoryScope.setUnread(0);
   });
 
   testWidgets('profile shows stub identity and menu items', (tester) async {
