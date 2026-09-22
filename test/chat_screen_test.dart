@@ -129,6 +129,43 @@ void main() {
     expect(repo.sentTexts, ['Привет']);
   });
 
+  testWidgets('composer bar matches Figma 1:14230 geometry', (tester) async {
+    ChatsRepositoryScope.instance = FakeChatsRepository(
+      chats: demoChatPreviews(),
+    );
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ChatThreadScreen(chat: demoChatPreviews().first),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final attach = tester.getRect(find.byKey(const ValueKey('chat-attach')));
+    final send = tester.getRect(find.byKey(const ValueKey('chat-send')));
+    final field = tester.getRect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat-input')),
+        matching: find.byType(InputDecorator),
+      ),
+    );
+    final mic = tester.getRect(find.byKey(const ValueKey('chat-mic')));
+
+    expect(attach.size, const Size(40, 40));
+    expect(send.size, const Size(40, 40));
+    expect(attach.left, 16);
+    expect(send.right, 393 - 16);
+    expect(field.left - attach.right, 16);
+    expect(send.left - field.right, 16);
+    expect(field.height, 40);
+    expect(mic.size, const Size(45, 36));
+    expect(field.right - mic.right, 0);
+    expect(field.center.dy, attach.center.dy);
+  });
+
   testWidgets('incoming message appears when chat preview updates', (
     tester,
   ) async {

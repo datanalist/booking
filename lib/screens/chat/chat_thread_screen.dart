@@ -798,6 +798,7 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+/// Панель ввода (Figma `1:14230`).
 class _ComposerBar extends StatelessWidget {
   const _ComposerBar({
     required this.controller,
@@ -827,8 +828,8 @@ class _ComposerBar extends StatelessWidget {
               onTap: sending ? null : onAttach,
               child: SvgPicture.asset(
                 'images/chat/attach.svg',
-                width: 24,
-                height: 24,
+                width: 20,
+                height: 20,
                 excludeFromSemantics: true,
               ),
             ),
@@ -860,23 +861,32 @@ class _ComposerBar extends StatelessWidget {
                     ),
                     filled: true,
                     fillColor: AppColors.white,
-                    contentPadding: const EdgeInsets.fromLTRB(16, 8, 40, 8),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
                     suffixIcon: Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: SvgPicture.asset(
-                        'images/chat/mic.svg',
-                        width: 20,
-                        height: 20,
-                        excludeFromSemantics: true,
+                      key: const ValueKey<String>('chat-mic'),
+                      padding: const EdgeInsets.only(right: 9),
+                      child: SizedBox.square(
+                        dimension: 36,
+                        child: Center(
+                          child: SvgPicture.asset(
+                            'images/chat/mic.svg',
+                            width: 20,
+                            height: 20,
+                            excludeFromSemantics: true,
+                          ),
+                        ),
                       ),
                     ),
-                    suffixIconConstraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
+                    suffixIconConstraints: const BoxConstraints.tightFor(
+                      width: 45,
+                      height: 36,
                     ),
                   ),
                 ),
@@ -889,8 +899,8 @@ class _ComposerBar extends StatelessWidget {
               onTap: sending ? null : onSend,
               child: SvgPicture.asset(
                 'images/chat/send.svg',
-                width: 24,
-                height: 24,
+                width: 20,
+                height: 20,
                 excludeFromSemantics: true,
               ),
             ),
@@ -916,17 +926,22 @@ class _SquareIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        key: ValueKey<String>(keyName),
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          width: 40,
-          height: 48,
-          child: Center(child: child),
+    return SizedBox(
+      width: 40,
+      height: 48,
+      child: Center(
+        child: Material(
+          color: background,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            key: ValueKey<String>(keyName),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox.square(
+              dimension: 40,
+              child: Center(child: child),
+            ),
+          ),
         ),
       ),
     );
