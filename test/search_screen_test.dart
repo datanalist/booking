@@ -838,7 +838,7 @@ void main() {
     expect(filters.displayPrice.end, SearchFilters.fallbackPriceMax);
   });
 
-  test('check-in picker cannot reach the selected check-out day', () {
+  test('check-in picker stays open past the selected check-out day', () {
     final today = DateTime(2026, 9, 12);
     final checkOut = DateTime(2026, 9, 20);
     final bounds = stayDatePickerBounds(
@@ -848,13 +848,12 @@ void main() {
     );
 
     expect(bounds.first, today);
-    expect(bounds.last, DateTime(2026, 9, 19));
+    expect(bounds.last, today.add(const Duration(days: 365 * 2)));
     expect(bounds.initial, today);
-    expect(!bounds.last.isBefore(bounds.first), isTrue);
-    expect(bounds.last.isBefore(checkOut), isTrue);
+    expect(bounds.last.isAfter(checkOut), isTrue);
   });
 
-  test('check-in last day stays at today if check-out is today', () {
+  test('check-in picker is not capped when check-out is today', () {
     final today = DateTime(2026, 9, 12);
     final bounds = stayDatePickerBounds(
       checkOut: false,
@@ -863,7 +862,18 @@ void main() {
     );
 
     expect(bounds.first, today);
-    expect(bounds.last, today);
+    expect(bounds.last, today.add(const Duration(days: 365 * 2)));
+  });
+
+  test('check-in on or after check-out clears check-out', () {
+    final dates = completeSearchStayDates(
+      checkIn: DateTime(2026, 9, 22),
+      checkOut: DateTime(2026, 9, 20),
+      today: DateTime(2026, 9, 12),
+    );
+
+    expect(dates.checkIn, DateTime(2026, 9, 22));
+    expect(dates.checkOut, isNull);
   });
 
   test('check-out picker still starts after the selected check-in', () {

@@ -92,15 +92,10 @@ String formatSearchDate(DateTime date) {
     last = horizon;
     rawInitial = currentCheckOut ?? first;
   } else {
+    // Check-in is not capped by an already chosen check-out: the guest may
+    // move the start later, and that clears check-out (see completeSearchStayDates).
     first = today;
-    var computedLast = horizon;
-    if (currentCheckOut != null) {
-      computedLast = currentCheckOut.subtract(const Duration(days: 1));
-      if (computedLast.isBefore(first)) {
-        computedLast = first;
-      }
-    }
-    last = computedLast;
+    last = horizon;
     rawInitial = currentCheckIn ?? first;
   }
 
@@ -199,7 +194,10 @@ Future<DateTime?> showStayDatePicker(
   if (end != null && start == null && day.isBefore(end)) {
     start = day;
   }
-  if (start != null && (end == null || !end.isAfter(start))) {
+  if (start != null && end != null && !end.isAfter(start)) {
+    // Check-in moved to/after check-out → clear check-out; guest picks again.
+    end = null;
+  } else if (start != null && end == null) {
     end = start.add(const Duration(days: 1));
   }
   return (checkIn: start, checkOut: end);
@@ -399,6 +397,13 @@ class _SearchQuerySheetState extends State<SearchQuerySheet> {
         _checkOut = picked;
       } else {
         _checkIn = picked;
+        if (_checkOut != null &&
+            !DateTime(picked.year, picked.month, picked.day).isBefore(
+              DateTime(_checkOut!.year, _checkOut!.month, _checkOut!.day),
+            )) {
+          _checkOut = null;
+          return;
+        }
       }
       final completed = completeSearchStayDates(
         checkIn: _checkIn,

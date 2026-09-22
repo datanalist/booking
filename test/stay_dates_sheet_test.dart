@@ -166,6 +166,57 @@ void main() {
     expect(formatSearchDate(DateTime(2024, 11, 14)), '14.11.2024');
   });
 
+  testWidgets('check-in after check-out is selectable and clears check-out', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: StayDatesSheet(
+            initialCheckIn: DateTime(2026, 10, 12),
+            initialCheckOut: DateTime(2026, 10, 15),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('12.10.2026'), findsOneWidget);
+    expect(find.text('15.10.2026'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('stay-dates-check-in')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('20'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ОК'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('20.10.2026'), findsOneWidget);
+    expect(find.text('15.10.2026'), findsNothing);
+    expect(find.text('дд.мм.гггг'), findsOneWidget);
+
+    final save = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('stay-dates-save')),
+    );
+    expect(save.onPressed, isNull);
+  });
+
+  test('check-out picker still cannot start on or before check-in', () {
+    final bounds = stayDatePickerBounds(
+      checkOut: true,
+      today: DateTime(2026, 10, 1),
+      currentCheckIn: DateTime(2026, 10, 15),
+      currentCheckOut: DateTime(2026, 10, 20),
+    );
+
+    expect(bounds.first, DateTime(2026, 10, 16));
+    expect(!bounds.first.isBefore(DateTime(2026, 10, 16)), isTrue);
+  });
+
   testWidgets('occupied night is not selectable and a free day is', (
     tester,
   ) async {
