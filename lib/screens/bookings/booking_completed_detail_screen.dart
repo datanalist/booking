@@ -17,6 +17,7 @@ import '../listing/listing_reviews_screen.dart';
 import '../search/search_listing.dart';
 import 'booking_address_dialog.dart';
 import 'booking_complaint_screen.dart';
+import 'booking_review_sheet.dart';
 
 const _meta = Color(0xFF525353);
 const _divider = Color(0xFFFFE3B7);
@@ -27,8 +28,6 @@ const _dotInactive = Color.fromRGBO(251, 192, 40, 0.17);
 const _datesFill = Color.fromRGBO(251, 192, 40, 0.06);
 const _datesBorder = Color.fromRGBO(251, 192, 40, 0.17);
 const _datesSplit = Color(0xFFFFE4B8);
-const _fieldFill = Color.fromRGBO(251, 192, 40, 0.06);
-const _fieldStroke = Color.fromRGBO(251, 192, 40, 0.17);
 
 const _weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
@@ -141,10 +140,14 @@ class _BookingCompletedDetailScreenState
   }
 
   Future<void> _openReviewSheet() async {
+    final listing = _detail.listing;
     final created = await showBookingReviewSheet(
       context,
       booking: widget.booking,
       reviewsRepository: _reviews,
+      listingRating: listing.rating,
+      listingReviews: listing.reviews,
+      listingType: listing.type,
     );
     if (!mounted || created == null) return;
     setState(() => _review = created);
@@ -320,201 +323,6 @@ class _BookingCompletedDetailScreenState
             if (!_hasReview) _LeaveReviewFooter(onTap: _openReviewSheet),
           ],
         ),
-      ),
-    );
-  }
-}
-
-Future<StayReview?> showBookingReviewSheet(
-  BuildContext context, {
-  required Booking booking,
-  ReviewsRepository? reviewsRepository,
-}) {
-  return showModalBottomSheet<StayReview>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: AppColors.white,
-    barrierColor: const Color(0x661A1B1C),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (context) => _BookingReviewSheet(
-      booking: booking,
-      reviewsRepository: reviewsRepository,
-    ),
-  );
-}
-
-class _BookingReviewSheet extends StatefulWidget {
-  const _BookingReviewSheet({required this.booking, this.reviewsRepository});
-
-  final Booking booking;
-  final ReviewsRepository? reviewsRepository;
-
-  @override
-  State<_BookingReviewSheet> createState() => _BookingReviewSheetState();
-}
-
-class _BookingReviewSheetState extends State<_BookingReviewSheet> {
-  final _controller = TextEditingController();
-  var _rating = 0;
-  var _busy = false;
-  String? _error;
-
-  ReviewsRepository get _reviews =>
-      widget.reviewsRepository ?? ReviewsRepositoryScope.instance;
-
-  bool get _canSend => _rating >= 1 && !_busy;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_canSend) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final review = await _reviews.create(
-        booking: widget.booking,
-        rating: _rating,
-        comment: _controller.text,
-      );
-      if (!mounted) return;
-      Navigator.of(context).pop(review);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _error = error is ReviewException
-            ? error.message
-            : 'Не удалось сохранить отзыв';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    final inset = MediaQuery.viewInsetsOf(context).bottom;
-    return Padding(
-      key: const ValueKey('booking-review-sheet'),
-      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottom + inset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Оставить отзыв',
-            style: TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
-              height: 1.2,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              for (var i = 1; i <= 5; i++) ...[
-                if (i != 1) const SizedBox(width: 8),
-                GestureDetector(
-                  key: ValueKey('booking-review-star-$i'),
-                  onTap: _busy ? null : () => setState(() => _rating = i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: i <= _rating
-                        ? ListingFigmaIcon.reviewStarOn
-                        : ListingFigmaIcon.reviewStarOff,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            key: const ValueKey('booking-review-text'),
-            controller: _controller,
-            enabled: !_busy,
-            maxLines: 4,
-            style: const TextStyle(
-              fontFamily: AppTheme.fontFamily,
-              fontWeight: FontWeight.w400,
-              fontSize: 14,
-              height: 1.40,
-              color: AppColors.textPrimary,
-            ),
-            decoration: InputDecoration(
-              hintText: 'Расскажите о жилье',
-              hintStyle: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 14,
-                height: 1.40,
-                color: _meta,
-              ),
-              filled: true,
-              fillColor: _fieldFill,
-              contentPadding: const EdgeInsets.all(16),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: _fieldStroke),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.orange),
-              ),
-              disabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: _fieldStroke),
-              ),
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: const TextStyle(
-                fontFamily: AppTheme.fontFamily,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-                height: 1.4,
-                color: Color(0xFFC23B2A),
-              ),
-            ),
-          ],
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: FilledButton(
-              key: const ValueKey('booking-review-submit'),
-              onPressed: _canSend ? _submit : null,
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: _busy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.white,
-                      ),
-                    )
-                  : const Text('Отправить'),
-            ),
-          ),
-        ],
       ),
     );
   }

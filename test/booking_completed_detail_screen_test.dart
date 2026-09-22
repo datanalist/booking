@@ -160,11 +160,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('booking-review-sheet')), findsOneWidget);
+    expect(find.text('Оценить'), findsOneWidget);
+    expect(find.text('Насколько вам понравилось проживание?'), findsOneWidget);
+    expect(find.text('Пропустить'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(
+        find.byKey(const ValueKey('booking-review-submit')),
+      ).onPressed,
+      isNull,
+    );
+
     await tester.tap(find.byKey(const ValueKey('booking-review-star-5')));
+    await tester.pump();
+    expect(
+      tester.widget<FilledButton>(
+        find.byKey(const ValueKey('booking-review-submit')),
+      ).onPressed,
+      isNotNull,
+    );
+
     await tester.enterText(
       find.byKey(const ValueKey('booking-review-text')),
       'Очень понравилось жильё',
     );
+    await tester.pump();
+    expect(find.text('23/500'), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey('booking-review-submit')));
     await tester.pumpAndSettle();
 
@@ -174,6 +195,27 @@ void main() {
     expect(find.text('Очень понравилось жильё'), findsOneWidget);
     expect(reviews.created, hasLength(1));
     expect(reviews.created.single.rating, 5);
+    expect(reviews.created.single.comment, 'Очень понравилось жильё');
+  });
+
+  testWidgets('skip closes review sheet without creating a review', (
+    tester,
+  ) async {
+    final reviews = FakeReviewsRepository();
+    await _openDetail(
+      tester,
+      booking: _completed(),
+      reviews: reviews,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('booking-leave-review')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('booking-review-skip')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('booking-review-sheet')), findsNothing);
+    expect(find.text('Оставить отзыв'), findsOneWidget);
+    expect(reviews.created, isEmpty);
   });
 
   testWidgets('tap on completed archive card opens completed detail', (

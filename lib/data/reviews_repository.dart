@@ -6,6 +6,9 @@ import 'booking.dart';
 import 'pocketbase_client.dart';
 import 'pocketbase_filter.dart';
 
+/// Лимит комментария отзыва (макет Figma `114:10781`).
+const kReviewCommentMaxLength = 500;
+
 enum ReviewKind {
   listing('listing'),
   guest('guest');
@@ -174,6 +177,10 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
     if (rating < 1 || rating > 5) {
       throw const ReviewException('Поставьте оценку от 1 до 5');
     }
+    final trimmed = comment.trim();
+    if (trimmed.length > kReviewCommentMaxLength) {
+      throw const ReviewException('Комментарий не длиннее 500 символов');
+    }
     try {
       final record = await _pb
           .collection(collection)
@@ -185,7 +192,7 @@ class PocketBaseReviewsRepository implements ReviewsRepository {
               'subject': booking.hostId,
               'kind': ReviewKind.listing.apiKey,
               'rating': rating,
-              'comment': comment.trim(),
+              'comment': trimmed,
             },
           );
       return _map(record);
