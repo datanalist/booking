@@ -4,10 +4,14 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'package:booking/data/booking.dart';
 import 'package:booking/data/listings_repository.dart';
 import 'package:booking/screens/listing/stay_dates_sheet.dart';
 import 'package:booking/screens/search/search_query_sheet.dart';
 import 'package:booking/theme/app_theme.dart';
+
+import 'fixtures/demo_listings.dart';
+import 'fixtures/fake_bookings.dart';
 
 Widget _app(Widget home) {
   return MaterialApp(
@@ -232,5 +236,63 @@ void main() {
       find.byKey(const ValueKey('stay-dates-save')),
     );
     expect(save.onPressed, isNull);
+  });
+
+  testWidgets('requested stay of the guest blocks a day the hook omitted', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final bookings = FakeBookingsRepository([
+      Booking(
+        id: 'own-1',
+        listingId: 'studio-msk',
+        guestId: 'guest',
+        hostId: 'host',
+        checkIn: DateTime(2026, 9, 1),
+        checkOut: DateTime(2026, 9, 3),
+        status: BookingStatus.changeRequested,
+        requestedCheckIn: DateTime(2026, 10, 1),
+        requestedCheckOut: DateTime(2026, 10, 10),
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _app(
+        Scaffold(
+          body: StayDatesSheet(
+            initialCheckIn: DateTime(2026, 10, 20),
+            initialCheckOut: DateTime(2026, 10, 25),
+            listingId: 'studio-msk',
+            listingsRepository: FakeListingsRepository(),
+            bookingsRepository: bookings,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('stay-dates-loading')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('stay-dates-check-in')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ОК'));
+    await tester.pumpAndSettle();
+    expect(find.text('20.10.2026'), findsOneWidget);
+    expect(find.text('03.10.2026'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('stay-dates-check-in')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ОК'));
+    await tester.pumpAndSettle();
+    expect(find.text('15.10.2026'), findsOneWidget);
   });
 }

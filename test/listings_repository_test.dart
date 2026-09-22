@@ -305,6 +305,24 @@ void main() {
       isTrue,
     );
     expect(
+      stayDaySelectable(
+        day: DateTime(2026, 10, 20),
+        checkOut: true,
+        ranges: occupied,
+        anchor: DateTime(2026, 9, 20),
+      ),
+      isFalse,
+    );
+    expect(
+      stayDaySelectable(
+        day: DateTime(2026, 10, 1),
+        checkOut: true,
+        ranges: occupied,
+        anchor: DateTime(2026, 9, 20),
+      ),
+      isTrue,
+    );
+    expect(
       stayConflictsWithOccupied(
         checkIn: DateTime(2026, 10, 3),
         checkOut: DateTime(2026, 10, 6),

@@ -338,18 +338,36 @@ bool stayNightOccupied(DateTime day, Iterable<OccupiedStayRange> ranges) {
 }
 
 /// Check-out may still pick the start morning of an occupying stay.
+///
+/// [anchor] is the other end of the stay. A free night is still blocked
+/// when the resulting range would cross an occupying stay.
 bool stayDaySelectable({
   required DateTime day,
   required bool checkOut,
   required Iterable<OccupiedStayRange> ranges,
+  DateTime? anchor,
 }) {
-  if (!stayNightOccupied(day, ranges)) return true;
-  if (!checkOut) return false;
-  final d = stayDay(day);
-  for (final range in ranges) {
-    if (stayDay(range.start) == d) return true;
+  final date = stayDay(day);
+  if (stayNightOccupied(date, ranges)) {
+    if (!checkOut) return false;
+    var checkoutMorning = false;
+    for (final range in ranges) {
+      if (stayDay(range.start) == date) {
+        checkoutMorning = true;
+        break;
+      }
+    }
+    if (!checkoutMorning) return false;
   }
-  return false;
+  if (anchor == null) return true;
+  final start = checkOut ? stayDay(anchor) : date;
+  final end = checkOut ? date : stayDay(anchor);
+  if (!end.isAfter(start)) return true;
+  return !stayConflictsWithOccupied(
+    checkIn: start,
+    checkOut: end,
+    ranges: ranges,
+  );
 }
 
 bool stayConflictsWithOccupied({

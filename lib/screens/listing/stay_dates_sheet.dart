@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../data/bookings_repository.dart';
 import '../../data/listings_repository.dart';
+import '../../data/occupied_stay_ranges.dart';
 import '../../theme/app_theme.dart';
 import '../search/search_listing.dart';
 import '../search/search_query_sheet.dart';
@@ -23,6 +25,7 @@ class StayDatesSheet extends StatefulWidget {
     this.excludeBookingId,
     this.occupiedRanges,
     this.listingsRepository,
+    this.bookingsRepository,
   });
 
   final DateTime? initialCheckIn;
@@ -31,6 +34,7 @@ class StayDatesSheet extends StatefulWidget {
   final String? excludeBookingId;
   final List<OccupiedStayRange>? occupiedRanges;
   final ListingsRepository? listingsRepository;
+  final BookingsRepository? bookingsRepository;
 
   static Future<StayDates?> show(
     BuildContext context, {
@@ -40,6 +44,7 @@ class StayDatesSheet extends StatefulWidget {
     String? excludeBookingId,
     List<OccupiedStayRange>? occupiedRanges,
     ListingsRepository? listingsRepository,
+    BookingsRepository? bookingsRepository,
   }) {
     return showModalBottomSheet<StayDates>(
       context: context,
@@ -56,6 +61,7 @@ class StayDatesSheet extends StatefulWidget {
         excludeBookingId: excludeBookingId,
         occupiedRanges: occupiedRanges,
         listingsRepository: listingsRepository,
+        bookingsRepository: bookingsRepository,
       ),
     );
   }
@@ -68,10 +74,14 @@ class _StayDatesSheetState extends State<StayDatesSheet> {
   late DateTime? _checkIn;
   late DateTime? _checkOut;
   var _occupied = const <OccupiedStayRange>[];
+  var _occupiedReady = false;
   Future<void>? _occupiedLoad;
 
   ListingsRepository get _repository =>
       widget.listingsRepository ?? ListingsRepositoryScope.instance;
+
+  BookingsRepository get _bookings =>
+      widget.bookingsRepository ?? BookingsRepositoryScope.instance;
 
   @override
   void initState() {
@@ -81,21 +91,47 @@ class _StayDatesSheetState extends State<StayDatesSheet> {
     final injected = widget.occupiedRanges;
     if (injected != null) {
       _occupied = injected;
-    } else if ((widget.listingId ?? '').trim().isNotEmpty) {
+    }
+    final listingId = (widget.listingId ?? '').trim();
+    if (listingId.isEmpty) {
+      _occupiedReady = true;
+    } else {
       _occupiedLoad = _loadOccupied();
     }
   }
 
   Future<void> _loadOccupied() async {
-    final ranges = await _repository.fetchOccupiedDates(
+    final ranges = await loadOccupiedStayRanges(
+      listings: _repository,
+      bookings: _bookings,
       listingId: widget.listingId!.trim(),
       excludeBookingId: widget.excludeBookingId,
     );
     if (!mounted) return;
-    setState(() => _occupied = ranges);
+    setState(() {
+      _occupied = ranges;
+      _occupiedReady = true;
+      _clearOverlap();
+    });
+  }
+
+  void _clearOverlap() {
+    final checkIn = _checkIn;
+    final checkOut = _checkOut;
+    if (checkIn == null || checkOut == null) return;
+    if (stayConflictsWithOccupied(
+      checkIn: checkIn,
+      checkOut: checkOut,
+      ranges: _occupied,
+    )) {
+      _checkIn = null;
+      _checkOut = null;
+    }
   }
 
   bool get _canSave {
+    final hasListing = (widget.listingId ?? '').trim().isNotEmpty;
+    if (hasListing && !_occupiedReady) return false;
     if (stayNightsBetween(_checkIn, _checkOut) <= 0) return false;
     return !stayConflictsWithOccupied(
       checkIn: _checkIn!,
@@ -109,6 +145,7 @@ class _StayDatesSheetState extends State<StayDatesSheet> {
       day: day,
       checkOut: checkOut,
       ranges: _occupied,
+      anchor: checkOut ? _checkIn : _checkOut,
     );
   }
 
@@ -219,6 +256,16 @@ class _StayDatesSheetState extends State<StayDatesSheet> {
             ),
           ),
           const SizedBox(height: 40),
+          if (!_occupiedReady)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: SizedBox(
+                key: ValueKey('stay-dates-loading'),
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
           Row(
             children: [
               Expanded(

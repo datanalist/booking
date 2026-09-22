@@ -159,14 +159,16 @@ Future<DateTime?> showStayDatePicker(
       ? null
       : (DateTime day) =>
             selectableDay(DateTime(day.year, day.month, day.day));
-  final usePredicate = predicate == null || predicate(initial);
+  if (predicate != null && !predicate(initial)) {
+    return Future<DateTime?>.value(null);
+  }
   return showDatePicker(
     context: context,
     locale: const Locale('ru', 'RU'),
     initialDate: initial,
     firstDate: bounds.first,
     lastDate: bounds.last,
-    selectableDayPredicate: usePredicate ? predicate : null,
+    selectableDayPredicate: predicate,
     builder: (context, child) {
       return Theme(
         data: Theme.of(context).copyWith(
