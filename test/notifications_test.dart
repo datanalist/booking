@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:booking/data/auth_repository.dart';
-import 'package:booking/data/booking.dart';
 import 'package:booking/data/booking_draft.dart';
 import 'package:booking/data/inbox_notification.dart';
 import 'package:booking/data/notifications_repository.dart';
@@ -65,6 +64,7 @@ void main() {
   setUp(() {
     previousNotifications = NotificationsRepositoryScope.instance;
     NotificationsRepositoryScope.setUnread(0);
+    NotificationsScreen.debugPollInterval = Duration.zero;
     AuthRepositoryScope.session.value = const AuthSession(
       userId: 'guest-1',
       email: 'guest@test.com',
@@ -74,6 +74,7 @@ void main() {
   tearDown(() {
     NotificationsRepositoryScope.instance = previousNotifications;
     NotificationsRepositoryScope.setUnread(0);
+    NotificationsScreen.debugPollInterval = null;
     AuthRepositoryScope.session.value = null;
   });
 
@@ -209,5 +210,47 @@ void main() {
       tester.getSize(find.descendant(of: card, matching: find.byType(SvgPicture))),
       const Size(7, 7),
     );
+  });
+
+  testWidgets('notifications screen polls for new chat notices', (
+    tester,
+  ) async {
+    NotificationsScreen.debugPollInterval = const Duration(milliseconds: 40);
+    final notifications = FakeNotificationsRepository();
+    NotificationsRepositoryScope.instance = notifications;
+
+    await tester.pumpWidget(
+      _app(NotificationsScreen(repository: notifications)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+    expect(find.text('Пока нет уведомлений'), findsOneWidget);
+    final fetchesAfterOpen = notifications.fetchCount;
+
+    final yesterday = DateTime.now().toLocal().subtract(const Duration(days: 1));
+    notifications.items.add(
+      InboxNotification(
+        id: 'chat-notice-1',
+        userId: 'guest-1',
+        title: 'Новое сообщение от Анна Иваненко',
+        body: 'Здравствуйте! Хочу напомнить правила проживания в квартире',
+        read: false,
+        chatId: 'chat-anna',
+        created: yesterday,
+        updated: yesterday,
+      ),
+    );
+    // SSE молчит — только poll подхватывает карточку.
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump();
+
+    expect(notifications.fetchCount, greaterThan(fetchesAfterOpen));
+    expect(find.text('Новое сообщение от Анна Иваненко'), findsOneWidget);
+    expect(
+      find.text('Здравствуйте! Хочу напомнить правила проживания в квартире'),
+      findsOneWidget,
+    );
+    expect(find.text('Вчера'), findsOneWidget);
+    expect(NotificationsRepositoryScope.unreadCount.value, 1);
   });
 }

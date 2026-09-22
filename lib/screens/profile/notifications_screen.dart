@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -20,6 +21,11 @@ class NotificationsScreen extends StatefulWidget {
 
   final NotificationsRepository? repository;
 
+  /// Для виджет-тестов: `Duration.zero` отключает Timer.periodic
+  /// (иначе `pumpAndSettle` никогда не завершится).
+  @visibleForTesting
+  static Duration? debugPollInterval;
+
   static Future<void> open(
     BuildContext context, {
     NotificationsRepository? repository,
@@ -36,8 +42,14 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  /// На проде SSE по `notifications` ненадёжен так же, как create `messages`.
+  /// Пока экран открыт — тот же запасной poll, что у списка чатов.
+  static const _pollInterval = Duration(seconds: 2);
+
   var _items = const <InboxNotification>[];
   var _loading = true;
+  var _refreshInFlight = false;
+  Timer? _pollTimer;
 
   NotificationsRepository get _repository =>
       widget.repository ?? NotificationsRepositoryScope.instance;
@@ -45,10 +57,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load(silent: false));
+    _startPolling();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    final interval = NotificationsScreen.debugPollInterval ?? _pollInterval;
+    if (interval <= Duration.zero) return;
+    _pollTimer = Timer.periodic(interval, (_) {
+      unawaited(_load(silent: true));
+    });
+  }
+
+  /// Hot reload не вызывает initState: таймер мог так и не стартовать.
+  void _ensurePolling() {
+    final interval = NotificationsScreen.debugPollInterval ?? _pollInterval;
+    if (interval <= Duration.zero) return;
+    if (_pollTimer != null && _pollTimer!.isActive) return;
+    _startPolling();
+  }
+
+  Future<void> _load({required bool silent}) async {
+    if (!mounted || _refreshInFlight) return;
+    _refreshInFlight = true;
     try {
       final items = await _repository.fetchMine();
       if (!mounted) return;
@@ -58,7 +96,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       });
     } catch (_) {
       if (!mounted) return;
+      if (silent && _items.isNotEmpty) return;
       setState(() => _loading = false);
+    } finally {
+      _refreshInFlight = false;
     }
   }
 
@@ -79,7 +120,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 read: true,
                 bookingId: notice.bookingId,
                 listingId: notice.listingId,
+                chatId: notice.chatId,
                 created: notice.created,
+                updated: notice.updated,
               )
             else
               notice,
@@ -92,6 +135,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    _ensurePolling();
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
@@ -175,9 +219,8 @@ class _NotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final when = item.created == null
-        ? ''
-        : notificationWhenLabel(item.created!);
+    final stamp = item.when;
+    final when = stamp == null ? '' : notificationWhenLabel(stamp);
     return Material(
       color: Colors.transparent,
       child: InkWell(

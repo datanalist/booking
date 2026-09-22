@@ -47,7 +47,8 @@ class PocketBaseNotificationsRepository implements NotificationsRepository {
     if (userId.isEmpty || !_pb.authStore.isValid) return const [];
     final records = await _pb.collection(collection).getFullList(
       filter: pbFilter('user = {:userId}', {'userId': userId}),
-      sort: '-created',
+      // Чат-карточки upsert'ятся хуком → свежие по `-updated`.
+      sort: '-updated',
     );
     final items = [for (final record in records) _map(record)];
     NotificationsRepositoryScope.setUnread(
@@ -124,7 +125,9 @@ class PocketBaseNotificationsRepository implements NotificationsRepository {
       read: record.get<bool>('read', false),
       bookingId: record.get<String>('booking', ''),
       listingId: record.get<String>('listing', ''),
+      chatId: record.get<String>('chat', ''),
       created: DateTime.tryParse(record.get<String>('created', '')),
+      updated: DateTime.tryParse(record.get<String>('updated', '')),
     );
   }
 

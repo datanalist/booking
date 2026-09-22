@@ -17,6 +17,7 @@ abstract final class BookingRequestCopy {
   }
 
   static InboxNotification fromBooking(Booking booking, {String id = ''}) {
+    final now = DateTime.now();
     return InboxNotification(
       id: id,
       userId: booking.guestId,
@@ -25,7 +26,8 @@ abstract final class BookingRequestCopy {
       read: false,
       bookingId: booking.id,
       listingId: booking.listingId,
-      created: DateTime.now(),
+      created: now,
+      updated: now,
     );
   }
 }
@@ -39,7 +41,9 @@ class InboxNotification {
     required this.read,
     this.bookingId = '',
     this.listingId = '',
+    this.chatId = '',
     this.created,
+    this.updated,
   });
 
   final String id;
@@ -49,7 +53,13 @@ class InboxNotification {
   final bool read;
   final String bookingId;
   final String listingId;
+  final String chatId;
   final DateTime? created;
+  final DateTime? updated;
+
+  /// Для «Сегодня»/«Вчера»: у чат-карточки хук обновляет ту же запись,
+  /// поэтому ориентируемся на [updated], если есть.
+  DateTime? get when => updated ?? created;
 }
 
 String notificationWhenLabel(DateTime created, {DateTime? now}) {

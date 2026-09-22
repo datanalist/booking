@@ -66,7 +66,9 @@
 
 **Уведомления**
 - Профиль → **Уведомления** (макет Figma `1:11396`): полноэкранный список, как «Личные данные», не bottom sheet. Карточка с кремовой заливкой, обводкой и красной точкой непрочитанного (ассет `images/profile/unread-dot-7.svg`, 7×7)
-- Записи читаются из PocketBase `notifications` (`NotificationsRepository.fetchMine`, `user =` текущая сессия через `pbFilter`). Бейдж в меню — живой unread count, 0 не рисуется (больше не заглушка «2»)
+- Записи читаются из PocketBase `notifications` (`NotificationsRepository.fetchMine`, `user =` текущая сессия через `pbFilter`, сортировка `-updated`). Бейдж в меню — живой unread count, 0 не рисуется (больше не заглушка «2»)
+- Пока экран открыт — запасной poll **2 с** (как у списка чатов): SSE по `notifications` на проде ненадёжен. Hot reload поднимает таймер через `_ensurePolling`
+- Входящее сообщение чата: хук `chats_messages.pb.js` пишет/обновляет одну карточку на чат (`user` = получатель, `chat` = тред, заголовок «Новое сообщение от …», тело = превью). Свои исходящие отправителю не дублируются. Бронь по-прежнему пишет клиент (`createForBooking`)
 - После бронирования в инбоксе тот же заголовок, что у попапа `1:11832`; в теле подставляется название жилья, если оно есть. Макет `1:11396` показывает чужой сценарий («Владелец подтвердил вашу бронь» / предоплата) — это не этот шаг
 
 **Авторизация**
@@ -146,10 +148,10 @@ ssh root@159.194.252.80 'install -o pocketbase -g pocketbase -m 644 /tmp/change_
 | `change_email.pb.js` | `POST /api/vallome/change-email`: заявка на смену email текущего пользователя; адрес применяется только после magic-link на новый ящик |
 | `bookings_overlap.pb.js` | Запрет пересечения дат на занятом жилье |
 | `occupied_listings.pb.js` | `GET /api/vallome/occupied-listings` — id занятых объявлений на диапазон дат (поиск и карта). `GET /api/vallome/occupied-dates` — диапазоны `{start,end}` одного жилья для календаря карточки, без PII гостей. Статусы как у «Предстоящие», пересечение по дням, плюс `listing_blocks` если коллекция есть |
-| `chats_messages.pb.js` | Один тред `kind=listing` на пару `(listing, guest)`; listing-чат создаётся только с `booking` гостя на это жильё; обновляет `last_message` / `last_message_at` после create в `messages` |
+| `chats_messages.pb.js` | Один тред `kind=listing` на пару `(listing, guest)`; listing-чат создаётся только с `booking` гостя на это жильё; обновляет `last_message` / `last_message_at` после create в `messages`; upsert инбокса `notifications` для получателя (одна карточка на чат, без дубля отправителю) |
 | `chats_sync_listing_host.pb.js` | После смены `listings.host` выравнивает `chats.host` и `bookings.host` по этому объявлению (иначе шапка чата оставляет прежнего хозяина) |
 
-Отдельного хука `/api/vallome/` для уведомлений нет: клиент пишет в `notifications` сам, если `createRule` пускает `@request.body.user = @request.auth.id` (как у `bookings`). Коллекцию поднимает `scripts/ensure_notifications.py`. После `ensure_chats.py` имеет смысл снова запустить `ensure_notifications.py`, чтобы у `notifications` появилась relation `chat`.
+Бронь в инбокс пишет клиент (`createForBooking`), если `createRule` пускает `@request.body.user = @request.auth.id`. Уведомления о чужих сообщениях пишет хук (createRule не даёт клиенту создать запись с `user` = собеседник). Коллекцию поднимает `scripts/ensure_notifications.py`. После `ensure_chats.py` имеет смысл снова запустить `ensure_notifications.py`, чтобы у `notifications` появилась relation `chat`.
 
 Коллекции чата (`docs/pocketbase-schema.md`):
 

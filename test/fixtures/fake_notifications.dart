@@ -8,10 +8,12 @@ class FakeNotificationsRepository implements NotificationsRepository {
 
   final List<InboxNotification> items;
   final created = <InboxNotification>[];
+  int fetchCount = 0;
   Object? failCreateWith;
 
   @override
   Future<List<InboxNotification>> fetchMine() async {
+    fetchCount++;
     final unread = items.where((item) => !item.read).length;
     NotificationsRepositoryScope.setUnread(unread);
     return List<InboxNotification>.from(items);
@@ -56,7 +58,9 @@ class FakeNotificationsRepository implements NotificationsRepository {
       read: true,
       bookingId: current.bookingId,
       listingId: current.listingId,
+      chatId: current.chatId,
       created: current.created,
+      updated: current.updated,
     );
     NotificationsRepositoryScope.setUnread(
       items.where((item) => !item.read).length,
