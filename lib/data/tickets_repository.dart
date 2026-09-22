@@ -35,7 +35,11 @@ class SupportTicket {
     this.listingId = '',
     this.hostId = '',
     this.bookingId = '',
+    this.chatId = '',
+    this.assigneeId = '',
+    this.refundAmount = 0,
     this.photos = const [],
+    this.created,
   });
 
   final String id;
@@ -45,7 +49,11 @@ class SupportTicket {
   final String listingId;
   final String hostId;
   final String bookingId;
+  final String chatId;
+  final String assigneeId;
+  final double refundAmount;
   final List<String> photos;
+  final DateTime? created;
 }
 
 class TicketException implements Exception {
@@ -58,6 +66,8 @@ class TicketException implements Exception {
 }
 
 abstract class TicketsRepository {
+  Future<List<SupportTicket>> listMine();
+
   Future<SupportTicket> create({
     required TicketType type,
     required Booking booking,
@@ -85,6 +95,21 @@ class PocketBaseTicketsRepository implements TicketsRepository {
   }
 
   @override
+  Future<List<SupportTicket>> listMine() async {
+    final authorId = _userId;
+    if (authorId.isEmpty || !_pb.authStore.isValid) return const [];
+    try {
+      final records = await _pb.collection(collection).getFullList(
+        filter: pbFilter('author = {:authorId}', {'authorId': authorId}),
+        sort: '-created',
+      );
+      return [for (final record in records) _map(record)];
+    } on ClientException catch (error) {
+      throw TicketException(_messageFor(error));
+    }
+  }
+
+  @override
   Future<SupportTicket> create({
     required TicketType type,
     required Booking booking,
@@ -109,20 +134,24 @@ class PocketBaseTicketsRepository implements TicketsRepository {
         ),
       );
     }
+    final body = <String, dynamic>{
+      'author': authorId,
+      'type': type.apiKey,
+      'text': trimmed,
+    };
+    if (booking.listingId.isNotEmpty) {
+      body['listing'] = booking.listingId;
+    }
+    if (booking.hostId.isNotEmpty) {
+      body['host'] = booking.hostId;
+    }
+    if (booking.id.isNotEmpty) {
+      body['booking'] = booking.id;
+    }
     try {
       final record = await _pb
           .collection(collection)
-          .create(
-            body: {
-              'author': authorId,
-              'type': type.apiKey,
-              'listing': booking.listingId,
-              'host': booking.hostId,
-              'booking': booking.id,
-              'text': trimmed,
-            },
-            files: files,
-          );
+          .create(body: body, files: files);
       return _map(record);
     } on ClientException catch (error) {
       throw TicketException(_messageFor(error));
@@ -138,7 +167,32 @@ class PocketBaseTicketsRepository implements TicketsRepository {
       listingId: record.get<String>('listing', ''),
       hostId: record.get<String>('host', ''),
       bookingId: record.get<String>('booking', ''),
+      chatId: record.get<String>('chat', ''),
+      assigneeId: record.get<String>('assignee', ''),
+      refundAmount: _number(record, 'refund_amount'),
+      photos: _fileUrls(record, 'photos'),
+      created: DateTime.tryParse(record.get<String>('created', '')),
     );
+  }
+
+  List<String> _fileUrls(RecordModel record, String field) {
+    final raw = record.data[field] ?? record.get<dynamic>(field);
+    if (raw is! List || raw.isEmpty) return const [];
+    final base = _pb.baseURL;
+    return [
+      for (final name in raw)
+        if (name is String && name.isNotEmpty)
+          '$base/api/files/$collection/${record.id}/$name',
+    ];
+  }
+
+  double _number(RecordModel record, String field) {
+    final raw = record.data.containsKey(field)
+        ? record.data[field]
+        : record.get<dynamic>(field);
+    if (raw is num) return raw.toDouble();
+    if (raw == null) return 0;
+    return double.tryParse('$raw') ?? 0;
   }
 
   String _messageFor(ClientException error) {

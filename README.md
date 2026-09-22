@@ -50,7 +50,7 @@
 - Адрес (подчёркнутый) → модалка `1:13629` → «Да, смотреть» открывает карту Mapbox. У **предстоящих** — как поиск: ценовой пин (`PricePin` / `SearchMapView`) и нижний preview карточки жилья; у архива — прежний одиночный пин адреса
 - **Отменить** → `1:13635`; «Да, отменить» пишет `status = cancelled` и `cancel_reason = guest`. Бронь сразу в Архив с чипом «отменено». Ключ БД `cancel_requested` остаётся, в гостевом UI его нет
 - **Изменить бронирование** → шит `1:11560` (даты и гости). «Отправить» пишет `change_requested`, новые даты в `requested_check_in` / `requested_check_out` и пересчитанную сумму. Подтверждённые `check_in` / `check_out` до ответа хозяина не затираются, но список и карточка показывают запрошенные даты, гостей и сумму. Окно `1:11840`. На списке тот же чип, что у `pending_host`: «ожидание подтверждения от владельца» (в макете Предстоящих отдельного чипа для правок нет)
-- **Пожаловаться** → экран `1:11353`: бронь / жильё / владелец. Ticket в коллекцию `tickets`. «Написать владельцу» открывает экран треда (Figma `1:14157`), пока на локальных данных
+- **Пожаловаться** → экран `1:11353`: бронь / жильё / владелец. Форма пишет запись в PocketBase `tickets` (`type` listing/host/booking, текст и фото); список своих обращений — `TicketsRepository.listMine`. Статуса у обращения в схеме нет. «Написать владельцу» открывает экран треда (Figma `1:14157`), пока на локальных данных
 - Прошедшая без отзыва: кнопка «Оставить отзыв» пишет `reviews` (`kind = listing`). После отправки сразу шаблон «отзыв оставлен»
 - «Внести предоплату» на карточке `awaiting_prepayment` пока заглушка
 
@@ -125,6 +125,7 @@ python3 scripts/enable_email_otp.py        # magic-link (OTP) на email + SMTP,
 python3 scripts/ensure_users.py            # доменные поля users + бэкафил хозяев (бейдж = verified_host, не системный verified)
 python3 scripts/ensure_bookings.py         # коллекция bookings, правила и индексы
 python3 scripts/ensure_notifications.py    # коллекция notifications (инбокс), createRule = текущий user
+python3 scripts/ensure_tickets.py          # коллекция tickets (жалобы/обращения), author = текущий user
 python3 scripts/ensure_reviews.py          # коллекция reviews, публичные отзывы на жильё
 python3 scripts/ensure_favorites.py        # коллекция favorites: user + listing, уникальная пара, только свои записи
 python3 scripts/ensure_chats.py            # коллекция chats (listing/support), правила участников
@@ -153,12 +154,15 @@ ssh root@159.194.252.80 'install -o pocketbase -g pocketbase -m 644 /tmp/change_
 
 Бронь в инбокс пишет клиент (`createForBooking`), если `createRule` пускает `@request.body.user = @request.auth.id`. Уведомления о чужих сообщениях пишет хук (createRule не даёт клиенту создать запись с `user` = собеседник). Коллекцию поднимает `scripts/ensure_notifications.py`. После `ensure_chats.py` имеет смысл снова запустить `ensure_notifications.py`, чтобы у `notifications` появилась relation `chat`.
 
+Жалобы из карточки брони (**Пожаловаться**) пишутся в коллекцию `tickets` (`scripts/ensure_tickets.py`). Гость создаёт и читает только свои записи (`author`); `assignee` / `refund_amount` / `chat` выставляет админ. Поля `status` у обращения нет.
+
 Коллекции чата (`docs/pocketbase-schema.md`):
 
 | Коллекция | Поля | Правила |
 | --- | --- | --- |
 | `chats` | `kind` `[listing, support]`, `listing`, `booking`, `guest` (req), `host`, `staff`, `last_message`, `last_message_at`, `guest_last_read`, `host_last_read` | list/view/update — участник (`guest`/`host`/`staff`); create listing — `guest` = текущий user **и** `booking` его брони на это `listing`; support — только `guest` = текущий |
 | `messages` | `chat` (req), `author` (req), `text`, `images` (file multi), `files` (file multi) | list/view — участник чата; create — `author` = текущий и участник чата |
+| `tickets` | `author` (req), `type` `[support, listing, host, booking]`, `listing`, `host`, `booking`, `chat`, `text` (req), `photos`, `assignee`, `refund_amount` | list/view/create — `author` = текущий; update/delete — только admin; без `status` |
 
 Вход в приложении: свой email → письмо → **Авторизоваться** → вернуться в приложение. Телефон пока заглушка `+79999999999` / код `77777`.
 

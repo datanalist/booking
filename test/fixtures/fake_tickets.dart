@@ -13,6 +13,16 @@ class FakeTicketsRepository implements TicketsRepository {
   Object? failCreateWith;
 
   @override
+  Future<List<SupportTicket>> listMine() async {
+    final authorId = AuthRepositoryScope.session.value?.userId ?? '';
+    if (authorId.isEmpty) return const [];
+    return [
+      for (final ticket in items)
+        if (ticket.authorId == authorId) ticket,
+    ];
+  }
+
+  @override
   Future<SupportTicket> create({
     required TicketType type,
     required Booking booking,
@@ -41,6 +51,7 @@ class FakeTicketsRepository implements TicketsRepository {
       hostId: booking.hostId,
       bookingId: booking.id,
       photos: [for (final file in photos) file.path],
+      created: DateTime.now(),
     );
     created.add(ticket);
     items.add(ticket);
