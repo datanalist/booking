@@ -104,6 +104,10 @@ class FakeReviewsRepository implements ReviewsRepository {
     if (rating < 1 || rating > 5) {
       throw const ReviewException('Поставьте оценку от 1 до 5');
     }
+    final trimmed = comment.trim();
+    if (trimmed.length > kReviewCommentMaxLength) {
+      throw const ReviewException('Комментарий не длиннее 500 символов');
+    }
     if (await hasGuestListingReview(booking.id)) {
       throw const ReviewException('Отзыв по этой брони уже оставлен');
     }
@@ -115,7 +119,7 @@ class FakeReviewsRepository implements ReviewsRepository {
       subjectId: booking.hostId,
       kind: ReviewKind.listing,
       rating: rating,
-      comment: comment.trim(),
+      comment: trimmed,
     );
     created.add(review);
     items.add(review);

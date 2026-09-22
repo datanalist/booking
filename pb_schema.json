@@ -1603,7 +1603,7 @@
       "CREATE INDEX `idx_reviews_author` ON `reviews` (`author`)"
     ],
     "created": "2026-09-18 02:11:32.254Z",
-    "updated": "2026-09-18 02:11:32.254Z",
+    "updated": "2026-09-22 18:49:41.889Z",
     "system": false
   },
   {
