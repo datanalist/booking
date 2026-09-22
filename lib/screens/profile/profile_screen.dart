@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../data/auth_repository.dart';
+import '../../data/chats_repository.dart';
 import '../../data/notifications_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_confirm_dialog.dart';
 import '../auth/auth_screen.dart';
+import '../chat/chat_thread_screen.dart';
 import 'notifications_screen.dart';
 import 'personal_data_screen.dart';
 
@@ -66,6 +68,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     if (!mounted) return;
     await _refreshUnread();
+  }
+
+  Future<void> _openSupport() async {
+    try {
+      final chat = await ChatsRepositoryScope.instance.getOrCreateSupport();
+      if (!mounted) return;
+      await ChatThreadScreen.open(context, chat: chat);
+    } on ChatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    }
   }
 
   Future<void> _onLogout(BuildContext context) async {
@@ -183,6 +198,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         authRepository: _auth,
                       ),
                       onNotifications: _openNotifications,
+                      onSupport: _openSupport,
                       onLogout: () => _onLogout(context),
                       onDeleteAccount: () => _onDeleteAccount(context),
                     );
@@ -202,6 +218,7 @@ class _ProfileMenu extends StatelessWidget {
     required this.unreadCount,
     required this.onPersonalData,
     required this.onNotifications,
+    required this.onSupport,
     required this.onLogout,
     required this.onDeleteAccount,
   });
@@ -209,6 +226,7 @@ class _ProfileMenu extends StatelessWidget {
   final int unreadCount;
   final VoidCallback onPersonalData;
   final VoidCallback onNotifications;
+  final VoidCallback onSupport;
   final VoidCallback onLogout;
   final VoidCallback onDeleteAccount;
 
@@ -228,9 +246,11 @@ class _ProfileMenu extends StatelessWidget {
         badgeCount: unreadCount > 0 ? unreadCount : null,
         onTap: onNotifications,
       ),
-      const _MenuItemData(
+      _MenuItemData(
+        key: const ValueKey<String>('profile-support'),
         icon: Icons.help_outline,
         label: 'Написать в поддержку',
+        onTap: onSupport,
       ),
       _MenuItemData(
         key: const ValueKey<String>('profile-logout'),

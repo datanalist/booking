@@ -51,6 +51,21 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
+  Future<ChatPreview> getOrCreateSupport() async {
+    for (final chat in chats) {
+      if (chat.kind == ChatKind.support) return chat;
+    }
+    final created = ChatPreview(
+      id: 'support-1',
+      kind: ChatKind.support,
+      guestId: 'guest-1',
+      hostId: '',
+    );
+    chats.add(created);
+    return created;
+  }
+
+  @override
   Future<ChatPreview> getOrCreateForBooking(Booking booking) async {
     for (final chat in chats) {
       if (chat.listingId == booking.listingId && chat.hostId == booking.hostId) {

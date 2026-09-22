@@ -322,7 +322,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
                 onBack: () => Navigator.of(context).pop(),
               ),
             ),
-            _ListingContextBar(chat: _chat),
+            if (_chat.kind != ChatKind.support)
+              _ListingContextBar(chat: _chat),
             Expanded(child: _messagesBody()),
             _ComposerBar(
               controller: _controller,

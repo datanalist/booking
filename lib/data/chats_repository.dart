@@ -32,6 +32,9 @@ abstract class ChatsRepository {
 
   Future<ChatPreview> getOrCreateForBooking(Booking booking);
 
+  /// Один чат поддержки на текущего гостя (`kind = support`, без жилья).
+  Future<ChatPreview> getOrCreateSupport();
+
   Future<List<ChatMessage>> fetchMessages(
     String chatId, {
     ChatPreview? chat,
@@ -233,6 +236,46 @@ class PocketBaseChatsRepository implements ChatsRepository {
       }
       throw ChatException(_messageFor(error));
     }
+  }
+
+  @override
+  Future<ChatPreview> getOrCreateSupport() async {
+    final guestId = _userId;
+    if (guestId.isEmpty) {
+      throw const ChatException('Войдите, чтобы написать в поддержку');
+    }
+    final existing = await _findSupportChat(guestId);
+    if (existing != null) return existing;
+    try {
+      final record = await _pb.collection(chatsCollection).create(
+        body: {
+          'kind': ChatKind.support.apiKey,
+          'guest': guestId,
+        },
+        expand: _chatExpand,
+      );
+      ChatsRepositoryScope.notifyChanged();
+      return _mapChat(record, guestId);
+    } on ClientException catch (error) {
+      final again = await _findSupportChat(guestId);
+      if (again != null) return again;
+      throw ChatException(_messageFor(error));
+    }
+  }
+
+  Future<ChatPreview?> _findSupportChat(String guestId) async {
+    final existing = await _pb.collection(chatsCollection).getList(
+      page: 1,
+      perPage: 1,
+      filter: pbFilter(
+        'kind = "support" && guest = {:guestId}',
+        {'guestId': guestId},
+      ),
+      expand: _chatExpand,
+      sort: '-updated',
+    );
+    if (existing.items.isEmpty) return null;
+    return _mapChat(existing.items.first, guestId);
   }
 
   @override

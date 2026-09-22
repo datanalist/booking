@@ -5,6 +5,8 @@ import 'package:booking/data/auth_repository.dart';
 import 'package:booking/data/bookings_repository.dart';
 import 'package:booking/data/chats_repository.dart';
 import 'package:booking/data/notifications_repository.dart';
+import 'package:booking/data/chat.dart';
+import 'package:booking/screens/chat/chat_thread_screen.dart';
 import 'package:booking/screens/profile/profile_screen.dart';
 import 'package:booking/shell/main_shell.dart';
 
@@ -226,6 +228,37 @@ void main() {
     expect(
       find.text('Не удалось удалить аккаунт. Проверьте соединение'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('support menu opens one support chat without a listing', (
+    tester,
+  ) async {
+    ChatThreadScreen.debugPollInterval = Duration.zero;
+    addTearDown(() => ChatThreadScreen.debugPollInterval = null);
+
+    final chats = FakeChatsRepository();
+    ChatsRepositoryScope.instance = chats;
+
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: ProfileScreen())),
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('profile-support')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey<String>('chat-thread')), findsOneWidget);
+    expect(find.text('Поддержка'), findsOneWidget);
+    expect(find.text('Объявление'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('chat-thread-back')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('profile-support')));
+    await tester.pumpAndSettle();
+
+    expect(
+      chats.chats.where((chat) => chat.kind == ChatKind.support),
+      hasLength(1),
     );
   });
 }
