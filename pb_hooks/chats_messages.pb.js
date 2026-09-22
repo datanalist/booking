@@ -5,8 +5,10 @@
 // Listing chats may be created only when the guest has a booking for that listing.
 
 onRecordCreateRequest((e) => {
+  // Коллекция уже задана вторым аргументом ("chats"); e.collection?.name
+  // в JSVM может быть undefined — тогда раньше хук молча пропускал create.
   const record = e.record
-  if (!record || e.collection?.name !== "chats") {
+  if (!record) {
     e.next()
     return
   }
@@ -63,8 +65,12 @@ onRecordCreateRequest((e) => {
 }, "chats")
 
 onRecordAfterCreateSuccess((e) => {
+  // Хук уже ограничен коллекцией "messages" вторым аргументом.
+  // Не проверять e.collection?.name: в PB JSVM оно часто undefined,
+  // и тогда превью чата молча не обновлялось → собеседник не видел
+  // сообщение, пока тред открыт (create realtime тоже не доходит).
   const record = e.record
-  if (!record || e.collection?.name !== "messages") return
+  if (!record) return
   const chatId = record.getString("chat")
   if (!chatId) return
   try {

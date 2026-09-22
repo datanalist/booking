@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:booking/data/auth_repository.dart';
+import 'package:booking/data/chat.dart';
 import 'package:booking/data/chats_repository.dart';
 import 'package:booking/screens/chat/chat_screen.dart';
+import 'package:booking/screens/chat/chat_thread_screen.dart';
 import 'package:booking/theme/app_theme.dart';
 
 import 'fixtures/fake_chats.dart';
@@ -24,11 +26,13 @@ void main() {
       userId: 'guest-1',
       email: 'guest@test.com',
     );
+    ChatThreadScreen.debugPollInterval = Duration.zero;
   });
 
   tearDown(() {
     ChatsRepositoryScope.instance = previous;
     AuthRepositoryScope.session.value = null;
+    ChatThreadScreen.debugPollInterval = null;
   });
 
   testWidgets('chat tab lists conversations from the repository', (
@@ -121,5 +125,50 @@ void main() {
 
     expect(find.text('Привет'), findsOneWidget);
     expect(repo.sentTexts, ['Привет']);
+  });
+
+  testWidgets('incoming message appears when chat preview updates', (
+    tester,
+  ) async {
+    final repo = FakeChatsRepository(chats: demoChatPreviews());
+    repo.messagesByChat['anna'] = [
+      ChatMessage(
+        id: 'local-1',
+        chatId: 'anna',
+        authorId: 'guest-1',
+        text: 'Уже тут',
+        created: DateTime(2024, 9, 12, 13),
+      ),
+    ];
+    ChatsRepositoryScope.instance = repo;
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: ChatScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('chat-tile-anna')));
+    await tester.pumpAndSettle();
+    expect(find.text('Уже тут'), findsOneWidget);
+    expect(find.text('Вы тут'), findsNothing);
+
+    repo.emitIncomingViaChat(
+      'anna',
+      ChatMessage(
+        id: 'remote-vy-tut',
+        chatId: 'anna',
+        authorId: 'anna',
+        text: 'Вы тут',
+        created: DateTime(2024, 9, 12, 13, 40),
+      ),
+    );
+    // subscribeChat → _pollMessages; без ожидания полного poll-интервала.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Вы тут'), findsOneWidget);
   });
 }

@@ -40,6 +40,11 @@ class ChatThreadScreen extends StatefulWidget {
   final ChatsRepository? repository;
   final PhotoLibrary? photoLibrary;
 
+  /// Для виджет-тестов: `Duration.zero` отключает Timer.periodic
+  /// (иначе `pumpAndSettle` никогда не завершится).
+  @visibleForTesting
+  static Duration? debugPollInterval;
+
   static Future<void> open(
     BuildContext context, {
     required ChatPreview chat,
@@ -60,14 +65,21 @@ class ChatThreadScreen extends StatefulWidget {
 }
 
 class _ChatThreadScreenState extends State<ChatThreadScreen> {
+  /// Пока SSE create по `messages` на сервере не доходит стабильно —
+  /// короткий poll держит тред свежим (макс. задержка ≈ интервал).
+  static const _pollInterval = Duration(seconds: 2);
+
   final _controller = TextEditingController();
   final _scroll = ScrollController();
   late ChatPreview _chat = widget.chat;
   var _messages = const <ChatMessage>[];
   var _loading = true;
   var _sending = false;
+  var _pollInFlight = false;
   Object? _error;
   UnsubscribeFunc? _unsubscribe;
+  UnsubscribeFunc? _unsubscribeChats;
+  Timer? _pollTimer;
 
   ChatsRepository get _repository =>
       widget.repository ?? ChatsRepositoryScope.instance;
@@ -85,14 +97,71 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     super.initState();
     _load();
     _listenRealtime();
+    _startPolling();
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _controller.dispose();
     _scroll.dispose();
     unawaited(_stopRealtime());
     super.dispose();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    final interval =
+        ChatThreadScreen.debugPollInterval ?? _pollInterval;
+    if (interval <= Duration.zero) return;
+    _pollTimer = Timer.periodic(interval, (_) {
+      unawaited(_pollMessages());
+    });
+  }
+
+  Future<void> _pollMessages() async {
+    if (!mounted || _pollInFlight || _chat.id.isEmpty) return;
+    _pollInFlight = true;
+    try {
+      final items = await _repository.fetchMessages(_chat.id, chat: _chat);
+      if (!mounted) return;
+      _mergeMessages(items, fromPoll: true);
+    } catch (_) {
+      // Poll — запасной канал; ошибки не показываем поверх треда.
+    } finally {
+      _pollInFlight = false;
+    }
+  }
+
+  void _mergeMessages(List<ChatMessage> items, {required bool fromPoll}) {
+    final prevIds = {for (final item in _messages) item.id};
+    final added = <ChatMessage>[
+      for (final item in items)
+        if (!prevIds.contains(item.id)) item,
+    ];
+    if (added.isEmpty && items.length == _messages.length) {
+      // Тот же набор — не дёргаем setState лишний раз, но сбрасываем
+      // loading: иначе пустой тред навсегда крутит индикатор.
+      if (_loading || _error != null) {
+        setState(() {
+          _loading = false;
+          _error = null;
+        });
+      }
+      return;
+    }
+    final hadIncoming = added.any((item) => item.authorId != _userId);
+    setState(() {
+      _messages = items;
+      _loading = false;
+      _error = null;
+    });
+    if (hadIncoming || (!fromPoll && added.isNotEmpty)) {
+      _scrollToEnd();
+    }
+    if (hadIncoming) {
+      unawaited(_repository.markRead(_chat));
+    }
   }
 
   Future<void> _listenRealtime() async {
@@ -108,12 +177,28 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
         unawaited(_repository.markRead(_chat));
       });
     } catch (_) {}
+    // create по messages молчит; PATCH/hook chats.last_message доходит —
+    // сразу тянем тред, не дожидаясь poll-интервала (его не меняем).
+    try {
+      _unsubscribeChats = await _repository.subscribeChat(_chat.id, () {
+        if (mounted) unawaited(_pollMessages());
+      });
+    } catch (_) {
+      try {
+        _unsubscribeChats = await _repository.subscribeChats(() {
+          if (mounted) unawaited(_pollMessages());
+        });
+      } catch (_) {}
+    }
   }
 
   Future<void> _stopRealtime() async {
     final stop = _unsubscribe;
     _unsubscribe = null;
     if (stop != null) await stop();
+    final stopChats = _unsubscribeChats;
+    _unsubscribeChats = null;
+    if (stopChats != null) await stopChats();
   }
 
   Future<void> _load() async {
@@ -122,14 +207,12 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       _error = null;
     });
     try {
-      final items = await _repository.fetchMessages(_chat.id);
+      final items = await _repository.fetchMessages(_chat.id, chat: _chat);
       if (!mounted) return;
-      setState(() {
-        _messages = items;
-        _loading = false;
-      });
+      // Merge, не replace: поздний fetch не должен затирать то, что уже
+      // пришло через poll/realtime, пока грузился список.
+      _mergeMessages(items, fromPoll: false);
       await _repository.markRead(_chat);
-      _scrollToEnd();
     } catch (error) {
       if (!mounted) return;
       setState(() {

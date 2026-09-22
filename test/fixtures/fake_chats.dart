@@ -87,7 +87,10 @@ class FakeChatsRepository implements ChatsRepository {
   }
 
   @override
-  Future<List<ChatMessage>> fetchMessages(String chatId) async {
+  Future<List<ChatMessage>> fetchMessages(
+    String chatId, {
+    ChatPreview? chat,
+  }) async {
     return List.of(messagesByChat[chatId] ?? const []);
   }
 
@@ -129,12 +132,42 @@ class FakeChatsRepository implements ChatsRepository {
   @override
   Future<void> markRead(ChatPreview chat) async {}
 
+  final chatListeners = <String, List<void Function()>>{};
+  final messageListeners = <String, List<void Function(ChatMessage)>>{};
+
   @override
   Future<UnsubscribeFunc> subscribeMessages(
     String chatId,
     void Function(ChatMessage message) onCreate,
   ) async {
-    return () async {};
+    final listeners = messageListeners.putIfAbsent(chatId, () => []);
+    listeners.add(onCreate);
+    return () async {
+      listeners.remove(onCreate);
+    };
+  }
+
+  @override
+  Future<UnsubscribeFunc> subscribeChat(
+    String chatId,
+    void Function() onChange,
+  ) async {
+    final listeners = chatListeners.putIfAbsent(chatId, () => []);
+    listeners.add(onChange);
+    return () async {
+      listeners.remove(onChange);
+    };
+  }
+
+  /// Симулирует чужое сообщение так, как на проде: create по messages
+  /// не приходит, срабатывает только update чата → poll/reconcile.
+  void emitIncomingViaChat(String chatId, ChatMessage message) {
+    messagesByChat.putIfAbsent(chatId, () => []).add(message);
+    for (final listener in List<void Function()>.of(
+      chatListeners[chatId] ?? const [],
+    )) {
+      listener();
+    }
   }
 
   @override

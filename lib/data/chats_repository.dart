@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -31,7 +32,10 @@ abstract class ChatsRepository {
 
   Future<ChatPreview> getOrCreateForBooking(Booking booking);
 
-  Future<List<ChatMessage>> fetchMessages(String chatId);
+  Future<List<ChatMessage>> fetchMessages(
+    String chatId, {
+    ChatPreview? chat,
+  });
 
   Future<ChatMessage> sendText({
     required String chatId,
@@ -49,6 +53,16 @@ abstract class ChatsRepository {
   Future<UnsubscribeFunc> subscribeMessages(
     String chatId,
     void Function(ChatMessage message) onCreate,
+  );
+
+  /// Обновление одной записи чата (превью после отправки).
+  ///
+  /// PocketBase в этой среде не шлёт realtime `create` по `messages`, а
+  /// серверный хук превью часто не срабатывает. Клиентский PATCH `chats`
+  /// доходит — по нему открытый тред подтягивает недостающие сообщения.
+  Future<UnsubscribeFunc> subscribeChat(
+    String chatId,
+    void Function() onChange,
   );
 
   Future<UnsubscribeFunc> subscribeChats(
@@ -222,16 +236,19 @@ class PocketBaseChatsRepository implements ChatsRepository {
   }
 
   @override
-  Future<List<ChatMessage>> fetchMessages(String chatId) async {
+  Future<List<ChatMessage>> fetchMessages(
+    String chatId, {
+    ChatPreview? chat,
+  }) async {
     if (chatId.isEmpty) return const [];
     final records = await _pb.collection(messagesCollection).getFullList(
       filter: pbFilter('chat = {:chatId}', {'chatId': chatId}),
       expand: _messageExpand,
       sort: 'created',
     );
-    final chat = await _loadChat(chatId);
+    final resolved = chat ?? await _loadChat(chatId);
     return [
-      for (final record in records) _mapMessage(record, chat),
+      for (final record in records) _mapMessage(record, resolved),
     ];
   }
 
@@ -257,11 +274,10 @@ class PocketBaseChatsRepository implements ChatsRepository {
         },
         expand: _messageExpand,
       );
-      await _updateChatPreview(chatId, trimmed);
-      await _touchLastRead(chatId, authorId);
-      ChatsRepositoryScope.notifyChanged();
-      final chat = await _loadChat(chatId);
-      return _mapMessage(record, chat);
+      // Preview / last_read не блокируют ответ: хук уже пишет last_message,
+      // а получатель читает тред через realtime/poll, не через этот await.
+      unawaited(_afterSendSideEffects(chatId, authorId, trimmed));
+      return _mapMessage(record, null);
     } on ClientException catch (error) {
       throw ChatException(_messageFor(error));
     }
@@ -302,17 +318,26 @@ class PocketBaseChatsRepository implements ChatsRepository {
         files: files,
         expand: _messageExpand,
       );
-      await _updateChatPreview(
-        chatId,
-        trimmed.isEmpty ? 'Фото' : trimmed,
-      );
-      await _touchLastRead(chatId, authorId);
-      ChatsRepositoryScope.notifyChanged();
-      final chat = await _loadChat(chatId);
-      return _mapMessage(record, chat);
+      final preview = trimmed.isEmpty ? 'Фото' : trimmed;
+      unawaited(_afterSendSideEffects(chatId, authorId, preview));
+      return _mapMessage(record, null);
     } on ClientException catch (error) {
       throw ChatException(_messageFor(error));
     }
+  }
+
+  Future<void> _afterSendSideEffects(
+    String chatId,
+    String authorId,
+    String preview,
+  ) async {
+    try {
+      await _updateChatPreview(chatId, preview);
+    } catch (_) {}
+    try {
+      await _touchLastRead(chatId, authorId);
+    } catch (_) {}
+    ChatsRepositoryScope.notifyChanged();
   }
 
   @override
@@ -343,24 +368,32 @@ class PocketBaseChatsRepository implements ChatsRepository {
   ) {
     return _pb.collection(messagesCollection).subscribe(
       '*',
-      (event) async {
-        if (event.action != 'create') return;
+      (event) {
+        // create на проде часто не доходит; update — доходит.
+        if (event.action != 'create' && event.action != 'update') return;
         final record = event.record;
         if (record == null) return;
-        if (record.get<String>('chat', '') != chatId) return;
+        final messageChat = _relationId(record, 'chat');
+        if (messageChat.isNotEmpty && messageChat != chatId) return;
         try {
-          final full = await _pb.collection(messagesCollection).getOne(
-            record.id,
-            expand: _messageExpand,
-          );
-          final chat = await _loadChat(chatId);
-          onCreate(_mapMessage(full, chat));
+          onCreate(_mapMessage(record, null));
         } catch (_) {
           // Ignore transient realtime failures.
         }
       },
       filter: pbFilter('chat = {:chatId}', {'chatId': chatId}),
+      expand: _messageExpand,
     );
+  }
+
+  @override
+  Future<UnsubscribeFunc> subscribeChat(
+    String chatId,
+    void Function() onChange,
+  ) {
+    return _pb.collection(chatsCollection).subscribe(chatId, (event) {
+      onChange();
+    });
   }
 
   @override
