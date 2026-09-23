@@ -179,6 +179,12 @@ class _StayDatesSheetState extends State<StayDatesSheet> {
       } else {
         _checkIn = picked;
         if (_checkOut != null &&
+            !stayDay(picked).isBefore(stayDay(_checkOut!))) {
+          // Later (or same-day) check-in clears check-out; guest picks again.
+          _checkOut = null;
+          return;
+        }
+        if (_checkOut != null &&
             stayConflictsWithOccupied(
               checkIn: picked,
               checkOut: _checkOut!,
