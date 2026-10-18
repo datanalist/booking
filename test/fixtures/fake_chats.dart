@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:booking/data/booking.dart';
@@ -7,14 +8,26 @@ import 'package:pocketbase/pocketbase.dart';
 
 class FakeChatsRepository implements ChatsRepository {
   FakeChatsRepository({List<ChatPreview>? chats})
-      : chats = List.of(chats ?? const []);
+    : chats = List.of(chats ?? const []);
 
   final List<ChatPreview> chats;
   final Map<String, List<ChatMessage>> messagesByChat = {};
   final sentTexts = <String>[];
 
+  /// Если не null, следующий `fetchMine` ждёт его и возвращает снимок на момент старта.
+  Completer<void>? holdFetchMine;
+
   @override
-  Future<List<ChatPreview>> fetchMine() async => List.of(chats);
+  Future<List<ChatPreview>> fetchMine() async {
+    final hold = holdFetchMine;
+    final snapshot = List<ChatPreview>.of(chats);
+    if (hold != null) {
+      holdFetchMine = null;
+      await hold.future;
+      return snapshot;
+    }
+    return List<ChatPreview>.of(chats);
+  }
 
   @override
   Future<ChatPreview> getOrCreateForListing({
@@ -68,7 +81,8 @@ class FakeChatsRepository implements ChatsRepository {
   @override
   Future<ChatPreview> getOrCreateForBooking(Booking booking) async {
     for (final chat in chats) {
-      if (chat.listingId == booking.listingId && chat.hostId == booking.hostId) {
+      if (chat.listingId == booking.listingId &&
+          chat.hostId == booking.hostId) {
         return chat;
       }
     }

@@ -45,17 +45,15 @@ class ChatThreadScreen extends StatefulWidget {
   @visibleForTesting
   static Duration? debugPollInterval;
 
-  static Future<void> open(
+  static Future<ChatPreview?> open(
     BuildContext context, {
     required ChatPreview chat,
     ChatsRepository? repository,
   }) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => ChatThreadScreen(
-          chat: chat,
-          repository: repository,
-        ),
+    return Navigator.of(context).push<ChatPreview>(
+      MaterialPageRoute<ChatPreview>(
+        builder: (context) =>
+            ChatThreadScreen(chat: chat, repository: repository),
       ),
     );
   }
@@ -73,9 +71,15 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   final _scroll = ScrollController();
   late ChatPreview _chat = widget.chat;
   var _messages = const <ChatMessage>[];
+
+  /// Дольше этого poll треда считаем зависшим и пускаем следующий.
+  static const _pollTimeout = Duration(seconds: 8);
+
   var _loading = true;
   var _sending = false;
   var _pollInFlight = false;
+  var _pollQueued = false;
+  var _closing = false;
   Object? _error;
   UnsubscribeFunc? _unsubscribe;
   UnsubscribeFunc? _unsubscribeChats;
@@ -111,8 +115,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    final interval =
-        ChatThreadScreen.debugPollInterval ?? _pollInterval;
+    final interval = ChatThreadScreen.debugPollInterval ?? _pollInterval;
     if (interval <= Duration.zero) return;
     _pollTimer = Timer.periodic(interval, (_) {
       unawaited(_pollMessages());
@@ -120,17 +123,56 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   }
 
   Future<void> _pollMessages() async {
-    if (!mounted || _pollInFlight || _chat.id.isEmpty) return;
+    if (!mounted || _chat.id.isEmpty) return;
+    if (_pollInFlight) {
+      _pollQueued = true;
+      return;
+    }
     _pollInFlight = true;
     try {
-      final items = await _repository.fetchMessages(_chat.id, chat: _chat);
+      final items = await _repository
+          .fetchMessages(_chat.id, chat: _chat)
+          .timeout(_pollTimeout);
       if (!mounted) return;
       _mergeMessages(items, fromPoll: true);
+    } on TimeoutException {
+      // Зависший poll не должен глушить следующие сообщения.
     } catch (_) {
       // Poll — запасной канал; ошибки не показываем поверх треда.
     } finally {
       _pollInFlight = false;
+      if (_pollQueued && mounted) {
+        _pollQueued = false;
+        unawaited(_pollMessages());
+      }
     }
+  }
+
+  ChatPreview _previewForList() {
+    ChatMessage? newest;
+    for (final item in _messages) {
+      final at = item.created;
+      final bestAt = newest?.created;
+      final newer =
+          newest == null ||
+          (at != null && (bestAt == null || at.isAfter(bestAt)));
+      if (newer) newest = item;
+    }
+    if (newest == null) return _chat.copyWith(unreadCount: 0);
+    return _chat.copyWith(
+      lastMessage: newest.previewLabel(),
+      lastMessageAt: newest.created ?? _chat.lastMessageAt,
+      unreadCount: 0,
+    );
+  }
+
+  void _close() {
+    if (_closing || !mounted) return;
+    setState(() => _closing = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pop(_previewForList());
+    });
   }
 
   void _mergeMessages(List<ChatMessage> items, {required bool fromPoll}) {
@@ -251,7 +293,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       final message = error is ChatException
           ? error.message
           : 'Не удалось отправить сообщение';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -295,7 +338,8 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
       final message = error is ChatException
           ? error.message
           : 'Не удалось отправить фото';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -308,31 +352,35 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    return Scaffold(
-      key: const ValueKey<String>('chat-thread'),
-      backgroundColor: AppColors.white,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-              child: _ThreadHeader(
-                chat: _chat,
-                onBack: () => Navigator.of(context).pop(),
+    return PopScope(
+      canPop: _closing,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _close();
+      },
+      child: Scaffold(
+        key: const ValueKey<String>('chat-thread'),
+        backgroundColor: AppColors.white,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                child: _ThreadHeader(chat: _chat, onBack: _close),
               ),
-            ),
-            if (_chat.kind != ChatKind.support)
-              _ListingContextBar(chat: _chat),
-            Expanded(child: _messagesBody()),
-            _ComposerBar(
-              controller: _controller,
-              sending: _sending,
-              bottomInset: bottomInset,
-              onAttach: _attach,
-              onSend: _send,
-            ),
-          ],
+              if (_chat.kind != ChatKind.support)
+                _ListingContextBar(chat: _chat),
+              Expanded(child: _messagesBody()),
+              _ComposerBar(
+                controller: _controller,
+                sending: _sending,
+                bottomInset: bottomInset,
+                onAttach: _attach,
+                onSend: _send,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -344,10 +392,7 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
     }
     if (_error != null && _messages.isEmpty) {
       return Center(
-        child: TextButton(
-          onPressed: _load,
-          child: const Text('Повторить'),
-        ),
+        child: TextButton(onPressed: _load, child: const Text('Повторить')),
       );
     }
     if (_messages.isEmpty) {
@@ -478,9 +523,7 @@ class _ThreadHeader extends StatelessWidget {
         children: [
           Material(
             color: AppColors.white,
-            shape: const CircleBorder(
-              side: BorderSide(color: _backBorder),
-            ),
+            shape: const CircleBorder(side: BorderSide(color: _backBorder)),
             child: InkWell(
               key: const ValueKey<String>('chat-thread-back'),
               customBorder: const CircleBorder(),
@@ -628,11 +671,7 @@ class _ListingContextBar extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                _StayMetaLine(
-                  city: chat.city,
-                  dates: dates,
-                  guests: guests,
-                ),
+                _StayMetaLine(city: chat.city, dates: dates, guests: guests),
               ],
             ),
           ),
@@ -668,7 +707,12 @@ class _StayMetaLine extends StatelessWidget {
       if (guests.isNotEmpty) guests,
     ];
     if (parts.isEmpty) return const SizedBox.shrink();
-    return Text(parts.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    return Text(
+      parts.join(' · '),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
   }
 }
 
@@ -703,8 +747,9 @@ class _MessageBubble extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Column(
-            crossAxisAlignment:
-                mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: mine
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
               if (showIdentity) ...[
                 Row(
@@ -937,10 +982,7 @@ class _SquareIconButton extends StatelessWidget {
             key: ValueKey<String>(keyName),
             onTap: onTap,
             borderRadius: BorderRadius.circular(12),
-            child: SizedBox.square(
-              dimension: 40,
-              child: Center(child: child),
-            ),
+            child: SizedBox.square(dimension: 40, child: Center(child: child)),
           ),
         ),
       ),
@@ -985,7 +1027,8 @@ Future<void> openHostChat(
     final message = error is ChatException
         ? error.message
         : 'Не удалось открыть чат';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

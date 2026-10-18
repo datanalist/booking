@@ -32,10 +32,15 @@ class _ChatScreenState extends State<ChatScreen> {
   /// переключит вкладку / не сделает pull-to-refresh.
   static const _pollInterval = Duration(seconds: 2);
 
+  /// Дольше этого запрос списка считаем зависшим и отпускаем следующий.
+  static const _refreshTimeout = Duration(seconds: 8);
+
   var _items = const <ChatPreview>[];
   var _loading = false;
   var _tabVisible = false;
   var _refreshInFlight = false;
+  var _refreshQueued = false;
+  final _threadPreviewIds = <String>{};
   Object? _error;
   UnsubscribeFunc? _unsubscribe;
   Timer? _pollTimer;
@@ -111,7 +116,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _refresh({required bool silent}) async {
-    if (!mounted || _refreshInFlight) return;
+    if (!mounted) return;
+    // Пока предыдущий fetch висит, новый не отбрасываем: после него
+    // список всё равно перечитывается, иначе превью остаётся старым.
+    if (_refreshInFlight) {
+      _refreshQueued = true;
+      return;
+    }
     _refreshInFlight = true;
     if (!silent) {
       setState(() {
@@ -120,16 +131,11 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     }
     try {
-      final items = await _repository.fetchMine();
+      final items = await _repository.fetchMine().timeout(_refreshTimeout);
       if (!mounted) return;
-      ChatsRepositoryScope.setUnread(
-        items.fold<int>(0, (sum, chat) => sum + chat.unreadCount),
-      );
-      setState(() {
-        _items = items;
-        _loading = false;
-        _error = null;
-      });
+      _showChats(items);
+    } on TimeoutException {
+      // Сокет мог зависнуть на SSL. Следующий poll / очередь возьмут свежие данные.
     } catch (error) {
       if (!mounted) return;
       if (silent && _items.isNotEmpty) return;
@@ -139,12 +145,69 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } finally {
       _refreshInFlight = false;
+      if (_refreshQueued && mounted) {
+        _refreshQueued = false;
+        unawaited(_refresh(silent: true));
+      }
     }
   }
 
+  void _showChats(List<ChatPreview> items) {
+    final merged = _keepNewerLocalPreviews(items);
+    ChatsRepositoryScope.setUnread(
+      merged.fold<int>(0, (sum, chat) => sum + chat.unreadCount),
+    );
+    setState(() {
+      _items = merged;
+      _loading = false;
+      _error = null;
+    });
+  }
+
+  /// Ответ списка иногда старше сообщения, которое уже видно в треде.
+  List<ChatPreview> _keepNewerLocalPreviews(List<ChatPreview> fetched) {
+    final localById = {for (final item in _items) item.id: item};
+    return [
+      for (final item in fetched) _preferNewerPreview(localById[item.id], item),
+    ];
+  }
+
+  ChatPreview _preferNewerPreview(ChatPreview? local, ChatPreview fetched) {
+    if (local == null || !_threadPreviewIds.contains(fetched.id)) {
+      return fetched;
+    }
+    final localAt = local.lastMessageAt;
+    final fetchedAt = fetched.lastMessageAt;
+    final localIsNewer =
+        localAt != null && (fetchedAt == null || localAt.isAfter(fetchedAt));
+    if (!localIsNewer) {
+      _threadPreviewIds.remove(fetched.id);
+      return fetched;
+    }
+    return fetched.copyWith(
+      lastMessage: local.lastMessage,
+      lastMessageAt: localAt,
+    );
+  }
+
+  void _applyThreadPreview(ChatPreview updated) {
+    final index = _items.indexWhere((item) => item.id == updated.id);
+    if (index < 0) return;
+    _threadPreviewIds.add(updated.id);
+    final next = List<ChatPreview>.of(_items);
+    next[index] = updated;
+    setState(() => _items = next);
+  }
+
   Future<void> _open(ChatPreview chat) async {
-    await ChatThreadScreen.open(context, chat: chat, repository: _repository);
-    if (mounted) unawaited(_refresh(silent: true));
+    final updated = await ChatThreadScreen.open(
+      context,
+      chat: chat,
+      repository: _repository,
+    );
+    if (!mounted) return;
+    if (updated != null) _applyThreadPreview(updated);
+    unawaited(_refresh(silent: true));
   }
 
   @override
@@ -152,9 +215,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _ensurePolling();
     return ColoredBox(
       color: AppColors.white,
-      child: SafeArea(
-        child: _body(),
-      ),
+      child: SafeArea(child: _body()),
     );
   }
 
@@ -187,10 +248,7 @@ class _ChatScreenState extends State<ChatScreen> {
         },
         itemBuilder: (context, index) {
           final chat = _items[index];
-          return _ChatTile(
-            chat: chat,
-            onTap: () => _open(chat),
-          );
+          return _ChatTile(chat: chat, onTap: () => _open(chat));
         },
       ),
     );
@@ -267,10 +325,7 @@ class _ChatError extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            TextButton(
-              onPressed: onRetry,
-              child: const Text('Повторить'),
-            ),
+            TextButton(onPressed: onRetry, child: const Text('Повторить')),
           ],
         ),
       ),

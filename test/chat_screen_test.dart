@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -45,9 +47,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: ChatScreen()),
-      ),
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
     );
     await tester.pumpAndSettle();
 
@@ -71,9 +71,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: ChatScreen()),
-      ),
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
     );
     await tester.pumpAndSettle();
 
@@ -91,9 +89,7 @@ void main() {
     ChatsRepositoryScope.instance = FakeChatsRepository(chats: const []);
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: ChatScreen()),
-      ),
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
     );
     await tester.pumpAndSettle();
 
@@ -109,9 +105,7 @@ void main() {
     ChatsRepositoryScope.instance = repo;
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: ChatScreen()),
-      ),
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
     );
     await tester.pumpAndSettle();
 
@@ -138,9 +132,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: ChatThreadScreen(chat: demoChatPreviews().first),
-      ),
+      MaterialApp(home: ChatThreadScreen(chat: demoChatPreviews().first)),
     );
     await tester.pumpAndSettle();
 
@@ -182,9 +174,7 @@ void main() {
     ChatsRepositoryScope.instance = repo;
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: ChatScreen()),
-      ),
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
     );
     await tester.pumpAndSettle();
 
@@ -219,9 +209,7 @@ void main() {
     ChatsRepositoryScope.setUnread(0);
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: ChatScreen()),
-      ),
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
     );
     await tester.pumpAndSettle();
     expect(find.text('Добрый день, бронирование…'), findsOneWidget);
@@ -262,9 +250,7 @@ void main() {
     ChatsRepositoryScope.instance = repo;
 
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(body: ChatScreen()),
-      ),
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 10));
@@ -294,5 +280,100 @@ void main() {
 
     expect(find.text('555'), findsOneWidget);
     expect(ChatsRepositoryScope.unreadCount.value, 4);
+  });
+
+  testWidgets('queued refresh applies a newer preview after a hung fetch', (
+    tester,
+  ) async {
+    final repo = FakeChatsRepository(chats: demoChatPreviews());
+    final hold = Completer<void>();
+    repo.holdFetchMine = hold;
+    ChatsRepositoryScope.instance = repo;
+
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
+    );
+    await tester.pump();
+
+    final base = demoChatPreviews().first;
+    repo.replaceChat(
+      ChatPreview(
+        id: base.id,
+        kind: base.kind,
+        guestId: base.guestId,
+        hostId: base.hostId,
+        counterpartyName: base.counterpartyName,
+        lastMessage: 'yed',
+        lastMessageAt: DateTime(2026, 9, 23, 18),
+        listingTitle: base.listingTitle,
+        city: base.city,
+        checkIn: base.checkIn,
+        checkOut: base.checkOut,
+        adults: base.adults,
+      ),
+    );
+    repo.emitChatsChanged();
+    hold.complete();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('yed'), findsOneWidget);
+    expect(find.text('Добрый день, бронирование…'), findsNothing);
+  });
+
+  testWidgets('leaving a thread shows its latest message in the list', (
+    tester,
+  ) async {
+    final repo = FakeChatsRepository(chats: demoChatPreviews());
+    final base = demoChatPreviews().first;
+    repo.replaceChat(
+      ChatPreview(
+        id: base.id,
+        kind: base.kind,
+        guestId: base.guestId,
+        hostId: base.hostId,
+        counterpartyName: base.counterpartyName,
+        lastMessage: '0000',
+        lastMessageAt: DateTime(2026, 9, 22, 22, 41),
+        listingTitle: base.listingTitle,
+        city: base.city,
+        checkIn: base.checkIn,
+        checkOut: base.checkOut,
+        adults: base.adults,
+      ),
+    );
+    repo.messagesByChat['anna'] = [
+      ChatMessage(
+        id: 'old',
+        chatId: 'anna',
+        authorId: 'anna',
+        text: '0000',
+        created: DateTime(2026, 9, 22, 22, 41),
+      ),
+      ChatMessage(
+        id: 'new',
+        chatId: 'anna',
+        authorId: 'anna',
+        text: 'yed',
+        created: DateTime(2026, 9, 23, 3, 53),
+      ),
+    ];
+    ChatsRepositoryScope.instance = repo;
+
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: ChatScreen())),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('0000'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat-tile-anna')));
+    await tester.pumpAndSettle();
+    expect(find.text('yed'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('chat-thread-back')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('yed'), findsOneWidget);
+    expect(find.text('Добрый день, бронирование…'), findsNothing);
   });
 }

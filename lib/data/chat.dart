@@ -89,7 +89,8 @@ class ChatPreview {
     if (at == null) return '';
     final local = at.toLocal();
     final today = (now ?? DateTime.now()).toLocal();
-    final sameDay = local.year == today.year &&
+    final sameDay =
+        local.year == today.year &&
         local.month == today.month &&
         local.day == today.day;
     if (sameDay) {
@@ -98,7 +99,11 @@ class ChatPreview {
     return DateFormat('dd.MM.yyyy', 'ru').format(local);
   }
 
-  ChatPreview copyWith({int? unreadCount}) {
+  ChatPreview copyWith({
+    int? unreadCount,
+    String? lastMessage,
+    DateTime? lastMessageAt,
+  }) {
     return ChatPreview(
       id: id,
       kind: kind,
@@ -107,8 +112,8 @@ class ChatPreview {
       staffId: staffId,
       listingId: listingId,
       bookingId: bookingId,
-      lastMessage: lastMessage,
-      lastMessageAt: lastMessageAt,
+      lastMessage: lastMessage ?? this.lastMessage,
+      lastMessageAt: lastMessageAt ?? this.lastMessageAt,
       guestLastRead: guestLastRead,
       hostLastRead: hostLastRead,
       counterpartyName: counterpartyName,
@@ -156,6 +161,16 @@ class ChatMessage {
     final at = created;
     if (at == null) return '';
     return DateFormat('HH:mm', 'ru').format(at.toLocal());
+  }
+
+  /// Текст строки списка: то же правило, что у хука `chats.last_message`.
+  String previewLabel() {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return imageUrls.isNotEmpty ? 'Фото' : 'Сообщение';
+    }
+    if (trimmed.length > 120) return '${trimmed.substring(0, 117)}…';
+    return trimmed;
   }
 }
 
